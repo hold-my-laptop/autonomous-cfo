@@ -29,6 +29,11 @@ spec:
           env:
             - name: STATEMENT_PATH
               value: /opt/app-root/data/pizzeria-amalfi-bank-statement-2025-v6.csv
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: db
+                  key: DATABASE_URL
           volumeMounts:
             - name: statement
               mountPath: /opt/app-root/data
