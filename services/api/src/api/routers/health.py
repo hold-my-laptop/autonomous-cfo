@@ -20,13 +20,16 @@ class ReadyStatus(BaseModel):
 
 
 @router.get("/live")
-def live() -> HealthStatus:
+def health_live() -> HealthStatus:
     """The process is up. No dependencies are checked (used by liveness probes)."""
     return HealthStatus(status="ok")
 
 
-@router.get("/ready")
-def ready(repository: RepositoryDep, response: Response) -> ReadyStatus:
+@router.get(
+    "/ready",
+    responses={503: {"model": ReadyStatus, "description": "The demo state is not loaded"}},
+)
+def health_ready(repository: RepositoryDep, response: Response) -> ReadyStatus:
     """The demo state is loaded and requests can be served (used by readiness probes)."""
     try:
         with repository.read():
@@ -40,7 +43,7 @@ def ready(repository: RepositoryDep, response: Response) -> ReadyStatus:
     "/model",
     responses={503: {"model": ModelHealth, "description": "The model cannot be reached"}},
 )
-def model(client: AgentClientDep, settings: SettingsDep, response: Response) -> ModelHealth:
+def health_model(client: AgentClientDep, settings: SettingsDep, response: Response) -> ModelHealth:
     """Whether the LLM served on OpenShift AI answers, as checked by the AI service.
 
     503 with ok=false when the model, the AI service or agent mode (INTERNAL_TOKEN) is missing."""

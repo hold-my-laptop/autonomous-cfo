@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 
 from api.agent import AgentClient, AgentOrchestrator, HttpAgentClient
 from api.config import Settings, get_settings
@@ -22,6 +23,11 @@ from api.startup import StateLoader
 from api.state import InMemoryStateRepository, StateRepository
 
 API_PREFIX = "/api/v1"
+
+
+def operation_id(route: APIRoute) -> str:
+    """The handler's name, e.g. `get_forecast`, so generated clients get readable names."""
+    return route.name
 
 
 def build_repository(settings: Settings) -> StateRepository:
@@ -52,6 +58,7 @@ def create_app(
             "Vero Cash: cash forecast, owner rules and simulated actions for small businesses."
         ),
         lifespan=lifespan,
+        generate_unique_id_function=operation_id,
     )
     app.state.settings = settings
     app.state.repository = build_repository(settings)
@@ -74,7 +81,9 @@ def create_app(
         responses={
             "default": {
                 "model": Problem,
-                "content": {"application/problem+json": {}},
+                "content": {
+                    "application/problem+json": {"schema": {"$ref": "#/components/schemas/Problem"}}
+                },
                 "description": "Error (RFC 9457 problem details)",
             }
         },

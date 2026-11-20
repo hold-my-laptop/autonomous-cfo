@@ -60,7 +60,7 @@ def create_mandate(
 
 
 @router.post("/{version}/activate")
-def activate(
+def activate_mandate_version(
     version: int,
     body: MandateActivateIn,
     key: IdempotencyKeyDep,
@@ -77,7 +77,7 @@ def activate(
 
 
 @router.post("/pause")
-def pause(key: IdempotencyKeyDep, repository: RepositoryDep, request: Request) -> Mandate:
+def pause_mandate(key: IdempotencyKeyDep, repository: RepositoryDep, request: Request) -> Mandate:
     """While paused, everything Vero proposes needs the owner's approval."""
     with repository.write() as state:
         return run_idempotent(
@@ -89,7 +89,7 @@ def pause(key: IdempotencyKeyDep, repository: RepositoryDep, request: Request) -
 
 
 @router.post("/resume")
-def resume(key: IdempotencyKeyDep, repository: RepositoryDep, request: Request) -> Mandate:
+def resume_mandate(key: IdempotencyKeyDep, repository: RepositoryDep, request: Request) -> Mandate:
     with repository.write() as state:
         return run_idempotent(
             state,

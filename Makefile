@@ -42,7 +42,7 @@ e2e:
 > @echo "e2e: not implemented yet"
 
 schema:
-> @echo "schema: not implemented yet (Backend)"
+> cd services/api && uv run python -m api.openapi
 
 oc-api-build:
 > oc apply -n $(OC_NS) -f deploy/openshift/api/01-imagestream.yaml -f deploy/openshift/api/02-buildconfig.yaml
