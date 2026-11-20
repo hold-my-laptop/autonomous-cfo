@@ -1,5 +1,7 @@
 # Local files
 local/
+.agents/
+.claude/
 
 # Environment / secrets
 .env

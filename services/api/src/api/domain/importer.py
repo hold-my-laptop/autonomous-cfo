@@ -56,8 +56,7 @@ class StatementImportError(ValueError):
 @dataclass(frozen=True, slots=True)
 class StatementImport:
     account: str
-    transactions: list[Transaction]  # sorted by booking date
-    date_from: date
+    transactions: list[Transaction]
     date_to: date
     possible_duplicates: int
 
@@ -128,7 +127,6 @@ def parse_statement(text: str) -> StatementImport:
     if len(accounts) != 1:
         raise StatementImportError(f"expected one account, found {len(accounts)}")
 
-    # Files list newest first; sort oldest first and keep the file's within-day order reversed.
     transactions = [t for _, t in sorted(parsed, key=lambda item: (item[1].booking_date, -item[0]))]
     identical = Counter(tuple(row.values()) for _, row in rows)
     return StatementImport(
