@@ -4,6 +4,7 @@ Every call is bound to a RUNNING run and the financial version it started on, is
 `call_id`, counts towards the run's limit and adds a plain-language step to the run's trace.
 Tools never change financial data."""
 
+import json
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import date, timedelta
@@ -315,7 +316,12 @@ def _check_policy(state, run, args: CheckPolicyArgs, settings) -> ToolOutput:
         if outflow is None:
             raise ToolError("INVALID_ARGUMENT", f"no outflow {proposal.move.outflow_id}")
         decision = evaluate_move(
-            outflow, proposal.move.to_date, mandate, state.as_of, moved_alone_today(state)
+            outflow,
+            proposal.move.to_date,
+            mandate,
+            state.as_of,
+            moved_alone_today(state),
+            window_end=state.window_end,
         )
         what = outflow.counterparty
     else:
@@ -451,6 +457,10 @@ def _error(code: str, message: str, state: DemoState, used: int) -> dict:
     }
 
 
+def _fingerprint(name: str, arguments: dict) -> str:
+    return json.dumps([name, arguments], sort_keys=True, separators=(",", ":"), default=str)
+
+
 def call_tool(
     state: DemoState,
     settings: Settings,
@@ -460,19 +470,28 @@ def call_tool(
     arguments: dict,
     now,
 ) -> dict:
+    """Run one tool call for a RUNNING run.
+
+    A repeated `call_id` replays the stored response, but only for the same tool and
+    arguments. Every new call counts towards the limit and leaves a trace step, unknown tools
+    included, so a looping model shows in the trace and is stopped by the limit."""
     run = state.runs.get(run_id)
     if run is None or run.status is not RunStatus.RUNNING:
         return _error("RUN_CLOSED", f"run {run_id} is not running", state, 0)
     log = dict(run.tool_log or {})
     calls = dict(log.get("calls", {}))
     used = log.get("used", 0)
+    fingerprint = _fingerprint(name, arguments)
     if call_id in calls:
-        return calls[call_id]
+        stored = calls[call_id]
+        if stored["fingerprint"] == fingerprint:
+            return stored["response"]
+        return _error(
+            "INVALID_ARGUMENT", "call_id was already used for a different call", state, used
+        )
 
     tool = TOOLS.get(name)
-    if tool is None:
-        response = _error("UNKNOWN_TOOL", f"no tool {name!r}", state, used)
-    elif used >= settings.agent_max_tool_calls:
+    if used >= settings.agent_max_tool_calls:
         response = _error(
             "TOOL_LIMIT_REACHED",
             f"limit of {settings.agent_max_tool_calls} calls reached",
@@ -484,29 +503,35 @@ def call_tool(
     else:
         used += 1
         tracer = Tracer(run)
-        try:
-            output = tool.handler(state, run, tool.args.model_validate(arguments), settings)
-        except ValidationError as exc:
-            message = "; ".join(f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors())
-            response = _error("INVALID_ARGUMENT", message, state, used)
-            tracer.add("TOOL_CALL", f"Tool {name}: invalid arguments", now, name)
-        except ToolError as exc:
-            response = _error(exc.code, exc.message, state, used)
-            tracer.add("TOOL_CALL", f"Tool {name}: {exc.message}", now, name)
+        if tool is None:
+            response = _error("UNKNOWN_TOOL", f"no tool {name!r}", state, used)
+            tracer.add("TOOL_CALL", f"Tool {name[:60]}: unknown tool", now)
         else:
-            response = {
-                "ok": True,
-                "result": output.result,
-                "error": None,
-                "financial_version": state.financial_version,
-                "tool_calls_used": used,
-            }
-            tracer.add("TOOL_CALL", output.label, now, name, {"arguments": arguments})
-            if output.result_label:
-                tracer.add("TOOL_RESULT", output.result_label, now, name)
-            log |= output.log or {}
+            try:
+                output = tool.handler(state, run, tool.args.model_validate(arguments), settings)
+            except ValidationError as exc:
+                message = "; ".join(
+                    f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()
+                )
+                response = _error("INVALID_ARGUMENT", message, state, used)
+                tracer.add("TOOL_CALL", f"Tool {name}: invalid arguments", now, name)
+            except ToolError as exc:
+                response = _error(exc.code, exc.message, state, used)
+                tracer.add("TOOL_CALL", f"Tool {name}: {exc.message}", now, name)
+            else:
+                response = {
+                    "ok": True,
+                    "result": output.result,
+                    "error": None,
+                    "financial_version": state.financial_version,
+                    "tool_calls_used": used,
+                }
+                tracer.add("TOOL_CALL", output.label, now, name, {"arguments": arguments})
+                if output.result_label:
+                    tracer.add("TOOL_RESULT", output.result_label, now, name)
+                log |= output.log or {}
         run = replace(run, trace=tuple(tracer.steps))
 
-    calls[call_id] = response
+    calls[call_id] = {"fingerprint": fingerprint, "response": response}
     state.runs[run_id] = replace(run, tool_log=log | {"calls": calls, "used": used})
     return response

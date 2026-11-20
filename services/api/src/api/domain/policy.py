@@ -94,7 +94,10 @@ def evaluate_move(
     as_of: date,
     already_done_today: Cents = 0,
     owner_approved: bool = False,
+    window_end: date | None = None,
 ) -> PolicyDecision:
+    """`window_end` is the last forecast day: a payment moved beyond it would drop out of the
+    forecast, so such a date is refused."""
     checks: list[Check] = []
 
     if outflow.category in mandate.protected_categories:
@@ -121,6 +124,12 @@ def evaluate_move(
         validity = _failed(
             "VALIDITY",
             f"{to_date} is more than {mandate.max_delay_days} days after the due date",
+            Lane.NOT_ALLOWED,
+        )
+    elif window_end is not None and to_date > window_end:
+        validity = _failed(
+            "VALIDITY",
+            f"{to_date} is after the forecast window, which ends on {window_end}",
             Lane.NOT_ALLOWED,
         )
     else:
@@ -191,13 +200,18 @@ def evaluate_credit(
 
 
 def evaluate_moves(
-    proposals: Sequence[MoveProposal], mandate: Mandate, as_of: date
+    proposals: Sequence[MoveProposal],
+    mandate: Mandate,
+    as_of: date,
+    window_end: date | None = None,
 ) -> list[PolicyDecision]:
     """In order; moves Vero may make alone count towards the per-day limit of later ones."""
     done_today = 0
     decisions = []
     for proposal in proposals:
-        decision = evaluate_move(proposal.outflow, proposal.to_date, mandate, as_of, done_today)
+        decision = evaluate_move(
+            proposal.outflow, proposal.to_date, mandate, as_of, done_today, window_end=window_end
+        )
         if decision.lane is Lane.DONE_WITHIN_MANDATE:
             done_today += proposal.outflow.amount
         decisions.append(decision)

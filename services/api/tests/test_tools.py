@@ -253,3 +253,38 @@ def test_tools_never_change_financial_data(client: TestClient) -> None:
         call(client, run_id, name)
     assert client.get("/api/v1/forecast").json()["summary"] == before
     assert client.get("/api/v1/recommendations").json() == []
+
+
+def test_call_id_reused_for_a_different_call_is_refused(client: TestClient) -> None:
+    run_id = start_run(client)
+    mandate = call(client, run_id, "get_mandate", call_id="x")
+
+    other_tool = call(client, run_id, "get_forecast", call_id="x")
+    other_args = call(client, run_id, "get_mandate", {"surprise": 1}, call_id="x")
+
+    for response in (other_tool, other_args):
+        assert (response["ok"], response["error"]["code"]) == (False, "INVALID_ARGUMENT")
+        assert response["error"]["message"] == "call_id was already used for a different call"
+    assert call(client, run_id, "get_mandate", call_id="x") == mandate
+    assert call(client, run_id, "get_forecast")["tool_calls_used"] == 2
+
+
+def test_unknown_tools_count_and_show_in_the_trace() -> None:
+    with TestClient(create_app(settings(agent_max_tool_calls=3))) as limited:
+        run_id = start_run(limited)
+        for _ in range(3):
+            assert call(limited, run_id, "move_money")["error"]["code"] == "UNKNOWN_TOOL"
+
+        assert call(limited, run_id, "get_forecast")["error"]["code"] == "TOOL_LIMIT_REACHED"
+        trace = limited.get(f"/api/v1/runs/{run_id}").json()["trace"]
+        assert [s["label"] for s in trace].count("Tool move_money: unknown tool") == 3
+
+
+def test_non_ascii_token_is_unauthorized() -> None:
+    from api.errors import ApiError
+    from api.routers.internal import require_internal_token
+
+    with pytest.raises(ApiError) as refused:
+        require_internal_token(settings(), "Bearer tést")
+
+    assert (refused.value.status_code, refused.value.code) == (401, "UNAUTHORIZED")

@@ -333,7 +333,7 @@ sequenceDiagram
   else deadline (60 s) passes without /complete
     A->>A: watchdog fires, later callbacks are rejected (RUN_CLOSED)
   end
-  A->>DB: TraceStep FALLBACK ("Model unavailable, using standard checks")
+  A->>DB: TraceStep FALLBACK (e.g. "The model took too long, using standard checks", data.reason)
   A->>A: engine: forecast → planner → credit sizing
   A->>A: policy, execution, re-forecast (same as 2.3)
   A->>AI: POST /v1/explain (best effort, 10 s)

@@ -195,3 +195,21 @@ def test_request_hash_is_stable_and_order_independent() -> None:
 def test_problem_is_documented_in_openapi() -> None:
     schemas = create_app(settings).openapi()["components"]["schemas"]
     assert {"type", "title", "status", "code"} <= set(schemas["Problem"]["required"])
+
+
+@changes_router.get("/boom")
+def boom() -> dict:
+    raise RuntimeError("secret internals")
+
+
+def test_unexpected_error_is_a_problem(caplog: pytest.LogCaptureFixture) -> None:
+    app = create_app(settings)
+    app.include_router(changes_router)
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.get("/api/v1/test/boom")
+
+    problem = assert_problem(response, 500, "INTERNAL_ERROR")
+    assert "secret internals" not in response.text
+    assert "detail" not in problem
+    assert "unhandled error on GET /api/v1/test/boom" in caplog.text
+    assert "secret internals" in caplog.text

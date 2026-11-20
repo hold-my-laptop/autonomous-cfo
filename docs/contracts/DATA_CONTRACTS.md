@@ -22,7 +22,7 @@ apps/web ──/api/v1──▶ services/api ──start run / explain──▶ 
 
 | Topic | Rule |
 |---|---|
-| **Money** | A string holding an integer number of **cents**: `"125050"` = 1 250,50 €. Never floats. Negative allowed (`"-2276082"`) |
+| **Money** | A string holding an integer number of **cents**: `"125050"` = 1 250,50 €. Never floats. Negative allowed (`"-2276082"`). At most 15 digits (`^-?[0-9]{1,15}$`), otherwise `VALIDATION_ERROR` |
 | **Currency** | Account currency **EUR**. Foreign-currency items (CHF tranches) also carry `original_amount`, `original_currency` and `fx_rate` |
 | **Business date** | `"YYYY-MM-DD"`, Europe/Berlin |
 | **Timestamp** | UTC RFC 3339, e.g. `"2025-05-05T09:15:00Z"` |
@@ -183,11 +183,11 @@ The owner's rules for what Vero may do alone (one version).
 **Assumption**: `{ code: string, text: string }`. Codes are generated from the inputs: `REVENUE_WEEKDAY_AVERAGE_<N>W` and `CALENDAR_DAYS` and `CLOSING_DAY_CONVENTION` (always), `<CURRENCY>_AT_LAST_RATE` (foreign-currency outflows, e.g. `CHF_AT_LAST_RATE`), `OWNER_SCHEDULE` (owner-entered outflows), `CLOSURE_STOPS_VARIABLE_COSTS` (a closure that also stops supplier spending).
 
 ### Backtest *(demo)*
-Forecast vs what really happened (possible because the sample covers all of 2025). Actual balances use the same opening balance and floor, without credit lines.
+Forecast vs what really happened (possible because the sample covers all of 2025). Actual balances use the same opening balance and floor, without credit lines. The forecast side leaves out Vero's simulated actions (every payment on its due date, no credit lines), because they never happened in reality: the numbers stay those of the plan as the owner made it (e.g. S1) after moves or approvals.
 
 | Field | Type | Description |
 |---|---|---|
-| `forecast_id` | UUID | The forecast compared (same as `Forecast.id`) |
+| `forecast_id` | UUID | The current forecast (same as `Forecast.id`) this backtest belongs to |
 | `complete` | bool | False if the statement ends before the forecast window does |
 | `days` | `{ date: Date, forecast: Money, actual: Money }[]` | |
 | `forecast`, `actual` | `{ first_breach: Breach?, lowest: { date, closing }, days_below_floor: int, end_balance: Money }` | e.g. lowest 3 Jul −22 760,82 € vs 3 Jul −22 097,60 € |
@@ -264,6 +264,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | `UNAUTHORIZED` | 401 | `/internal/v1` without a valid `Bearer INTERNAL_TOKEN` |
 | `RUN_CLOSED` | 409 | Agent callback for a run that is no longer running |
 | `HTTP_ERROR` | other | Any other HTTP error |
+| `INTERNAL_ERROR` | 500 | Unexpected server failure (logged; no internal details in the body) |
 
 **Idempotency:** a repeated request with the same key and body returns the original response without repeating the change. Only successful responses are stored, so a request rejected with `VERSION_CONFLICT` can be retried with the same key after refreshing. A demo reset forgets all keys.
 
@@ -402,9 +403,9 @@ Response to `POST /recommendations/{id}/approve` and `/reject` (body `{ note? }`
 | `recommendation` | Recommendation | Updated status; `executed` set when approved |
 | `forecast_summary` | ForecastSummary | Cash after the decision |
 | `receipt_id` | UUID | The DECISION receipt |
-| `follow_up_recommendation_ids` | UUID[] | Empty for now (reserved for e.g. a resized credit line) |
+| `follow_up_recommendation_ids` | UUID[] | New recommendations made because this approval changed the data, e.g. the pending credit line resized after a move was approved (the old one becomes `SUPERSEDED`) |
 
-Errors: `NOT_FOUND` (404), `NOT_PENDING` (409, already decided), `STALE_RECOMMENDATION` (409; the recommendation is also marked `STALE`, plan again). Approving re-checks the rules with the owner's approval: protected payments and invalid dates are still refused, and the recommendation becomes `BLOCKED`.
+Errors: `NOT_FOUND` (404), `NOT_PENDING` (409, already decided), `STALE_RECOMMENDATION` (409; the recommendation is also marked `STALE`, plan again). An approval re-checks the other pending items of the same run instead of making them stale: a pending move keeps its lane with updated impact; a pending credit line is kept if it still fits, otherwise replaced by a follow-up or dropped when no gap is left. Approving re-checks the rules with the owner's approval: protected payments and invalid dates are still refused, and the recommendation becomes `BLOCKED`.
 
 #### Receipt
 Immutable evidence, from `GET /receipts/{id}`.
@@ -458,7 +459,7 @@ The backend owns data and logic. The AI service runs the agent: it **reads throu
 | 8 | Agent is done | `POST /runs/{run_id}/complete` with **AgentCompletion** | `204` |
 | 9 | Agent gave up | `POST /runs/{run_id}/fail` with `{ reason, detail? }` | `204` (backend runs FALLBACK) |
 
-Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`. A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
+Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`. A completion whose proposals have the wrong shape (e.g. `move` not an object `{ outflow_id, to_date }`) returns `422 VALIDATION_ERROR` and the run keeps its deadline. An answer the backend cannot apply falls back ("The model's answer could not be applied"). A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
 
 **Backend settings:** `AI_URL`, `INTERNAL_TOKEN` (agent mode is on only when it is set; otherwise runs are FALLBACK and synchronous), `AGENT_MAX_TOOL_CALLS` (8), `AGENT_DEADLINE_S` (60), `AGENT_START_TIMEOUT_S` (5), `EXPLAIN_TIMEOUT_S` (10), `MODEL_HEALTH_TIMEOUT_S` (20).
 
@@ -498,7 +499,7 @@ Every call is **bound to a run** and answered from the state at the run's `finan
 `{ name: string, description: string (written for the LLM), input_schema: JSON Schema }`
 
 #### ToolCall
-`{ run_id: UUID, arguments: object, call_id: string }`. A repeated `call_id` returns the same result.
+`{ run_id: UUID, arguments: object, call_id: string }`. A repeated `call_id` with the same tool and arguments returns the same result; reused for a different call it returns `INVALID_ARGUMENT`. Every new call counts towards `max_tool_calls` and adds a trace step, unknown tools included.
 
 #### ToolResult
 `{ ok: bool, result: object?, error: { code, message }?, financial_version: int, tool_calls_used: int }`
@@ -519,8 +520,8 @@ Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHE
 | Field | Type | Description |
 |---|---|---|
 | `kind` | enum | `RESCHEDULE_PAYMENT`, `CREDIT_LINE` |
-| `move` | `{ outflow_id: UUID, to_date: Date }`? | Must be one of this run's planner candidates |
-| `credit_line` | `{ amount: Money, available_from: Date }`? | Must equal this run's `size_credit_line` result |
+| `move` | `{ outflow_id: UUID, to_date: Date }`? | Must be one of this run's planner candidates. A repeated payment is discarded |
+| `credit_line` | `{ amount: Money, available_from: Date }`? | Must equal this run's `size_credit_line` result. Only one per completion. The backend sizes it again after the moves are applied, since moves waiting for approval have not happened, and notes a resize in the trace |
 | `rationale` | string? | Shown as "Vero's note", never as a fact |
 
 #### AgentCompletion

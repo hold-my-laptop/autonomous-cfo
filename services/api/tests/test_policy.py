@@ -244,3 +244,15 @@ def test_demo_paused_needs_approval_for_everything() -> None:
     _, moves, credit = demo_decisions(mandate(paused=True))
     assert [m.lane for m in moves] == [Lane.NEEDS_APPROVAL]
     assert credit.lane is Lane.NEEDS_APPROVAL
+
+
+def test_moving_past_the_forecast_window_is_not_allowed() -> None:
+    window_end = TO - timedelta(days=1)
+
+    decision = evaluate_move(outflow(), TO, mandate(), AS_OF, window_end=window_end)
+
+    assert decision.lane is Lane.NOT_ALLOWED
+    assert failed(decision) == {"VALIDITY": Lane.NOT_ALLOWED}
+    assert evaluate_move(outflow(), TO, mandate(), AS_OF, window_end=TO).lane is (
+        Lane.DONE_WITHIN_MANDATE
+    )

@@ -1,5 +1,5 @@
 import hmac
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from api.agent import RunClosedError
 from api.deps import AgentDep, RepositoryDep, SettingsDep
 from api.errors import ApiError, ErrorCode
+from api.money import Money
 from api.tools import call_tool, tool_specs
 
 
@@ -18,7 +19,11 @@ def require_internal_token(
     """Only the AI service (holding INTERNAL_TOKEN) may call /internal."""
     expected = settings.internal_token.get_secret_value() if settings.internal_token else None
     scheme, _, token = (authorization or "").partition(" ")
-    if not expected or scheme.lower() != "bearer" or not hmac.compare_digest(token, expected):
+    if (
+        not expected
+        or scheme.lower() != "bearer"
+        or not hmac.compare_digest(token.encode(), expected.encode())
+    ):
         raise ApiError(status.HTTP_401_UNAUTHORIZED, ErrorCode.UNAUTHORIZED)
 
 
@@ -78,10 +83,30 @@ class NoteIn(BaseModel):
     text: str = Field(min_length=1, max_length=500)
 
 
+class MoveIn(BaseModel):
+    outflow_id: UUID
+    to_date: date
+
+
+class CreditLineIn(BaseModel):
+    amount: Money
+    available_from: date
+
+
+class ProposalIn(BaseModel):
+    """Shape only; whether a proposal is usable (known kind, a planner candidate, the sized
+    credit line) is decided when the run is finalized, and unusable ones are discarded."""
+
+    kind: str = Field(max_length=50)
+    move: MoveIn | None = None
+    credit_line: CreditLineIn | None = None
+    rationale: str | None = Field(default=None, max_length=1000)
+
+
 class CompletionIn(BaseModel):
     """The agent's final answer; proposals are re-checked against this run's tool results."""
 
-    proposals: list[dict[str, Any]] = Field(max_length=10)
+    proposals: list[ProposalIn] = Field(max_length=10)
     summary_note: str | None = Field(default=None, max_length=2000)
     model: str | None = None
     prompt_version: str | None = None
@@ -111,7 +136,7 @@ def complete_run(
 ) -> None:
     """The texts are asked for after the response, so the agent is not kept waiting."""
     try:
-        agent.complete(run_id, body.model_dump())
+        agent.complete(run_id, body.model_dump(mode="json"))
     except RunClosedError as exc:
         raise _closed(exc) from exc
     background.add_task(agent.explain, run_id)

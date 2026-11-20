@@ -16,7 +16,7 @@ Phase 1, Vero Cash. Every feature traces back to [`DESIGN.md`](DESIGN.md) (rules
 - **Done when:** `GET /api/v1/health/live` returns `{"status":"ok"}` and `uv run pytest` runs.
 
 ### B02 · Money and dates — MUST
-- Money is an integer number of **cents** everywhere. JSON serializes it as a string (`"125050"`), and input accepts only `^-?\d+$`.
+- Money is an integer number of **cents** everywhere. JSON serializes it as a string (`"125050"`), and input accepts only `^-?[0-9]{1,15}$` (15 digits keep every value and sum within PostgreSQL BIGINT).
 - Parse German amounts (`-4166,67`, `275,35`) without floats.
 - Parse dates in `dd.mm.yy` format.
 - Calendar days only.
@@ -118,7 +118,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 - **Done when:** v1 → v2 (act alone on, 5 000 / 5 000 €) works, and removing `TAX` returns 422.
 
 ### B14 · Planner (greedy) — MUST
-- Candidates: movable, not protected, not already moved, `date ≤ first_breach < latest_allowed_date`.
+- Candidates: movable, not protected, not already moved, `date ≤ first_breach < latest_allowed_date`. The target date is kept inside the forecast window.
 - **Minimum benefit:** use a candidate only if it delays the first breach or cuts days below the floor by **≥ 3 days**.
 - **Order:** larger amount first, then the target date furthest away, then ref.
 - Move it, recompute, repeat.
@@ -132,7 +132,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
   - at S1 (v1, no move): 17 760,82 € → 20 000 € from 15 Jun.
 
 ### B16 · Policy engine — MUST
-- Evaluate **every** rule and record each check: R4 protected, validity (within `latest_allowed_date` and `max_delay_days`, not before today), pause, R2 act-alone, R3 per action / per decision day, R5 credit (enabled, ≤ max, **always** needs approval), R1 info.
+- Evaluate **every** rule and record each check: R4 protected, validity (within `latest_allowed_date` and `max_delay_days`, not before today, not after the forecast window), pause, R2 act-alone, R3 per action / per decision day, R5 credit (enabled, ≤ max, **always** needs approval), R1 info.
 - The strictest result wins → lane `DONE_WITHIN_MANDATE`, `NEEDS_APPROVAL` or `NOT_ALLOWED`.
 - With owner approval, R2, R3 and pause are lifted. R4 and validity are not.
 - Pure function with a `policy_version`.
@@ -172,7 +172,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 ## Milestone C: persistence
 
 ### B20 · PostgreSQL — MUST
-- SQLModel (preferred by the FastAPI skill) or SQLAlchemy, plus Alembic migrations.
+- SQLModel (preferred by the FastAPI skill). No Alembic: the tables hold only demo state that a reset rebuilds from the CSV, so a schema change bumps `SCHEMA_VERSION` in `persistence.py` and the tables are recreated at startup. Add Alembic once real data must survive schema changes.
 - **Tables:** company, transactions, recurring payments, outflows, inflows, planned events, mandate versions, events, runs, trace steps, forecasts, recommendations, executions, receipts, idempotency keys, credit lines. Money as `BIGINT` cents.
 - Swap the in-memory repository for the database one. Demo reset = truncate + re-import.
 - Uses `infra/docker-compose.yml` (Postgres on `localhost:5433` locally).
@@ -225,7 +225,8 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 ### B29 · Container + config for OpenShift — MUST (with DevOps)
 - Containerfile (UBI Python, non-root), `fastapi run`.
 - Env: `DATABASE_URL`, `AI_URL`, `INTERNAL_TOKEN`, `DEMO_MODE`, `DEMO_AS_OF_DATE`, `STATEMENT_PATH`.
-- Readiness checks the DB.
+- Readiness checks the DB. If the database (or the statement) is not available at startup, later requests retry loading at most every `STATE_LOAD_RETRY_S` (5 s), so the pod becomes ready on its own once the database is up; interrupted agent runs are then recovered.
+- **Single replica only** (`replicas: 1`, `strategy: Recreate`). Agent run deadlines live in process memory, a starting pod falls back every run still `RUNNING`, and a pod whose `DEMO_AS_OF_DATE` differs from the database resets it. Two API pods must never run at once.
 - The sample CSV is available in the image or a volume (**decide** whether it may be committed to `data/`).
 
 ### B30 · Scenario test — MUST (release gate)

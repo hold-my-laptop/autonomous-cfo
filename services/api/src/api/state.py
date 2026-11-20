@@ -6,7 +6,8 @@ else in `DemoState` is changed by the owner or by Vero and is what repositories 
 import threading
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
-from dataclasses import dataclass, field
+from copy import copy
+from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, date, datetime, time
 from typing import Any, Protocol
 from uuid import UUID, uuid5
@@ -167,7 +168,17 @@ class DemoState:
         return size_credit_line(data, available_until, rounding)
 
     def backtest(self) -> Backtest:
-        return compute_backtest(self.forecast(), self.opening_balance, self.statement.transactions)
+        """Forecast accuracy against what was really booked. Vero's simulated moves and credit
+        lines never happened in reality, so the forecast compared leaves them out: every
+        payment on its due date, no credit."""
+        unchanged = replace(
+            self.forecast_input(),
+            outflows=tuple(replace(o, scheduled_date=o.due_date) for o in self.outflows),
+            credit_lines=(),
+        )
+        return compute_backtest(
+            compute_forecast(unchanged), self.opening_balance, self.statement.transactions
+        )
 
 
 def build_base(settings: Settings) -> BaseData:
@@ -252,5 +263,17 @@ class InMemoryStateRepository:
 
     @contextmanager
     def write(self) -> Iterator[DemoState]:
+        """Like a database transaction: if the block raises, the state is put back as it was.
+
+        Items are immutable and only the lists and dicts holding them change, so copying the
+        containers is enough for the snapshot."""
         with self._lock:
-            yield self._current()
+            state = self._current()
+            snapshot = replace(
+                state, **{f.name: copy(getattr(state, f.name)) for f in fields(state)}
+            )
+            try:
+                yield state
+            except BaseException:
+                self._state = snapshot
+                raise

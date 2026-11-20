@@ -121,3 +121,19 @@ def test_missing_statement_does_not_stop_the_app() -> None:
 
 def replace_settings(**changes) -> Settings:
     return Settings(**(settings.model_dump() | changes))
+
+
+def test_in_memory_write_is_rolled_back_on_error() -> None:
+    repository = InMemoryStateRepository(settings)
+    repository.start()
+    with repository.read() as state:
+        before = (state.financial_version, len(state.planned_events), len(state.runs))
+
+    with pytest.raises(RuntimeError), repository.write() as state:
+        state.financial_version += 1
+        state.planned_events.append(None)
+        state.runs[uuid4()] = None
+        raise RuntimeError("boom")
+
+    with repository.read() as state:
+        assert (state.financial_version, len(state.planned_events), len(state.runs)) == before

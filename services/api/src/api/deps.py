@@ -8,6 +8,8 @@ from api.state import StateRepository
 
 
 def get_repository(request: Request) -> StateRepository:
+    """The repository, after retrying a failed start if one is due."""
+    request.app.state.loader.ensure()
     return request.app.state.repository
 
 

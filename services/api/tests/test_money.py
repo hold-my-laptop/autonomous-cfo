@@ -61,6 +61,13 @@ def test_money_accepts_digit_strings_and_ints() -> None:
     assert Amount.model_validate({"amount": "-500000"}).amount == -500000
     assert Amount.model_validate_json('{"amount": "125050"}').amount == 125050
     assert Amount(amount=42).amount == 42
+    assert Amount.model_validate({"amount": "-999999999999999"}).amount == -(10**15 - 1)
+
+
+@pytest.mark.parametrize("value", ["1000000000000000", "-99999999999999999999", 10**15, -(10**15)])
+def test_money_rejects_amounts_beyond_15_digits(value: object) -> None:
+    with pytest.raises(ValidationError):
+        Amount.model_validate({"amount": value})
 
 
 @pytest.mark.parametrize("value", [12.5, "12.50", "1,5", "1e3", "", " 5", True])
@@ -72,4 +79,4 @@ def test_money_rejects_floats_and_invalid_strings(value: object) -> None:
 def test_money_json_schema_is_a_string() -> None:
     schema = Amount.model_json_schema()["properties"]["amount"]
     assert schema["type"] == "string"
-    assert schema["pattern"] == "^-?[0-9]+$"
+    assert schema["pattern"] == "^-?[0-9]{1,15}$"
