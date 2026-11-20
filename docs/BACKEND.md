@@ -172,7 +172,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 ## Milestone C: persistence
 
 ### B20 · PostgreSQL — MUST
-- SQLModel (preferred by the FastAPI skill) or SQLAlchemy, plus Alembic migrations.
+- SQLModel (preferred by the FastAPI skill). No Alembic: the tables hold only demo state that a reset rebuilds from the CSV, so a schema change bumps `SCHEMA_VERSION` in `persistence.py` and the tables are recreated at startup. Add Alembic once real data must survive schema changes.
 - **Tables:** company, transactions, recurring payments, outflows, inflows, planned events, mandate versions, events, runs, trace steps, forecasts, recommendations, executions, receipts, idempotency keys, credit lines. Money as `BIGINT` cents.
 - Swap the in-memory repository for the database one. Demo reset = truncate + re-import.
 - Uses `infra/docker-compose.yml` (Postgres on `localhost:5433` locally).

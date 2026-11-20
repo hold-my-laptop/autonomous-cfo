@@ -13,7 +13,14 @@ from uuid import UUID
 import httpx
 
 from api.config import Settings
-from api.decisions import fall_back, finalize_agent_run
+from api.decisions import (
+    FALLBACK_AI_UNREACHABLE,
+    FALLBACK_DATA_CHANGED,
+    FALLBACK_DEADLINE,
+    FALLBACK_RESTARTED,
+    fall_back,
+    finalize_agent_run,
+)
 from api.domain.models import Run, RunStatus, TraceStep
 from api.explain import ExplainResult, settle
 from api.schemas import ModelHealth
@@ -137,7 +144,7 @@ class AgentOrchestrator:
         with self._repository.read() as state:
             payload = start_payload(state, _running(state, run_id), self._settings)
         timer = threading.Timer(
-            self._settings.agent_deadline_s, self.fall_back, args=(run_id, "deadline passed")
+            self._settings.agent_deadline_s, self.fall_back, args=(run_id, FALLBACK_DEADLINE)
         )
         timer.daemon = True
         with self._lock:
@@ -147,7 +154,7 @@ class AgentOrchestrator:
             self._client.start_run(payload)
         except AgentUnavailableError as exc:
             logger.warning("agent unavailable for run %s: %s", run_id, exc)
-            self.fall_back(run_id, "AI service unreachable")
+            self.fall_back(run_id, FALLBACK_AI_UNREACHABLE)
 
     def recover(self) -> None:
         """Runs left RUNNING by a restart have lost their agent; finish them without it.
@@ -156,7 +163,7 @@ class AgentOrchestrator:
             running = [r.id for r in state.runs.values() if r.status is RunStatus.RUNNING]
             finalizing = [r.id for r in state.runs.values() if r.status is RunStatus.FINALIZING]
         for run_id in running:
-            self.fall_back(run_id, "service restarted")
+            self.fall_back(run_id, FALLBACK_RESTARTED)
         for run_id in finalizing:
             self.explain(run_id)
 
@@ -183,6 +190,7 @@ class AgentOrchestrator:
             timer.cancel()
 
     def _fall_back(self, state: DemoState, run: Run, reason: str) -> None:
+        logger.warning("run %s falls back to the backend pipeline: %s", run.id, reason)
         fall_back(
             state,
             run,
@@ -212,7 +220,7 @@ class AgentOrchestrator:
             run = _running(state, run_id)
             self._stop_timer(run_id)
             if state.financial_version != run.started_financial_version:
-                self._fall_back(state, run, "data changed during the run")
+                self._fall_back(state, run, FALLBACK_DATA_CHANGED)
                 return
             finalize_agent_run(
                 state,

@@ -269,7 +269,8 @@ def test_timeout_falls_back() -> None:
 
         assert (finished["status"], finished["mode"]) == ("SUCCEEDED", "FALLBACK")
         [step] = [s for s in finished["trace"] if s["kind"] == "FALLBACK"]
-        assert "deadline passed" in step["label"]
+        assert step["label"] == "The model took too long, using standard checks"
+        assert step["data"] == {"reason": "DEADLINE_PASSED"}
         assert finished["result"]["headline"]["source"] == "MODEL"
         assert finished["result"]["counts"]["done_within_mandate"] == 1
 
@@ -278,7 +279,7 @@ def test_timeout_falls_back() -> None:
         assert callback(client, run_id, "notes", {"text": "late"}).status_code == 409
 
 
-def test_fail_falls_back(client: TestClient) -> None:
+def test_fail_falls_back(client: TestClient, caplog: pytest.LogCaptureFixture) -> None:
     run_id = close_june(client).json()["run_id"]
 
     response = callback(client, run_id, "fail", {"reason": "MODEL_ERROR", "detail": "500"})
@@ -286,6 +287,9 @@ def test_fail_falls_back(client: TestClient) -> None:
     assert response.status_code == 204
     finished = run(client, run_id)
     assert (finished["status"], finished["mode"]) == ("SUCCEEDED", "FALLBACK")
+    [step] = [s for s in finished["trace"] if s["kind"] == "FALLBACK"]
+    assert step["label"] == "The model could not finish (MODEL_ERROR), using standard checks"
+    assert f"run {run_id} falls back to the backend pipeline: MODEL_ERROR" in caplog.text
     assert finished["result"]["counts"]["needs_approval"] == 2
     assert callback(client, run_id, "fail", {"reason": "again"}).status_code == 409
 
@@ -296,7 +300,9 @@ def test_unreachable_ai_falls_back() -> None:
         finished = run(client, run_id)
 
         assert (finished["status"], finished["mode"]) == ("SUCCEEDED", "FALLBACK")
-        assert any("AI service unreachable" in s["label"] for s in finished["trace"])
+        assert "The AI service is unavailable, using standard checks" in [
+            s["label"] for s in finished["trace"]
+        ]
 
 
 def test_real_client_without_ai_service_falls_back() -> None:
@@ -348,7 +354,8 @@ def test_data_change_during_run_falls_back(client: TestClient) -> None:
 
     finished = run(client, run_id)
     assert finished["mode"] == "FALLBACK"
-    assert any("data changed" in s["label"] for s in finished["trace"])
+    [step] = [s for s in finished["trace"] if s["kind"] == "FALLBACK"]
+    assert step["label"] == "Your data changed during the analysis, using standard checks"
 
 
 def test_callbacks_need_the_token(client: TestClient) -> None:
@@ -569,3 +576,14 @@ def test_repeated_proposals_are_discarded(client: TestClient) -> None:
     }
     kinds = sorted(r["kind"] for r in client.get("/api/v1/recommendations").json())
     assert kinds == ["CREDIT_LINE", "RESCHEDULE_PAYMENT"]
+
+
+def test_restart_falls_back_running_runs(client: TestClient) -> None:
+    run_id = close_june(client).json()["run_id"]
+
+    client.app.state.agent.recover()
+
+    finished = run(client, run_id)
+    assert (finished["status"], finished["mode"]) == ("SUCCEEDED", "FALLBACK")
+    [step] = [s for s in finished["trace"] if s["kind"] == "FALLBACK"]
+    assert step["label"] == "Vero restarted during the analysis, using standard checks"

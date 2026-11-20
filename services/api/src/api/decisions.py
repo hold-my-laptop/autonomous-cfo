@@ -454,6 +454,26 @@ def run_fallback(
     )
 
 
+FALLBACK_DEADLINE = "DEADLINE_PASSED"
+FALLBACK_AI_UNREACHABLE = "AI_UNREACHABLE"
+FALLBACK_DATA_CHANGED = "DATA_CHANGED"
+FALLBACK_RESTARTED = "SERVICE_RESTARTED"
+
+_FALLBACK_LABELS = {
+    FALLBACK_DEADLINE: "The model took too long",
+    FALLBACK_AI_UNREACHABLE: "The AI service is unavailable",
+    FALLBACK_DATA_CHANGED: "Your data changed during the analysis",
+    FALLBACK_RESTARTED: "Vero restarted during the analysis",
+}
+
+
+def fallback_label(reason: str) -> str:
+    """Plain words for why the backend finished the run; any other reason came from the
+    agent giving up (e.g. MODEL_ERROR)."""
+    cause = _FALLBACK_LABELS.get(reason, f"The model could not finish ({reason})")
+    return f"{cause}, using standard checks"
+
+
 def fall_back(
     state: DemoState,
     run: Run,
@@ -463,7 +483,7 @@ def fall_back(
     credit_rounding: Cents,
 ) -> Run:
     trace = Tracer(run)
-    trace.add("FALLBACK", f"Model unavailable ({reason}), using standard checks", now)
+    trace.add("FALLBACK", fallback_label(reason), now, None, {"reason": reason})
     return run_fallback(
         state,
         replace(run, trace=tuple(trace.steps)),
