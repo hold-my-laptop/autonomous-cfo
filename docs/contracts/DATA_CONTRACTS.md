@@ -291,9 +291,9 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | 9 | Owner edits / activates / pauses rules | `POST /mandate` (**MandateIn**), `POST /mandate/{version}/activate` (`{ expected_active_version }`), `POST /mandate/pause` / `resume` | **Mandate** |
 | 10 | Something changes (e.g. "we close in June") | `POST /events` with **EventIn** | **202** `{ run_id, status }`: the run's current status (`QUEUED`/`RUNNING`, or `SUCCEEDED` if it already finished) |
 | 11 | Watching the agent work | `GET /runs/{run_id}` (poll ~500 ms) | **Run** |
-| 12 | Recommendations | `GET /recommendations?lane=&status=` | **Recommendation[]** |
+| 12 | Recommendations | `GET /recommendations?lane=&status=` (newest first), `GET /recommendations/{id}` | **Recommendation[]** / **Recommendation** |
 | 13 | Owner approves / rejects | `POST /recommendations/{id}/approve` or `/reject` with `{ note? }` | **DecisionResult** |
-| 14 | Owner asks to move a payment | `POST /outflows/{id}/reschedule-requests` with `{ to_date }` | **202** `{ run_id }` (e.g. payroll → NOT_ALLOWED) |
+| 14 | Owner asks to move a payment | `POST /outflows/{id}/reschedule-requests` with `{ to_date, note? }` | **202** `{ run_id, status }`. The same rules apply with the owner's approval implied: payroll → `BLOCKED` (NOT_ALLOWED), a movable payment is moved (`APPROVED_EXECUTED`) |
 | 15 | Evidence | `GET /receipts/{id}` | **Receipt** |
 | 16 | Health / model check | `GET /health/live`, `/health/ready`, `/health/model` | live: `{ status: "ok" }` · ready: `{ status: "ok" \| "unavailable", state_loaded: bool }` (503 when not loaded) · model: **ModelHealth** |
 | 17 | Demo reset | `POST /demo/reset` | `{ reset: true, as_of_date, financial_version }` |
@@ -330,7 +330,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | `pending_count` | int | |
 | `latest_run` | `{ run_id, status }?` | |
 
-**Finding**: `{ kind: "DRIVER" | "RECURRING" | "FX_EXPOSURE" | "BACKTEST", text: string, data: object? }`, e.g. "4 CHF tranches so far cost 4 325,00–4 354,17 € (rate 1,038–1,045)".
+**Finding**: `{ kind: "DRIVER" | "RECURRING" | "FX_EXPOSURE" | "BACKTEST", text: string }`, e.g. "4 CHF tranches so far cost 4 325,00–4 354,17 € (rate 1,038–1,045)".
 
 **Explanation**: `{ text: string, source: "MODEL" | "REPLAY" | "TEMPLATE" }`.
 
@@ -370,7 +370,7 @@ Statement imports (`POST /imports/bank-statement`) create a `STATEMENT_IMPORTED`
 | `error` | Problem? | When `FAILED` |
 | `created_at`, `finished_at` | Timestamp, Timestamp? | |
 
-**RunResult**: `forecast_id: UUID`, `recommendation_ids: UUID[]`, `headline: Explanation`, `counts: { done_within_mandate, needs_approval, not_allowed }`, `gap_closed: bool`.
+**RunResult**: `forecast_id: UUID`, `recommendation_ids: UUID[]`, `headline: Explanation?`, `counts: { done_within_mandate, needs_approval, not_allowed }` (by lane), `gap_closed: bool?` (no day below the floor after the run). `GET /runs?limit=` lists runs newest first.
 
 #### Recommendation
 
@@ -378,51 +378,56 @@ Statement imports (`POST /imports/bank-statement`) create a `STATEMENT_IMPORTED`
 |---|---|---|
 | `id`, `run_id` | UUID | |
 | `kind` | enum | `RESCHEDULE_PAYMENT`, `CREDIT_LINE` |
-| `lane` | enum | `DONE_WITHIN_MANDATE`, `NEEDS_APPROVAL`, `NOT_ALLOWED` |
-| `status` | enum | `EXECUTED`, `PENDING`, `APPROVED_EXECUTED`, `REJECTED`, `BLOCKED`, `STALE`, `SUPERSEDED` |
+| `lane` | enum | `DONE_WITHIN_MANDATE`, `NEEDS_APPROVAL`, `NOT_ALLOWED` (fixed when proposed) |
+| `status` | enum | `EXECUTED` (done alone), `PENDING`, `APPROVED_EXECUTED`, `REJECTED`, `BLOCKED` (refused by the rules), `STALE` (data changed before the decision), `SUPERSEDED` (a newer run replaced it) |
 | `execution` | `"SIMULATED"` | Always. Show a "Simulated" badge |
-| `subject` | RescheduleSubject \| CreditLineSubject | By `kind` |
-| `reason` | `{ first_breach: Date, shortfall: Money }` | The problem it addresses |
+| `subject` | RescheduleSubject \| CreditLineSubject | By `kind` (discriminator `subject.kind`) |
+| `reason` | `{ first_breach: Date?, shortfall: Money, requested_by?: "OWNER" }` | The problem it addresses. `requested_by` is set for owner reschedule requests |
 | `checks` | Check[] | Every rule checked, including passes |
 | `impact` | `{ before: ImpactState, after_if_executed: ImpactState }` | |
 | `explanation` | Explanation | |
-| `receipt_id` | UUID | |
+| `receipt_ids` | UUID[] | Oldest first: the PROPOSAL receipt, then the DECISION receipt if any |
+| `executed` | `{ execution: "SIMULATED", confirmation_ref: "SIM-…", executed_by: "VERO" \| "OWNER", executed_at: Timestamp }?` | When it was executed |
+| `note` | string? | Owner's note on the decision |
 | `created_at`, `decided_at` | Timestamp, Timestamp? | |
 
 **RescheduleSubject**: `kind: "RESCHEDULE_PAYMENT"`, `outflow_id`, `ref`, `counterparty`, `category`, `amount`, `original_amount?`, `original_currency?`, `from_date`, `to_date`.
 
-**CreditLineSubject**: `kind: "CREDIT_LINE"`, `product: "SHORT_TERM_CREDIT_LINE"`, all **CreditLine** fields, `illustrative: true` (show "illustrative, not a bank offer").
+**CreditLineSubject**: `kind: "CREDIT_LINE"`, `product: "SHORT_TERM_CREDIT_LINE"`, `amount`, `available_from`, `available_until`, `shortfall`, `rounded_to`, `headroom_at_lowest`, `illustrative: true` (show "illustrative, not a bank offer").
 
-**Check**: `{ rule: "R1".."R5" | "VALIDITY" | "PAUSE", result: "PASS" | "FAIL" | "INFO", effect?: "NEEDS_APPROVAL" | "NOT_ALLOWED", text: string }`, e.g. "4 333,34 € is within your 5 000 € limit for acting alone".
+**Check**: `{ rule: "R1".."R5" | "VALIDITY" | "PAUSE", result: "PASS" | "FAIL" | "INFO", effect: "NEEDS_APPROVAL" | "NOT_ALLOWED" | null, text: string }` (`effect` only on FAIL), e.g. "4 333,34 € is within your 5 000 € limit for acting alone".
 
 **ImpactState**: `{ first_breach: Date?, lowest: Money, lowest_date: Date, days_below_floor: int }`.
 
 #### DecisionResult
+Response to `POST /recommendations/{id}/approve` and `/reject` (body `{ note? }`, `Idempotency-Key` required).
 
 | Field | Type | Description |
 |---|---|---|
-| `recommendation` | Recommendation | Updated status |
-| `execution` | `{ execution: "SIMULATED", confirmation_ref: string, executed_at: Timestamp }?` | When approved |
+| `recommendation` | Recommendation | Updated status; `executed` set when approved |
 | `forecast_summary` | ForecastSummary | Cash after the decision |
-| `receipt_id` | UUID | |
-| `follow_up_recommendation_ids` | UUID[] | e.g. a resized credit line |
+| `receipt_id` | UUID | The DECISION receipt |
+| `follow_up_recommendation_ids` | UUID[] | Empty for now (reserved for e.g. a resized credit line) |
+
+Errors: `NOT_FOUND` (404), `NOT_PENDING` (409, already decided), `STALE_RECOMMENDATION` (409; the recommendation is also marked `STALE`, plan again). Approving re-checks the rules with the owner's approval: protected payments and invalid dates are still refused, and the recommendation becomes `BLOCKED`.
 
 #### Receipt
+Immutable evidence, from `GET /receipts/{id}`.
 
 | Field | Type | Description |
 |---|---|---|
 | `id`, `recommendation_id` | UUID | |
-| `kind` | enum | `PROPOSAL` or `DECISION` |
+| `kind` | enum | `PROPOSAL` (Vero proposed or acted) or `DECISION` (owner decided or requested) |
 | `created_at` | Timestamp | |
-| `trigger` | string | |
+| `trigger` | string | What started it, e.g. "You plan to close 1 Jun – 30 Jun" or "Your decision" |
 | `subject` | RescheduleSubject \| CreditLineSubject | |
 | `lane` | enum | |
-| `decision` | enum? | `APPROVED`, `REJECTED` |
+| `decision` | enum? | `APPROVED`, `REJECTED`, `REQUESTED` (owner reschedule request) |
 | `checks` | Check[] | |
 | `before`, `after` | ImpactState | |
-| `assumptions` | Assumption[] | |
+| `assumptions` | string[] | Assumption codes of the forecast used |
 | `mandate_version`, `financial_version` | int | |
-| `versions` | map string→string | `revenue_model`, `engine`, `planner`, `policy`, `prompt` |
+| `versions` | map string→string | `engine`, `planner`, `policy`, `revenue_model` |
 | `execution` | `"SIMULATED"` | |
 | `explanation` | Explanation | |
 
