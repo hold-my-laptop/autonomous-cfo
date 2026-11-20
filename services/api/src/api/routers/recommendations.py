@@ -84,7 +84,7 @@ def _decide(
 
 
 @router.post("/recommendations/{recommendation_id}/approve")
-def approve(
+def approve_recommendation(
     recommendation_id: UUID,
     key: IdempotencyKeyDep,
     repository: RepositoryDep,
@@ -97,7 +97,7 @@ def approve(
 
 
 @router.post("/recommendations/{recommendation_id}/reject")
-def reject(
+def reject_recommendation(
     recommendation_id: UUID,
     key: IdempotencyKeyDep,
     repository: RepositoryDep,

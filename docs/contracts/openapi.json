@@ -1,0 +1,4227 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Vero API",
+    "description": "Vero Cash: cash forecast, owner rules and simulated actions for small businesses.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/health/live": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Live",
+        "description": "The process is up. No dependencies are checked (used by liveness probes).",
+        "operationId": "health_live",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Ready",
+        "description": "The demo state is loaded and requests can be served (used by readiness probes).",
+        "operationId": "health_ready",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyStatus"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The demo state is not loaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadyStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/model": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Model",
+        "description": "Whether the LLM served on OpenShift AI answers, as checked by the AI service.\n\n503 with ok=false when the model, the AI service or agent mode (INTERNAL_TOKEN) is missing.",
+        "operationId": "health_model",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelHealth"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The model cannot be reached",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelHealth"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/company": {
+      "get": {
+        "tags": [
+          "data"
+        ],
+        "summary": "Get Company",
+        "operationId": "get_company",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/transactions": {
+      "get": {
+        "tags": [
+          "data"
+        ],
+        "summary": "List Transactions",
+        "description": "Statement lines the owner already has (booked before the demo's \"today\"), oldest first.",
+        "operationId": "list_transactions",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To"
+            }
+          },
+          {
+            "name": "category",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Category"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Transaction"
+                  },
+                  "title": "Response List Transactions"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/outflows": {
+      "get": {
+        "tags": [
+          "data"
+        ],
+        "summary": "List Outflows",
+        "operationId": "list_outflows",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Outflow"
+                  },
+                  "type": "array",
+                  "title": "Response List Outflows"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inflows": {
+      "get": {
+        "tags": [
+          "data"
+        ],
+        "summary": "List Inflows",
+        "operationId": "list_inflows",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Inflow"
+                  },
+                  "type": "array",
+                  "title": "Response List Inflows"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/revenue-model": {
+      "get": {
+        "tags": [
+          "data"
+        ],
+        "summary": "Get Revenue Model",
+        "operationId": "get_revenue_model",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RevenueModel"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/planned-events": {
+      "get": {
+        "tags": [
+          "data"
+        ],
+        "summary": "List Planned Events",
+        "operationId": "list_planned_events",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PlannedEvent"
+                  },
+                  "type": "array",
+                  "title": "Response List Planned Events"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/outflows/{outflow_id}/reschedule-requests": {
+      "post": {
+        "tags": [
+          "data"
+        ],
+        "summary": "Request Reschedule",
+        "description": "The owner asks to move a payment. The same rules apply; protected payments are refused.",
+        "operationId": "request_reschedule",
+        "parameters": [
+          {
+            "name": "outflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Outflow Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RescheduleIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/mandate": {
+      "get": {
+        "tags": [
+          "mandate"
+        ],
+        "summary": "Get Mandate",
+        "operationId": "get_mandate",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mandate"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "mandate"
+        ],
+        "summary": "Create Mandate",
+        "description": "Save new rules as a DRAFT version. Nothing changes until it is activated.",
+        "operationId": "create_mandate",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MandateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mandate"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/mandate/versions": {
+      "get": {
+        "tags": [
+          "mandate"
+        ],
+        "summary": "List Mandate Versions",
+        "description": "All versions, newest first.",
+        "operationId": "list_mandate_versions",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Mandate"
+                  },
+                  "type": "array",
+                  "title": "Response List Mandate Versions"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/mandate/{version}/activate": {
+      "post": {
+        "tags": [
+          "mandate"
+        ],
+        "summary": "Activate Mandate Version",
+        "operationId": "activate_mandate_version",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MandateActivateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mandate"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/mandate/pause": {
+      "post": {
+        "tags": [
+          "mandate"
+        ],
+        "summary": "Pause Mandate",
+        "description": "While paused, everything Vero proposes needs the owner's approval.",
+        "operationId": "pause_mandate",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mandate"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/mandate/resume": {
+      "post": {
+        "tags": [
+          "mandate"
+        ],
+        "summary": "Resume Mandate",
+        "operationId": "resume_mandate",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Mandate"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/forecast": {
+      "get": {
+        "tags": [
+          "forecast"
+        ],
+        "summary": "Get Forecast",
+        "description": "91-day daily forecast; `weekly=true` adds 13 weekly buckets for display.",
+        "operationId": "get_forecast",
+        "parameters": [
+          {
+            "name": "weekly",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Weekly"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Forecast"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/forecast/backtest": {
+      "get": {
+        "tags": [
+          "forecast"
+        ],
+        "summary": "Get Backtest",
+        "description": "The current forecast compared with what was actually booked in the sample year.",
+        "operationId": "get_backtest",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Backtest"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/events": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Post Event",
+        "description": "Tell Vero something changed. Starts a run; poll GET /runs/{run_id}.\n\n409 RUN_IN_PROGRESS while the agent is still working on an earlier run.",
+        "operationId": "post_event",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClosurePlannedIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/runs": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "List Runs",
+        "description": "Newest first.",
+        "operationId": "list_runs",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Run"
+                  },
+                  "title": "Response List Runs"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/runs/{run_id}": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Run",
+        "operationId": "get_run",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Run"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/overview": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Get Overview",
+        "description": "Everything the main screen needs in one call.",
+        "operationId": "get_overview",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations": {
+      "get": {
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "List Recommendations",
+        "description": "Newest first.",
+        "operationId": "list_recommendations",
+        "parameters": [
+          {
+            "name": "lane",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "DONE_WITHIN_MANDATE",
+                    "NEEDS_APPROVAL",
+                    "NOT_ALLOWED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Lane"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecommendationStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Recommendation"
+                  },
+                  "title": "Response List Recommendations"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations/{recommendation_id}": {
+      "get": {
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "Get Recommendation",
+        "operationId": "get_recommendation",
+        "parameters": [
+          {
+            "name": "recommendation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recommendation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Recommendation"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations/{recommendation_id}/approve": {
+      "post": {
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "Approve Recommendation",
+        "description": "Approve a pending recommendation; it is executed in simulation.",
+        "operationId": "approve_recommendation",
+        "parameters": [
+          {
+            "name": "recommendation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recommendation Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DecisionIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/recommendations/{recommendation_id}/reject": {
+      "post": {
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "Reject Recommendation",
+        "description": "Reject a pending recommendation. Nothing changes; the payment keeps its date.",
+        "operationId": "reject_recommendation",
+        "parameters": [
+          {
+            "name": "recommendation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Recommendation Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/DecisionIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/receipts/{receipt_id}": {
+      "get": {
+        "tags": [
+          "recommendations"
+        ],
+        "summary": "Get Receipt",
+        "operationId": "get_receipt",
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Receipt"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/demo/reset": {
+      "post": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Reset Demo",
+        "description": "Rebuild the demo company from the sample statement. Only when DEMO_MODE is on.",
+        "operationId": "reset_demo",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResetResult"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Assumption": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "text"
+        ],
+        "title": "Assumption"
+      },
+      "Backtest": {
+        "properties": {
+          "forecast_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Forecast Id"
+          },
+          "complete": {
+            "type": "boolean",
+            "title": "Complete"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/BacktestDay"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "forecast": {
+            "$ref": "#/components/schemas/BalanceSummary"
+          },
+          "actual": {
+            "$ref": "#/components/schemas/BalanceSummary"
+          },
+          "mean_abs_error": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Mean Abs Error",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "lowest_error": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Lowest Error",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "lowest_error_bp": {
+            "type": "integer",
+            "title": "Lowest Error Bp"
+          },
+          "note": {
+            "type": "string",
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "forecast_id",
+          "complete",
+          "days",
+          "forecast",
+          "actual",
+          "mean_abs_error",
+          "lowest_error",
+          "lowest_error_bp",
+          "note"
+        ],
+        "title": "Backtest"
+      },
+      "BacktestDay": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "forecast": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Forecast",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "actual": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Actual",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "forecast",
+          "actual"
+        ],
+        "title": "BacktestDay"
+      },
+      "BalanceSummary": {
+        "properties": {
+          "first_breach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Breach"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lowest": {
+            "$ref": "#/components/schemas/DayBalance"
+          },
+          "days_below_floor": {
+            "type": "integer",
+            "title": "Days Below Floor"
+          },
+          "end_balance": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "End Balance",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_breach",
+          "lowest",
+          "days_below_floor",
+          "end_balance"
+        ],
+        "title": "BalanceSummary"
+      },
+      "Breach": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "closing": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Closing",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "shortfall": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Shortfall",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "closing",
+          "shortfall"
+        ],
+        "title": "Breach"
+      },
+      "Category": {
+        "type": "string",
+        "enum": [
+          "CARD_REVENUE",
+          "VARIABLE_COST",
+          "RENT",
+          "PAYROLL",
+          "SOCIAL_SECURITY",
+          "TAX",
+          "UTILITIES",
+          "PARTNER_TRANSFER",
+          "OTHER"
+        ],
+        "title": "Category"
+      },
+      "Check": {
+        "properties": {
+          "rule": {
+            "type": "string",
+            "title": "Rule"
+          },
+          "result": {
+            "type": "string",
+            "enum": [
+              "PASS",
+              "FAIL",
+              "INFO"
+            ],
+            "title": "Result"
+          },
+          "effect": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "NEEDS_APPROVAL",
+                  "NOT_ALLOWED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effect"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rule",
+          "result",
+          "effect",
+          "text"
+        ],
+        "title": "Check"
+      },
+      "ClosurePayload": {
+        "properties": {
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To"
+          },
+          "variable_costs_stop": {
+            "type": "boolean",
+            "title": "Variable Costs Stop",
+            "default": true
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "date_from",
+          "date_to"
+        ],
+        "title": "ClosurePayload"
+      },
+      "ClosurePlannedIn": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "CLOSURE_PLANNED",
+            "title": "Type"
+          },
+          "expected_financial_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Financial Version"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/ClosurePayload"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "type",
+          "expected_financial_version",
+          "payload"
+        ],
+        "title": "ClosurePlannedIn"
+      },
+      "Company": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "as_of_date": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of Date"
+          },
+          "balance": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Balance",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "statement_until": {
+            "type": "string",
+            "format": "date",
+            "title": "Statement Until"
+          },
+          "financial_version": {
+            "type": "integer",
+            "title": "Financial Version"
+          },
+          "mandate_version": {
+            "type": "integer",
+            "title": "Mandate Version"
+          },
+          "paused": {
+            "type": "boolean",
+            "title": "Paused"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "owner",
+          "currency",
+          "as_of_date",
+          "balance",
+          "statement_until",
+          "financial_version",
+          "mandate_version",
+          "paused"
+        ],
+        "title": "Company"
+      },
+      "CreditLine": {
+        "properties": {
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "available_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Available From"
+          },
+          "available_until": {
+            "type": "string",
+            "format": "date",
+            "title": "Available Until"
+          }
+        },
+        "type": "object",
+        "required": [
+          "amount",
+          "available_from",
+          "available_until"
+        ],
+        "title": "CreditLine"
+      },
+      "CreditLineSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "CREDIT_LINE",
+            "title": "Kind"
+          },
+          "product": {
+            "type": "string",
+            "const": "SHORT_TERM_CREDIT_LINE",
+            "title": "Product"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "available_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Available From"
+          },
+          "available_until": {
+            "type": "string",
+            "format": "date",
+            "title": "Available Until"
+          },
+          "shortfall": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Shortfall",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "rounded_to": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Rounded To",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "headroom_at_lowest": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Headroom At Lowest",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "illustrative": {
+            "type": "boolean",
+            "const": true,
+            "title": "Illustrative"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "product",
+          "amount",
+          "available_from",
+          "available_until",
+          "shortfall",
+          "rounded_to",
+          "headroom_at_lowest",
+          "illustrative"
+        ],
+        "title": "CreditLineSubject"
+      },
+      "DayBalance": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "closing": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Closing",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "closing"
+        ],
+        "title": "DayBalance"
+      },
+      "DecisionIn": {
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "DecisionIn"
+      },
+      "DecisionResult": {
+        "properties": {
+          "recommendation": {
+            "$ref": "#/components/schemas/Recommendation"
+          },
+          "forecast_summary": {
+            "$ref": "#/components/schemas/ForecastSummary"
+          },
+          "receipt_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Receipt Id"
+          },
+          "follow_up_recommendation_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Follow Up Recommendation Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recommendation",
+          "forecast_summary",
+          "receipt_id",
+          "follow_up_recommendation_ids"
+        ],
+        "title": "DecisionResult"
+      },
+      "Driver": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "ref",
+          "label",
+          "amount",
+          "date_from",
+          "date_to"
+        ],
+        "title": "Driver"
+      },
+      "ErrorCode": {
+        "type": "string",
+        "enum": [
+          "VALIDATION_ERROR",
+          "NOT_FOUND",
+          "METHOD_NOT_ALLOWED",
+          "VERSION_CONFLICT",
+          "STALE_RECOMMENDATION",
+          "NOT_PENDING",
+          "MANDATE_INVALID",
+          "RUN_IN_PROGRESS",
+          "IMPORT_INVALID",
+          "IDEMPOTENCY_KEY_MISSING",
+          "IDEMPOTENCY_KEY_REUSED",
+          "DEMO_DISABLED",
+          "STATE_NOT_LOADED",
+          "HTTP_ERROR",
+          "UNAUTHORIZED",
+          "RUN_CLOSED",
+          "INTERNAL_ERROR"
+        ],
+        "title": "ErrorCode"
+      },
+      "EventType": {
+        "type": "string",
+        "enum": [
+          "CLOSURE_PLANNED",
+          "RESCHEDULE_REQUESTED"
+        ],
+        "title": "EventType"
+      },
+      "Execution": {
+        "properties": {
+          "execution": {
+            "type": "string",
+            "const": "SIMULATED",
+            "title": "Execution"
+          },
+          "confirmation_ref": {
+            "type": "string",
+            "title": "Confirmation Ref"
+          },
+          "executed_by": {
+            "type": "string",
+            "enum": [
+              "VERO",
+              "OWNER"
+            ],
+            "title": "Executed By"
+          },
+          "executed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Executed At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "execution",
+          "confirmation_ref",
+          "executed_by",
+          "executed_at"
+        ],
+        "title": "Execution"
+      },
+      "Explanation": {
+        "properties": {
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "MODEL",
+              "REPLAY",
+              "TEMPLATE"
+            ],
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text",
+          "source"
+        ],
+        "title": "Explanation"
+      },
+      "Finding": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "DRIVER",
+              "RECURRING",
+              "FX_EXPOSURE",
+              "BACKTEST"
+            ],
+            "title": "Kind"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "Finding"
+      },
+      "Forecast": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "label": {
+            "type": "string",
+            "const": "CURRENT",
+            "title": "Label"
+          },
+          "as_of_date": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of Date"
+          },
+          "horizon_days": {
+            "type": "integer",
+            "title": "Horizon Days"
+          },
+          "start_balance": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Start Balance",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "cash_floor": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Cash Floor",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "summary": {
+            "$ref": "#/components/schemas/ForecastSummary"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/ForecastDay"
+            },
+            "type": "array",
+            "title": "Days"
+          },
+          "drivers": {
+            "items": {
+              "$ref": "#/components/schemas/Driver"
+            },
+            "type": "array",
+            "title": "Drivers"
+          },
+          "assumptions": {
+            "items": {
+              "$ref": "#/components/schemas/Assumption"
+            },
+            "type": "array",
+            "title": "Assumptions"
+          },
+          "planned_events": {
+            "items": {
+              "$ref": "#/components/schemas/PlannedEvent"
+            },
+            "type": "array",
+            "title": "Planned Events"
+          },
+          "credit_lines": {
+            "items": {
+              "$ref": "#/components/schemas/CreditLine"
+            },
+            "type": "array",
+            "title": "Credit Lines"
+          },
+          "engine_version": {
+            "type": "string",
+            "title": "Engine Version"
+          },
+          "financial_version": {
+            "type": "integer",
+            "title": "Financial Version"
+          },
+          "mandate_version": {
+            "type": "integer",
+            "title": "Mandate Version"
+          },
+          "weeks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ForecastWeek"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weeks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label",
+          "as_of_date",
+          "horizon_days",
+          "start_balance",
+          "cash_floor",
+          "summary",
+          "days",
+          "drivers",
+          "assumptions",
+          "planned_events",
+          "credit_lines",
+          "engine_version",
+          "financial_version",
+          "mandate_version"
+        ],
+        "title": "Forecast"
+      },
+      "ForecastDay": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "revenue": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Revenue",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "variable_costs": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Variable Costs",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "fixed_outflows": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Fixed Outflows",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "other_inflows": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Other Inflows",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "closing": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Closing",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "credit_available": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Credit Available",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "below_floor": {
+            "type": "boolean",
+            "title": "Below Floor"
+          },
+          "closed": {
+            "type": "boolean",
+            "title": "Closed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "revenue",
+          "variable_costs",
+          "fixed_outflows",
+          "other_inflows",
+          "closing",
+          "credit_available",
+          "below_floor",
+          "closed"
+        ],
+        "title": "ForecastDay"
+      },
+      "ForecastSummary": {
+        "properties": {
+          "first_breach": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Breach"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lowest": {
+            "$ref": "#/components/schemas/DayBalance"
+          },
+          "days_below_floor": {
+            "type": "integer",
+            "title": "Days Below Floor"
+          },
+          "end_balance": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "End Balance",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "headroom_at_lowest": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Headroom At Lowest",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_breach",
+          "lowest",
+          "days_below_floor",
+          "end_balance",
+          "headroom_at_lowest"
+        ],
+        "title": "ForecastSummary"
+      },
+      "ForecastWeek": {
+        "properties": {
+          "week": {
+            "type": "integer",
+            "title": "Week"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "inflow": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Inflow",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "outflow": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Outflow",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "closing": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Closing",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "lowest": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Lowest",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "any_below_floor": {
+            "type": "boolean",
+            "title": "Any Below Floor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "week",
+          "start_date",
+          "end_date",
+          "inflow",
+          "outflow",
+          "closing",
+          "lowest",
+          "any_below_floor"
+        ],
+        "title": "ForecastWeek"
+      },
+      "HealthStatus": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "ok",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthStatus"
+      },
+      "Impact": {
+        "properties": {
+          "before": {
+            "$ref": "#/components/schemas/ImpactState"
+          },
+          "after_if_executed": {
+            "$ref": "#/components/schemas/ImpactState"
+          }
+        },
+        "type": "object",
+        "required": [
+          "before",
+          "after_if_executed"
+        ],
+        "title": "Impact"
+      },
+      "ImpactState": {
+        "properties": {
+          "first_breach": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Breach"
+          },
+          "lowest": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Lowest",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "lowest_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Lowest Date"
+          },
+          "days_below_floor": {
+            "type": "integer",
+            "title": "Days Below Floor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_breach",
+          "lowest",
+          "lowest_date",
+          "days_below_floor"
+        ],
+        "title": "ImpactState"
+      },
+      "Inflow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "expected_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Expected Date"
+          },
+          "original_expected_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Original Expected Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ref",
+          "counterparty",
+          "amount",
+          "expected_date",
+          "original_expected_date"
+        ],
+        "title": "Inflow"
+      },
+      "Lanes": {
+        "properties": {
+          "ANALYSED": {
+            "items": {
+              "$ref": "#/components/schemas/Finding"
+            },
+            "type": "array",
+            "title": "Analysed"
+          },
+          "DONE_WITHIN_MANDATE": {
+            "items": {
+              "$ref": "#/components/schemas/Recommendation"
+            },
+            "type": "array",
+            "title": "Done Within Mandate"
+          },
+          "NEEDS_APPROVAL": {
+            "items": {
+              "$ref": "#/components/schemas/Recommendation"
+            },
+            "type": "array",
+            "title": "Needs Approval"
+          },
+          "NOT_ALLOWED": {
+            "items": {
+              "$ref": "#/components/schemas/Recommendation"
+            },
+            "type": "array",
+            "title": "Not Allowed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ANALYSED",
+          "DONE_WITHIN_MANDATE",
+          "NEEDS_APPROVAL",
+          "NOT_ALLOWED"
+        ],
+        "title": "Lanes"
+      },
+      "Mandate": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MandateStatus"
+          },
+          "cash_floor": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Cash Floor",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "act_alone_enabled": {
+            "type": "boolean",
+            "title": "Act Alone Enabled"
+          },
+          "max_delay_days": {
+            "type": "integer",
+            "title": "Max Delay Days"
+          },
+          "max_amount_per_action": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Max Amount Per Action",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "max_amount_per_day": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Max Amount Per Day",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "protected_categories": {
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "type": "array",
+            "title": "Protected Categories"
+          },
+          "credit_enabled": {
+            "type": "boolean",
+            "title": "Credit Enabled"
+          },
+          "max_credit_amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Max Credit Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "paused": {
+            "type": "boolean",
+            "title": "Paused"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "activated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "status",
+          "cash_floor",
+          "act_alone_enabled",
+          "max_delay_days",
+          "max_amount_per_action",
+          "max_amount_per_day",
+          "protected_categories",
+          "credit_enabled",
+          "max_credit_amount",
+          "paused",
+          "note",
+          "created_at",
+          "activated_at"
+        ],
+        "title": "Mandate"
+      },
+      "MandateActivateIn": {
+        "properties": {
+          "expected_active_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Active Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_active_version"
+        ],
+        "title": "MandateActivateIn"
+      },
+      "MandateIn": {
+        "properties": {
+          "cash_floor": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Cash Floor",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "act_alone_enabled": {
+            "type": "boolean",
+            "title": "Act Alone Enabled"
+          },
+          "max_delay_days": {
+            "type": "integer",
+            "maximum": 90.0,
+            "minimum": 0.0,
+            "title": "Max Delay Days"
+          },
+          "max_amount_per_action": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Max Amount Per Action",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "max_amount_per_day": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Max Amount Per Day",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "protected_categories": {
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            },
+            "type": "array",
+            "title": "Protected Categories"
+          },
+          "credit_enabled": {
+            "type": "boolean",
+            "title": "Credit Enabled"
+          },
+          "max_credit_amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Max Credit Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cash_floor",
+          "act_alone_enabled",
+          "max_delay_days",
+          "max_amount_per_action",
+          "max_amount_per_day",
+          "protected_categories",
+          "credit_enabled",
+          "max_credit_amount"
+        ],
+        "title": "MandateIn"
+      },
+      "MandateStatus": {
+        "type": "string",
+        "enum": [
+          "DRAFT",
+          "ACTIVE",
+          "SUPERSEDED"
+        ],
+        "title": "MandateStatus"
+      },
+      "ModelHealth": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "model": {
+            "type": "string",
+            "title": "Model"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "live",
+                  "replay",
+                  "stub"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "title": "Latency Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "model",
+          "latency_ms"
+        ],
+        "title": "ModelHealth"
+      },
+      "Outflow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "original_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Amount"
+          },
+          "original_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Currency"
+          },
+          "fx_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate"
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Due Date"
+          },
+          "scheduled_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Scheduled Date"
+          },
+          "latest_allowed_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Allowed Date"
+          },
+          "protected": {
+            "type": "boolean",
+            "title": "Protected"
+          },
+          "source": {
+            "$ref": "#/components/schemas/OutflowSource"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "ref",
+          "counterparty",
+          "description",
+          "category",
+          "amount",
+          "original_amount",
+          "original_currency",
+          "fx_rate",
+          "due_date",
+          "scheduled_date",
+          "latest_allowed_date",
+          "protected",
+          "source",
+          "version"
+        ],
+        "title": "Outflow"
+      },
+      "OutflowSource": {
+        "type": "string",
+        "enum": [
+          "DETECTED",
+          "OWNER"
+        ],
+        "title": "OutflowSource"
+      },
+      "Overview": {
+        "properties": {
+          "company": {
+            "$ref": "#/components/schemas/Company"
+          },
+          "cash_floor": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Cash Floor",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "forecast_summary": {
+            "$ref": "#/components/schemas/ForecastSummary"
+          },
+          "headline": {
+            "$ref": "#/components/schemas/Explanation"
+          },
+          "lanes": {
+            "$ref": "#/components/schemas/Lanes"
+          },
+          "pending_count": {
+            "type": "integer",
+            "title": "Pending Count"
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "company",
+          "cash_floor",
+          "forecast_summary",
+          "headline",
+          "lanes",
+          "pending_count",
+          "latest_run"
+        ],
+        "title": "Overview"
+      },
+      "PlannedEvent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/PlannedEventKind"
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Date From"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Date To"
+          },
+          "revenue_factor": {
+            "type": "string",
+            "title": "Revenue Factor"
+          },
+          "variable_costs_stop": {
+            "type": "boolean",
+            "title": "Variable Costs Stop"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "date_from",
+          "date_to",
+          "revenue_factor",
+          "variable_costs_stop",
+          "note"
+        ],
+        "title": "PlannedEvent"
+      },
+      "PlannedEventKind": {
+        "type": "string",
+        "enum": [
+          "CLOSURE"
+        ],
+        "title": "PlannedEventKind"
+      },
+      "Problem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "integer",
+            "title": "Status"
+          },
+          "code": {
+            "$ref": "#/components/schemas/ErrorCode"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "errors": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "title": "Problem"
+      },
+      "ReadyStatus": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "unavailable"
+            ],
+            "title": "Status"
+          },
+          "state_loaded": {
+            "type": "boolean",
+            "title": "State Loaded"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "state_loaded"
+        ],
+        "title": "ReadyStatus"
+      },
+      "Reason": {
+        "properties": {
+          "first_breach": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Breach"
+          },
+          "shortfall": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Shortfall",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "requested_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "OWNER"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "first_breach",
+          "shortfall"
+        ],
+        "title": "Reason"
+      },
+      "Receipt": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "recommendation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Recommendation Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "PROPOSAL",
+              "DECISION"
+            ],
+            "title": "Kind"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "trigger": {
+            "type": "string",
+            "title": "Trigger"
+          },
+          "subject": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RescheduleSubject"
+              },
+              {
+                "$ref": "#/components/schemas/CreditLineSubject"
+              }
+            ],
+            "title": "Subject",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "CREDIT_LINE": "#/components/schemas/CreditLineSubject",
+                "RESCHEDULE_PAYMENT": "#/components/schemas/RescheduleSubject"
+              }
+            }
+          },
+          "lane": {
+            "type": "string",
+            "title": "Lane"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "APPROVED",
+                  "REJECTED",
+                  "REQUESTED"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/Check"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "before": {
+            "$ref": "#/components/schemas/ImpactState"
+          },
+          "after": {
+            "$ref": "#/components/schemas/ImpactState"
+          },
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Assumptions"
+          },
+          "mandate_version": {
+            "type": "integer",
+            "title": "Mandate Version"
+          },
+          "financial_version": {
+            "type": "integer",
+            "title": "Financial Version"
+          },
+          "versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Versions"
+          },
+          "execution": {
+            "type": "string",
+            "const": "SIMULATED",
+            "title": "Execution"
+          },
+          "explanation": {
+            "$ref": "#/components/schemas/Explanation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "recommendation_id",
+          "kind",
+          "created_at",
+          "trigger",
+          "subject",
+          "lane",
+          "decision",
+          "checks",
+          "before",
+          "after",
+          "assumptions",
+          "mandate_version",
+          "financial_version",
+          "versions",
+          "execution",
+          "explanation"
+        ],
+        "title": "Receipt"
+      },
+      "Recommendation": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RecommendationKind"
+          },
+          "lane": {
+            "type": "string",
+            "enum": [
+              "DONE_WITHIN_MANDATE",
+              "NEEDS_APPROVAL",
+              "NOT_ALLOWED"
+            ],
+            "title": "Lane"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RecommendationStatus"
+          },
+          "execution": {
+            "type": "string",
+            "const": "SIMULATED",
+            "title": "Execution"
+          },
+          "subject": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RescheduleSubject"
+              },
+              {
+                "$ref": "#/components/schemas/CreditLineSubject"
+              }
+            ],
+            "title": "Subject",
+            "discriminator": {
+              "propertyName": "kind",
+              "mapping": {
+                "CREDIT_LINE": "#/components/schemas/CreditLineSubject",
+                "RESCHEDULE_PAYMENT": "#/components/schemas/RescheduleSubject"
+              }
+            }
+          },
+          "reason": {
+            "$ref": "#/components/schemas/Reason"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/Check"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "impact": {
+            "$ref": "#/components/schemas/Impact"
+          },
+          "explanation": {
+            "$ref": "#/components/schemas/Explanation"
+          },
+          "receipt_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Receipt Ids"
+          },
+          "executed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Execution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "run_id",
+          "kind",
+          "lane",
+          "status",
+          "execution",
+          "subject",
+          "reason",
+          "checks",
+          "impact",
+          "explanation",
+          "receipt_ids",
+          "executed",
+          "note",
+          "created_at",
+          "decided_at"
+        ],
+        "title": "Recommendation"
+      },
+      "RecommendationKind": {
+        "type": "string",
+        "enum": [
+          "RESCHEDULE_PAYMENT",
+          "CREDIT_LINE"
+        ],
+        "title": "RecommendationKind"
+      },
+      "RecommendationStatus": {
+        "type": "string",
+        "enum": [
+          "EXECUTED",
+          "PENDING",
+          "APPROVED_EXECUTED",
+          "REJECTED",
+          "BLOCKED",
+          "STALE",
+          "SUPERSEDED"
+        ],
+        "title": "RecommendationStatus"
+      },
+      "RescheduleIn": {
+        "properties": {
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "to_date"
+        ],
+        "title": "RescheduleIn"
+      },
+      "RescheduleSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "RESCHEDULE_PAYMENT",
+            "title": "Kind"
+          },
+          "outflow_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Outflow Id"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "original_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Amount"
+          },
+          "original_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Currency"
+          },
+          "from_date": {
+            "type": "string",
+            "format": "date",
+            "title": "From Date"
+          },
+          "to_date": {
+            "type": "string",
+            "format": "date",
+            "title": "To Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "outflow_id",
+          "ref",
+          "counterparty",
+          "category",
+          "amount",
+          "original_amount",
+          "original_currency",
+          "from_date",
+          "to_date"
+        ],
+        "title": "RescheduleSubject"
+      },
+      "ResetResult": {
+        "properties": {
+          "reset": {
+            "type": "boolean",
+            "const": true,
+            "title": "Reset"
+          },
+          "as_of_date": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of Date"
+          },
+          "financial_version": {
+            "type": "integer",
+            "title": "Financial Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reset",
+          "as_of_date",
+          "financial_version"
+        ],
+        "title": "ResetResult"
+      },
+      "RevenueModel": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "window_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Window From"
+          },
+          "window_to": {
+            "type": "string",
+            "format": "date",
+            "title": "Window To"
+          },
+          "weeks": {
+            "type": "integer",
+            "title": "Weeks"
+          },
+          "by_weekday": {
+            "items": {
+              "$ref": "#/components/schemas/WeekdayAverage"
+            },
+            "type": "array",
+            "title": "By Weekday"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "window_from",
+          "window_to",
+          "weeks",
+          "by_weekday",
+          "model_version"
+        ],
+        "title": "RevenueModel"
+      },
+      "Run": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED"
+            ],
+            "title": "Status"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/RunMode"
+          },
+          "trigger": {
+            "$ref": "#/components/schemas/RunTrigger"
+          },
+          "trace": {
+            "items": {
+              "$ref": "#/components/schemas/TraceStep"
+            },
+            "type": "array",
+            "title": "Trace"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status",
+          "mode",
+          "trigger",
+          "trace",
+          "result",
+          "created_at",
+          "finished_at"
+        ],
+        "title": "Run"
+      },
+      "RunAccepted": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "RunAccepted"
+      },
+      "RunCounts": {
+        "properties": {
+          "done_within_mandate": {
+            "type": "integer",
+            "title": "Done Within Mandate"
+          },
+          "needs_approval": {
+            "type": "integer",
+            "title": "Needs Approval"
+          },
+          "not_allowed": {
+            "type": "integer",
+            "title": "Not Allowed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "done_within_mandate",
+          "needs_approval",
+          "not_allowed"
+        ],
+        "title": "RunCounts"
+      },
+      "RunMode": {
+        "type": "string",
+        "enum": [
+          "AGENT",
+          "FALLBACK"
+        ],
+        "title": "RunMode"
+      },
+      "RunRef": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "SUCCEEDED",
+              "FAILED"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status"
+        ],
+        "title": "RunRef"
+      },
+      "RunResult": {
+        "properties": {
+          "forecast_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Forecast Id"
+          },
+          "recommendation_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Recommendation Ids"
+          },
+          "headline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Explanation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "counts": {
+            "$ref": "#/components/schemas/RunCounts"
+          },
+          "gap_closed": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Closed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "forecast_id",
+          "recommendation_ids",
+          "headline",
+          "counts",
+          "gap_closed"
+        ],
+        "title": "RunResult"
+      },
+      "RunTrigger": {
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/EventType"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "label"
+        ],
+        "title": "RunTrigger"
+      },
+      "TraceStep": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          },
+          "data": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seq",
+          "kind",
+          "source",
+          "label",
+          "tool",
+          "data",
+          "at"
+        ],
+        "title": "TraceStep"
+      },
+      "Transaction": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "booking_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Booking Date"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "reference": {
+            "type": "string",
+            "title": "Reference"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "original_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Amount"
+          },
+          "original_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Original Currency"
+          },
+          "fx_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "booking_date",
+          "type",
+          "counterparty",
+          "reference",
+          "amount",
+          "category",
+          "original_amount",
+          "original_currency",
+          "fx_rate"
+        ],
+        "title": "Transaction"
+      },
+      "WeekdayAverage": {
+        "properties": {
+          "weekday": {
+            "type": "string",
+            "enum": [
+              "MON",
+              "TUE",
+              "WED",
+              "THU",
+              "FRI",
+              "SAT",
+              "SUN"
+            ],
+            "title": "Weekday"
+          },
+          "revenue": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Revenue",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "variable_costs": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Variable Costs",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "weekday",
+          "revenue",
+          "variable_costs"
+        ],
+        "title": "WeekdayAverage"
+      }
+    }
+  }
+}

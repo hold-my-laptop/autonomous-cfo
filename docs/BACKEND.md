@@ -221,6 +221,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 
 ### B28 · OpenAPI export — MUST
 - Explicit return types on every route. Export `openapi.json` for the frontend to generate types from. A test checks the exported file matches the app.
+- `make schema` (or `uv run python -m api.openapi` in `services/api`) writes [`contracts/openapi.json`](contracts/openapi.json); `--check` only reports whether it is out of date. Operation ids are the handler names (e.g. `get_forecast`, `approve_recommendation`), errors are typed as `application/problem+json` **Problem**, and `/internal` is not included.
 
 ### B29 · Container + config for OpenShift — MUST (with DevOps)
 - Containerfile (UBI Python, non-root), `fastapi run`.
