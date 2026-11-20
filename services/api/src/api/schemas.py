@@ -506,3 +506,23 @@ class Run(BaseModel):
             created_at=r.created_at,
             finished_at=r.finished_at,
         )
+
+
+class MandateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cash_floor: Money
+    act_alone_enabled: bool
+    max_delay_days: int = Field(ge=0, le=90)
+    max_amount_per_action: Money = Field(ge=0)
+    max_amount_per_day: Money = Field(ge=0)
+    protected_categories: list[Category]
+    credit_enabled: bool
+    max_credit_amount: Money = Field(ge=0)
+    note: str | None = Field(default=None, max_length=200)
+
+
+class MandateActivateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_active_version: int = Field(ge=1)

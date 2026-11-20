@@ -3,7 +3,6 @@
 import hashlib
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
 from typing import Annotated, Any
 from uuid import UUID
 
@@ -11,13 +10,7 @@ from fastapi import Depends, Header, status
 from pydantic import BaseModel
 
 from api.errors import ApiError, ErrorCode, version_conflict
-from api.state import DemoState
-
-
-@dataclass(frozen=True, slots=True)
-class StoredResponse:
-    request_hash: str
-    response: Any
+from api.state import DemoState, StoredResponse
 
 
 def require_idempotency_key(
@@ -44,18 +37,22 @@ def request_hash(method: str, path: str, body: BaseModel | None) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()
 
 
-def run_idempotent[T](state: DemoState, key: str, fingerprint: str, produce: Callable[[], T]) -> T:
+def run_idempotent[T](
+    state: DemoState, key: str, fingerprint: str, produce: Callable[[], T]
+) -> T | Any:
     """Run `produce` once per key. Call it while holding the state's write lock.
 
     Same key and same request: the stored response is returned again without side effects.
-    Same key, different request: IDEMPOTENCY_KEY_REUSED. Failed requests are not stored."""
+    Same key, different request: IDEMPOTENCY_KEY_REUSED. Failed requests are not stored.
+    Responses are kept as JSON-compatible data so any repository can persist them."""
     stored = state.idempotency.get(key)
     if stored is not None:
         if stored.request_hash != fingerprint:
             raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.IDEMPOTENCY_KEY_REUSED)
         return stored.response
     response = produce()
-    state.idempotency[key] = StoredResponse(fingerprint, response)
+    payload = response.model_dump(mode="json") if isinstance(response, BaseModel) else response
+    state.idempotency[key] = StoredResponse(fingerprint, payload)
     return response
 
 

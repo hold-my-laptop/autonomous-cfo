@@ -1,13 +1,17 @@
 """State-changing operations. Callers hold the repository's write lock."""
 
+from dataclasses import replace
 from datetime import date, datetime
 from uuid import uuid4
 
 from fastapi import status
 
 from api.domain.models import (
+    Category,
     Event,
     EventType,
+    Mandate,
+    MandateStatus,
     PlannedEvent,
     PlannedEventKind,
     Run,
@@ -15,6 +19,7 @@ from api.domain.models import (
     RunStatus,
 )
 from api.errors import ApiError, ErrorCode
+from api.money import Cents
 from api.state import DemoState
 
 MAX_CLOSURE_DAYS = 366
@@ -94,3 +99,78 @@ def plan_closure(
     )
     state.runs[run.id] = run
     return run
+
+
+REQUIRED_PROTECTED = frozenset({Category.PAYROLL, Category.SOCIAL_SECURITY, Category.TAX})
+
+
+def _mandate_invalid(detail: str) -> ApiError:
+    return ApiError(status.HTTP_422_UNPROCESSABLE_CONTENT, ErrorCode.MANDATE_INVALID, detail)
+
+
+def create_mandate_draft(
+    state: DemoState,
+    cash_floor: Cents,
+    act_alone_enabled: bool,
+    max_delay_days: int,
+    max_amount_per_action: Cents,
+    max_amount_per_day: Cents,
+    protected_categories: frozenset[Category],
+    credit_enabled: bool,
+    max_credit_amount: Cents,
+    note: str | None,
+    now: datetime,
+) -> Mandate:
+    missing = REQUIRED_PROTECTED - protected_categories
+    if missing:
+        raise _mandate_invalid(f"{', '.join(sorted(missing))} must stay protected")
+    if max_amount_per_action > max_amount_per_day:
+        raise _mandate_invalid("max_amount_per_action cannot exceed max_amount_per_day")
+    draft = Mandate(
+        version=max(m.version for m in state.mandates) + 1,
+        status=MandateStatus.DRAFT,
+        cash_floor=cash_floor,
+        act_alone_enabled=act_alone_enabled,
+        max_delay_days=max_delay_days,
+        max_amount_per_action=max_amount_per_action,
+        max_amount_per_day=max_amount_per_day,
+        protected_categories=protected_categories,
+        credit_enabled=credit_enabled,
+        max_credit_amount=max_credit_amount,
+        paused=False,
+        created_at=now,
+        note=note,
+    )
+    state.mandates.append(draft)
+    return draft
+
+
+def activate_mandate(state: DemoState, version: int, now: datetime) -> Mandate:
+    """Make a draft the active mandate. The pause switch carries over from the previous one."""
+    target = next((m for m in state.mandates if m.version == version), None)
+    if target is None:
+        raise ApiError(
+            status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, f"no mandate version {version}"
+        )
+    if target.status is not MandateStatus.DRAFT:
+        raise _mandate_invalid(f"mandate version {version} is {target.status}, not a draft")
+    previous = state.active_mandate
+    activated = replace(
+        target, status=MandateStatus.ACTIVE, activated_at=now, paused=previous.paused
+    )
+    state.mandates = [
+        activated
+        if m.version == version
+        else replace(m, status=MandateStatus.SUPERSEDED)
+        if m.version == previous.version
+        else m
+        for m in state.mandates
+    ]
+    return activated
+
+
+def set_paused(state: DemoState, paused: bool) -> Mandate:
+    active = state.active_mandate
+    updated = replace(active, paused=paused)
+    state.mandates = [updated if m.version == active.version else m for m in state.mandates]
+    return updated

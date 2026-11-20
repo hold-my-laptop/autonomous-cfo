@@ -3,15 +3,25 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import Settings, get_settings
 from api.domain.importer import StatementImportError
 from api.errors import Problem, install_error_handlers
 from api.routers import data, demo, events, forecast, health, mandate, runs
-from api.state import InMemoryStateRepository
+from api.state import InMemoryStateRepository, StateNotLoadedError, StateRepository
 
 API_PREFIX = "/api/v1"
 logger = logging.getLogger(__name__)
+
+
+def build_repository(settings: Settings) -> StateRepository:
+    """PostgreSQL when DATABASE_URL is set, otherwise in memory."""
+    if settings.sqlalchemy_url:
+        from api.persistence import PostgresStateRepository
+
+        return PostgresStateRepository(settings)
+    return InMemoryStateRepository(settings)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -20,10 +30,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         try:
-            app.state.repository.reset()
-        except StatementImportError:
+            app.state.repository.start()
+        except (StatementImportError, StateNotLoadedError):
             logger.exception("demo state not loaded at startup")
         yield
+        app.state.repository.close()
 
     app = FastAPI(
         title="Vero API",
@@ -34,8 +45,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
-    app.state.repository = InMemoryStateRepository(settings)
+    app.state.repository = build_repository(settings)
     install_error_handlers(app)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "Idempotency-Key"],
+        allow_credentials=False,
+    )
 
     api = APIRouter(
         prefix=API_PREFIX,

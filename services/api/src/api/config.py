@@ -23,8 +23,20 @@ class Settings(BaseSettings):
     partner_transfer_movable_days: int = 45
 
     database_url: str | None = None
+    reset_on_startup: bool = False
+    cors_origins: list[str] = ["http://localhost:5173"]
     ai_url: str = "http://localhost:8001"
     internal_token: SecretStr | None = None
+
+    @property
+    def sqlalchemy_url(self) -> str | None:
+        """DATABASE_URL with the psycopg driver, so plain postgresql:// URLs work too."""
+        if not self.database_url:
+            return None
+        for prefix in ("postgresql://", "postgres://"):
+            if self.database_url.startswith(prefix):
+                return "postgresql+psycopg://" + self.database_url[len(prefix) :]
+        return self.database_url
 
 
 @lru_cache

@@ -1,4 +1,7 @@
-"""The demo company's current state, kept behind a repository so storage can change later."""
+"""The demo company's current state, kept behind a repository so storage can change.
+
+`BaseData` is derived from the bank statement and never changes while the app runs. Everything
+else in `DemoState` is changed by the owner or by Vero and is what repositories persist."""
 
 import threading
 from collections.abc import Iterator
@@ -41,6 +44,27 @@ class StateNotLoadedError(RuntimeError):
     pass
 
 
+@dataclass(frozen=True, slots=True)
+class StoredResponse:
+    """A successful response kept for an Idempotency-Key, as JSON-compatible data."""
+
+    request_hash: str
+    response: Any
+
+
+@dataclass(frozen=True)
+class BaseData:
+    company: Company
+    as_of: date
+    opening_balance: Cents
+    horizon_days: int
+    statement: StatementImport
+    revenue_model: RevenueModel
+    recurring: tuple[RecurringPayment, ...]
+    outflows: tuple[Outflow, ...]
+    inflows: tuple[Inflow, ...] = ()
+
+
 @dataclass
 class DemoState:
     company: Company
@@ -58,7 +82,23 @@ class DemoState:
     financial_version: int = 1
     events: list[Event] = field(default_factory=list)
     runs: dict[UUID, Run] = field(default_factory=dict)
-    idempotency: dict[str, Any] = field(default_factory=dict)
+    idempotency: dict[str, StoredResponse] = field(default_factory=dict)
+
+    @classmethod
+    def from_base(cls, base: BaseData, mandates: list[Mandate], **changes: Any) -> "DemoState":
+        return cls(
+            company=base.company,
+            as_of=base.as_of,
+            opening_balance=base.opening_balance,
+            horizon_days=base.horizon_days,
+            statement=base.statement,
+            revenue_model=base.revenue_model,
+            recurring=list(base.recurring),
+            outflows=list(base.outflows),
+            inflows=list(base.inflows),
+            mandates=mandates,
+            **changes,
+        )
 
     @property
     def history(self) -> list[Transaction]:
@@ -109,7 +149,7 @@ class DemoState:
         return compute_backtest(self.forecast(), self.opening_balance, self.statement.transactions)
 
 
-def build_demo_state(settings: Settings) -> DemoState:
+def build_base(settings: Settings) -> BaseData:
     """Import the sample statement and derive everything Vero knows on `demo_as_of_date`."""
     statement = load_statement(settings.statement_path)
     as_of = settings.demo_as_of_date
@@ -122,21 +162,36 @@ def build_demo_state(settings: Settings) -> DemoState:
         end,
         {Category.PARTNER_TRANSFER: settings.partner_transfer_movable_days},
     ) + project_scheduled(PIZZERIA_TAX_SCHEDULE, as_of, end)
-    seeded_at = datetime.combine(as_of, time(8, 0), tzinfo=UTC)
-    return DemoState(
+    return BaseData(
         company=PIZZERIA_COMPANY,
         as_of=as_of,
         opening_balance=settings.opening_balance,
         horizon_days=settings.forecast_horizon_days,
         statement=statement,
         revenue_model=build_revenue_model(history, as_of, settings.revenue_model_weeks),
-        recurring=recurring,
-        outflows=sort_outflows(outflows),
-        mandates=[initial_mandate(seeded_at)],
+        recurring=tuple(recurring),
+        outflows=tuple(sort_outflows(outflows)),
     )
 
 
+def initial_mandates(as_of: date) -> list[Mandate]:
+    return [initial_mandate(datetime.combine(as_of, time(8, 0), tzinfo=UTC))]
+
+
+def fresh_state(base: BaseData) -> DemoState:
+    return DemoState.from_base(base, initial_mandates(base.as_of))
+
+
+def build_demo_state(settings: Settings) -> DemoState:
+    return fresh_state(build_base(settings))
+
+
 class StateRepository(Protocol):
+    def start(self) -> None:
+        """Load the state at startup (seeding it if there is none)."""
+
+    def close(self) -> None: ...
+
     def reset(self) -> DemoState: ...
 
     def read(self) -> AbstractContextManager[DemoState]: ...
@@ -151,6 +206,12 @@ class InMemoryStateRepository:
         self._settings = settings
         self._lock = threading.RLock()
         self._state: DemoState | None = None
+
+    def start(self) -> None:
+        self.reset()
+
+    def close(self) -> None:
+        return None
 
     def reset(self) -> DemoState:
         state = build_demo_state(self._settings)
