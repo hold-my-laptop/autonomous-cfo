@@ -6,7 +6,8 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Header, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from api.deps import RepositoryDep, SettingsDep
+from api.agent import RunClosedError
+from api.deps import AgentDep, RepositoryDep, SettingsDep
 from api.errors import ApiError, ErrorCode
 from api.tools import call_tool, tool_specs
 
@@ -71,3 +72,50 @@ def run_tool(
             state, settings, name, body.run_id, body.call_id, body.arguments, datetime.now(UTC)
         )
     return ToolResult(**response)
+
+
+class NoteIn(BaseModel):
+    text: str = Field(min_length=1, max_length=500)
+
+
+class CompletionIn(BaseModel):
+    """The agent's final answer; proposals are re-checked against this run's tool results."""
+
+    proposals: list[dict[str, Any]] = Field(max_length=10)
+    summary_note: str | None = Field(default=None, max_length=2000)
+    model: str | None = None
+    prompt_version: str | None = None
+    tool_calls: int | None = None
+
+
+class FailureIn(BaseModel):
+    reason: str = Field(min_length=1, max_length=200)
+    detail: str | None = Field(default=None, max_length=500)
+
+
+def _closed(exc: RunClosedError) -> ApiError:
+    return ApiError(status.HTTP_409_CONFLICT, ErrorCode.RUN_CLOSED, str(exc))
+
+
+@router.post("/runs/{run_id}/notes", status_code=status.HTTP_204_NO_CONTENT)
+def add_note(run_id: UUID, body: NoteIn, agent: AgentDep) -> None:
+    try:
+        agent.note(run_id, body.text)
+    except RunClosedError as exc:
+        raise _closed(exc) from exc
+
+
+@router.post("/runs/{run_id}/complete", status_code=status.HTTP_204_NO_CONTENT)
+def complete_run(run_id: UUID, body: CompletionIn, agent: AgentDep) -> None:
+    try:
+        agent.complete(run_id, body.model_dump())
+    except RunClosedError as exc:
+        raise _closed(exc) from exc
+
+
+@router.post("/runs/{run_id}/fail", status_code=status.HTTP_204_NO_CONTENT)
+def fail_run(run_id: UUID, body: FailureIn, agent: AgentDep) -> None:
+    try:
+        agent.fail(run_id, body.reason)
+    except RunClosedError as exc:
+        raise _closed(exc) from exc

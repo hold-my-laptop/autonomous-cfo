@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.agent import AgentClient, AgentOrchestrator, HttpAgentClient
 from api.config import Settings, get_settings
 from api.domain.importer import StatementImportError
 from api.errors import Problem, install_error_handlers
@@ -34,7 +35,9 @@ def build_repository(settings: Settings) -> StateRepository:
     return InMemoryStateRepository(settings)
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None, agent_client: AgentClient | None = None
+) -> FastAPI:
     settings = settings or get_settings()
 
     @asynccontextmanager
@@ -43,7 +46,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             app.state.repository.start()
         except (StatementImportError, StateNotLoadedError):
             logger.exception("demo state not loaded at startup")
+        else:
+            app.state.agent.recover()
         yield
+        app.state.agent.close()
         app.state.repository.close()
 
     app = FastAPI(
@@ -56,6 +62,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.repository = build_repository(settings)
+    app.state.agent = AgentOrchestrator(
+        app.state.repository, settings, agent_client or HttpAgentClient(settings)
+    )
     install_error_handlers(app)
     app.add_middleware(
         CORSMiddleware,

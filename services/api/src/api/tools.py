@@ -282,7 +282,7 @@ def _size_credit_line(state, run, args: SizeCreditArgs, settings) -> ToolOutput:
         f"{format_eur(line.amount)} from {_day(line.available_from)} would cover the gap"
         if line
         else "No credit needed",
-        {"credit": [str(line.amount), line.available_from.isoformat()] if line else None},
+        {"credit": result["credit_line"]},
     )
 
 

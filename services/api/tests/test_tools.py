@@ -239,16 +239,11 @@ def test_stale_and_closed_runs(client: TestClient) -> None:
     assert call(client, run_id, "get_forecast")["error"]["code"] == "STALE_RUN"
     assert call(client, str(uuid4()), "get_forecast")["error"]["code"] == "RUN_CLOSED"
 
-    finished = client.post(
-        "/api/v1/events",
-        json={
-            "type": "CLOSURE_PLANNED",
-            "expected_financial_version": client.get("/api/v1/company").json()["financial_version"],
-            "payload": {"date_from": "2025-07-20", "date_to": "2025-07-21"},
-        },
-        headers={"Idempotency-Key": str(uuid4())},
-    ).json()["run_id"]
-    assert call(client, finished, "get_forecast")["error"]["code"] == "RUN_CLOSED"
+    failed = client.post(
+        f"/internal/v1/runs/{run_id}/fail", json={"reason": "MODEL_ERROR"}, headers=AUTH
+    )
+    assert failed.status_code == 204
+    assert call(client, run_id, "get_forecast")["error"]["code"] == "RUN_CLOSED"
 
 
 def test_tools_never_change_financial_data(client: TestClient) -> None:

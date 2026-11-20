@@ -30,6 +30,14 @@ class Settings(BaseSettings):
     ai_url: str = "http://localhost:8001"
     internal_token: SecretStr | None = None
     agent_max_tool_calls: int = 8
+    agent_deadline_s: float = 60.0
+    agent_start_timeout_s: float = 5.0
+
+    @property
+    def agent_enabled(self) -> bool:
+        """Agent runs need the token shared with the AI service; without it, the backend runs
+        the decision pipeline itself."""
+        return self.internal_token is not None
 
     @property
     def sqlalchemy_url(self) -> str | None:

@@ -3,7 +3,7 @@
 The executor functions here are the only code that changes a payment date or adds a credit
 line. Every executed action is simulated: nothing reaches a real bank."""
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from uuid import UUID, uuid4
 
@@ -21,7 +21,7 @@ from api.domain.models import (
     RunStatus,
     TraceStep,
 )
-from api.domain.planner import PLANNER_VERSION, apply_moves
+from api.domain.planner import PLANNER_VERSION
 from api.domain.policy import (
     POLICY_VERSION,
     Lane,
@@ -42,6 +42,10 @@ class Tracer:
 
     def add(self, kind: str, label: str, now: datetime, tool: str | None = None, data=None) -> None:
         self.steps.append(TraceStep(len(self.steps) + 1, kind, "BACKEND", label, now, tool, data))
+
+
+def _lane_text(lane: Lane) -> str:
+    return lane.value.replace("_", " ").lower()
 
 
 def _day(d: date) -> str:
@@ -86,8 +90,15 @@ def _summary_with(
     state: DemoState, moves=(), lines: tuple[CreditLine, ...] = ()
 ) -> ForecastSummary:
     data = state.forecast_input()
-    data = apply_moves(data, list(moves))
-    data = replace(data, credit_lines=(*data.credit_lines, *lines))
+    targets = dict(moves)
+    data = replace(
+        data,
+        outflows=tuple(
+            replace(o, scheduled_date=targets[o.id]) if o.id in targets else o
+            for o in data.outflows
+        ),
+        credit_lines=(*data.credit_lines, *lines),
+    )
     return compute_forecast(data).summary
 
 
@@ -222,6 +233,145 @@ def headline(
     return " ".join(parts)
 
 
+@dataclass(frozen=True)
+class CreditProposal:
+    line: CreditLine
+    shortfall: Cents
+    rounded_to: Cents
+    headroom_at_lowest: Cents
+
+
+def _propose_move(
+    state: DemoState, run: Run, trace: Tracer, outflow: Outflow, to_date: date, now: datetime
+) -> Recommendation:
+    mandate = state.active_mandate
+    decision = evaluate_move(outflow, to_date, mandate, state.as_of, moved_alone_today(state))
+    before_move = state.forecast().summary
+    after_move = _summary_with(state, moves=[(outflow.id, to_date)])
+    lane = decision.lane
+    rec = Recommendation(
+        id=uuid4(),
+        run_id=run.id,
+        kind=RecommendationKind.RESCHEDULE_PAYMENT,
+        lane=lane.value,
+        status=RecommendationStatus.PENDING,
+        created_at=now,
+        based_on_financial_version=state.financial_version,
+        details={
+            "subject": _move_subject(outflow, to_date),
+            "reason": {
+                "first_breach": before_move.first_breach.date.isoformat()
+                if before_move.first_breach
+                else None,
+                "shortfall": before_move.first_breach.shortfall if before_move.first_breach else 0,
+            },
+            "checks": _checks(decision),
+            "impact": {"before": impact(before_move), "after_if_executed": impact(after_move)},
+            "explanation": {
+                "text": _move_text(lane, outflow, to_date, decision),
+                "source": "TEMPLATE",
+            },
+        },
+        outflow_id=outflow.id,
+        outflow_version=outflow.version,
+        to_date=to_date,
+    )
+    trace.add("POLICY", f"{outflow.counterparty}: {_lane_text(lane)}", now)
+    if lane is Lane.DONE_WITHIN_MANDATE:
+        execute_move(state, outflow.id, to_date)
+        rec = replace(
+            rec,
+            status=RecommendationStatus.EXECUTED,
+            executed_by="VERO",
+            executed_at=now,
+            confirmation_ref=_confirmation(),
+            decided_at=now,
+        )
+        trace.add(
+            "EXECUTE", f"Postponed {outflow.counterparty} to {_day(to_date)} (simulated)", now
+        )
+    elif lane is Lane.NOT_ALLOWED:
+        rec = replace(rec, status=RecommendationStatus.BLOCKED, decided_at=now)
+    receipt = _receipt(
+        state, rec, "PROPOSAL", now, run.trigger_label, impact(before_move), impact(after_move)
+    )
+    return _store(state, rec, receipt)
+
+
+def _propose_credit(
+    state: DemoState, run: Run, trace: Tracer, credit: CreditProposal, now: datetime
+) -> Recommendation:
+    line = credit.line
+    decision = evaluate_credit(line, state.active_mandate)
+    current = state.forecast().summary
+    rec = Recommendation(
+        id=uuid4(),
+        run_id=run.id,
+        kind=RecommendationKind.CREDIT_LINE,
+        lane=decision.lane.value,
+        status=RecommendationStatus.BLOCKED
+        if decision.lane is Lane.NOT_ALLOWED
+        else RecommendationStatus.PENDING,
+        created_at=now,
+        based_on_financial_version=state.financial_version,
+        details={
+            "subject": {
+                "kind": RecommendationKind.CREDIT_LINE.value,
+                "product": CREDIT_PRODUCT,
+                "amount": line.amount,
+                "available_from": line.available_from.isoformat(),
+                "available_until": line.available_until.isoformat(),
+                "shortfall": credit.shortfall,
+                "rounded_to": credit.rounded_to,
+                "headroom_at_lowest": credit.headroom_at_lowest,
+                "illustrative": True,
+            },
+            "reason": {
+                "first_breach": current.first_breach.date.isoformat()
+                if current.first_breach
+                else None,
+                "shortfall": credit.shortfall,
+            },
+            "checks": _checks(decision),
+            "impact": {
+                "before": impact(current),
+                "after_if_executed": impact(_summary_with(state, lines=(line,))),
+            },
+            "explanation": {
+                "text": _credit_text(decision.lane, line, credit.shortfall, decision),
+                "source": "TEMPLATE",
+            },
+        },
+        credit_line=line,
+        decided_at=now if decision.lane is Lane.NOT_ALLOWED else None,
+    )
+    trace.add(
+        "POLICY",
+        f"Credit line of {format_eur(line.amount)}: {_lane_text(decision.lane)}",
+        now,
+    )
+    receipt = _receipt(
+        state,
+        rec,
+        "PROPOSAL",
+        now,
+        run.trigger_label,
+        rec.details["impact"]["before"],
+        rec.details["impact"]["after_if_executed"],
+    )
+    return _store(state, rec, receipt)
+
+
+def _pin_pending(state: DemoState, created: list[Recommendation]) -> list[Recommendation]:
+    """Pending proposals are valid against the data as it is once the run has acted."""
+    for rec in created:
+        if rec.status is RecommendationStatus.PENDING:
+            state.recommendations[rec.id] = replace(
+                rec, based_on_financial_version=state.financial_version
+            )
+    return [state.recommendations[r.id] for r in created]
+
+
 def run_fallback(
     state: DemoState, run: Run, now: datetime, credit_until: date, credit_rounding: Cents
 ) -> Run:
@@ -232,7 +382,7 @@ def run_fallback(
     before = state.forecast().summary
     if before.first_breach is None:
         trace.add("TOOL_RESULT", "Your cash stays above your floor for the next 13 weeks", now)
-        return _finish(state, run, trace, before, [], now)
+        return _finish(state, run, trace, before, [], now, RunMode.FALLBACK)
 
     trace.add(
         "TOOL_RESULT",
@@ -244,163 +394,112 @@ def run_fallback(
 
     trace.add("TOOL_CALL", "Looking for payments that can wait", now, "find_reschedule_options")
     plan = state.plan()
+    count = len(plan.candidates)
     trace.add(
         "TOOL_RESULT",
-        f"Found {len(plan.candidates)} payment(s) worth postponing"
-        if plan.candidates
+        f"Found {count} payment{'s' if count != 1 else ''} worth postponing"
+        if count
         else "No payment can usefully wait",
         now,
     )
-
     by_id = {o.id: o for o in state.outflows}
-    created: list[Recommendation] = []
-    for candidate in plan.candidates:
-        outflow = by_id[candidate.outflow_id]
-        decision = evaluate_move(
-            outflow, candidate.to_date, mandate, state.as_of, moved_alone_today(state)
-        )
-        before_move = state.forecast().summary
-        after_move = _summary_with(state, [candidate])
-        lane = decision.lane
-        rec = Recommendation(
-            id=uuid4(),
-            run_id=run.id,
-            kind=RecommendationKind.RESCHEDULE_PAYMENT,
-            lane=lane.value,
-            status=RecommendationStatus.PENDING,
-            created_at=now,
-            based_on_financial_version=state.financial_version,
-            details={
-                "subject": _move_subject(outflow, candidate.to_date),
-                "reason": {
-                    "first_breach": before_move.first_breach.date.isoformat()
-                    if before_move.first_breach
-                    else None,
-                    "shortfall": before_move.first_breach.shortfall
-                    if before_move.first_breach
-                    else 0,
-                },
-                "checks": _checks(decision),
-                "impact": {"before": impact(before_move), "after_if_executed": impact(after_move)},
-                "explanation": {
-                    "text": _move_text(lane, outflow, candidate.to_date, decision),
-                    "source": "TEMPLATE",
-                },
-            },
-            outflow_id=outflow.id,
-            outflow_version=outflow.version,
-            to_date=candidate.to_date,
-        )
-        trace.add("POLICY", f"{outflow.counterparty}: {lane.value.replace('_', ' ').lower()}", now)
-        if lane is Lane.DONE_WITHIN_MANDATE:
-            execute_move(state, outflow.id, candidate.to_date)
-            rec = replace(
-                rec,
-                status=RecommendationStatus.EXECUTED,
-                executed_by="VERO",
-                executed_at=now,
-                confirmation_ref=_confirmation(),
-                decided_at=now,
-            )
-            trace.add(
-                "EXECUTE",
-                f"Postponed {outflow.counterparty} to {_day(candidate.to_date)} (simulated)",
-                now,
-            )
-        elif lane is Lane.NOT_ALLOWED:
-            rec = replace(rec, status=RecommendationStatus.BLOCKED, decided_at=now)
-        rec = _store(
-            state,
-            rec,
-            _receipt(
-                state,
-                rec,
-                "PROPOSAL",
-                now,
-                run.trigger_label,
-                impact(before_move),
-                impact(after_move),
-            ),
-        )
-        created.append(rec)
+    created = [
+        _propose_move(state, run, trace, by_id[c.outflow_id], c.to_date, now)
+        for c in plan.candidates
+    ]
 
     trace.add("TOOL_CALL", "Sizing a credit line for what's left", now, "size_credit_line")
     sizing = size_credit_line(state.forecast_input(), credit_until, credit_rounding)
     if sizing.needed and sizing.credit_line is not None:
-        line = sizing.credit_line
-        decision = evaluate_credit(line, mandate)
-        current = state.forecast().summary
-        rec = Recommendation(
-            id=uuid4(),
-            run_id=run.id,
-            kind=RecommendationKind.CREDIT_LINE,
-            lane=decision.lane.value,
-            status=RecommendationStatus.BLOCKED
-            if decision.lane is Lane.NOT_ALLOWED
-            else RecommendationStatus.PENDING,
-            created_at=now,
-            based_on_financial_version=state.financial_version,
-            details={
-                "subject": {
-                    "kind": RecommendationKind.CREDIT_LINE.value,
-                    "product": CREDIT_PRODUCT,
-                    "amount": line.amount,
-                    "available_from": line.available_from.isoformat(),
-                    "available_until": line.available_until.isoformat(),
-                    "shortfall": sizing.shortfall,
-                    "rounded_to": sizing.rounded_to,
-                    "headroom_at_lowest": sizing.headroom_at_lowest,
-                    "illustrative": True,
-                },
-                "reason": {
-                    "first_breach": current.first_breach.date.isoformat()
-                    if current.first_breach
-                    else None,
-                    "shortfall": sizing.shortfall,
-                },
-                "checks": _checks(decision),
-                "impact": {
-                    "before": impact(current),
-                    "after_if_executed": impact(_summary_with(state, lines=(line,))),
-                },
-                "explanation": {
-                    "text": _credit_text(decision.lane, line, sizing.shortfall, decision),
-                    "source": "TEMPLATE",
-                },
-            },
-            credit_line=line,
-            decided_at=now if decision.lane is Lane.NOT_ALLOWED else None,
+        credit = CreditProposal(
+            sizing.credit_line, sizing.shortfall, sizing.rounded_to, sizing.headroom_at_lowest
         )
-        trace.add(
-            "POLICY",
-            f"Credit line of {format_eur(line.amount)}: "
-            f"{decision.lane.value.replace('_', ' ').lower()}",
-            now,
-        )
-        rec = _store(
-            state,
-            rec,
-            _receipt(
-                state,
-                rec,
-                "PROPOSAL",
-                now,
-                run.trigger_label,
-                rec.details["impact"]["before"],
-                rec.details["impact"]["after_if_executed"],
-            ),
-        )
-        created.append(rec)
+        created.append(_propose_credit(state, run, trace, credit, now))
     else:
         trace.add("TOOL_RESULT", "No credit needed", now)
 
-    for rec in created:
-        if rec.status is RecommendationStatus.PENDING:
-            state.recommendations[rec.id] = replace(
-                rec, based_on_financial_version=state.financial_version
+    return _finish(state, run, trace, before, _pin_pending(state, created), now, RunMode.FALLBACK)
+
+
+def fall_back(
+    state: DemoState,
+    run: Run,
+    reason: str,
+    now: datetime,
+    credit_until: date,
+    credit_rounding: Cents,
+) -> Run:
+    trace = Tracer(run)
+    trace.add("FALLBACK", f"Model unavailable ({reason}), using standard checks", now)
+    return run_fallback(
+        state, replace(run, trace=tuple(trace.steps)), now, credit_until, credit_rounding
+    )
+
+
+def finalize_agent_run(
+    state: DemoState,
+    run: Run,
+    proposals: list[dict],
+    summary_note: str | None,
+    agent_info: dict | None,
+    now: datetime,
+) -> Run:
+    """Apply the agent's proposals through the same rules as the fallback.
+
+    Moves must be candidates of this run's find_reschedule_options and the credit line must
+    equal this run's size_credit_line result; anything else is discarded and noted."""
+    trace = Tracer(run)
+    log = run.tool_log or {}
+    candidates = {tuple(c) for c in log.get("candidates", [])}
+    credit_log = log.get("credit")
+    if summary_note:
+        trace.steps.append(
+            TraceStep(len(trace.steps) + 1, "THINK", "AGENT", summary_note[:500], now)
+        )
+    before = state.forecast().summary
+    _supersede_pending(state, now)
+    by_id = {str(o.id): o for o in state.outflows}
+    created: list[Recommendation] = []
+    for index, proposal in enumerate(proposals, start=1):
+        kind = proposal.get("kind")
+        if kind == RecommendationKind.RESCHEDULE_PAYMENT.value:
+            move = proposal.get("move") or {}
+            key = (str(move.get("outflow_id")), str(move.get("to_date")))
+            if key not in candidates or key[0] not in by_id:
+                trace.add("DISCARDED", f"Proposal {index} ignored: not a planner candidate", now)
+                continue
+            created.append(
+                _propose_move(state, run, trace, by_id[key[0]], date.fromisoformat(key[1]), now)
             )
-    created = [state.recommendations[r.id] for r in created]
-    return _finish(state, run, trace, before, created, now)
+        elif kind == RecommendationKind.CREDIT_LINE.value:
+            line = proposal.get("credit_line") or {}
+            offered = [str(line.get("amount")), str(line.get("available_from"))]
+            if not credit_log or offered != [credit_log["amount"], credit_log["available_from"]]:
+                trace.add("DISCARDED", f"Proposal {index} ignored: credit line was not sized", now)
+                continue
+            credit = CreditProposal(
+                CreditLine(
+                    int(credit_log["amount"]),
+                    date.fromisoformat(credit_log["available_from"]),
+                    date.fromisoformat(credit_log["available_until"]),
+                ),
+                int(credit_log["shortfall"]),
+                int(credit_log["rounded_to"]),
+                int(credit_log["headroom_at_lowest"]),
+            )
+            created.append(_propose_credit(state, run, trace, credit, now))
+        else:
+            trace.add("DISCARDED", f"Proposal {index} ignored: unknown kind", now)
+    return _finish(
+        state,
+        run,
+        trace,
+        before,
+        _pin_pending(state, created),
+        now,
+        RunMode.AGENT,
+        agent_info,
+    )
 
 
 def _finish(
@@ -410,14 +509,16 @@ def _finish(
     before: ForecastSummary,
     recs: list[Recommendation],
     now: datetime,
+    mode: RunMode = RunMode.FALLBACK,
+    summary_data: dict | None = None,
 ) -> Run:
     after = state.forecast().summary
     text = headline(run.trigger_label, state.active_mandate.cash_floor, before, recs)
-    trace.add("SUMMARY", text, now)
+    trace.add("SUMMARY", text, now, None, summary_data)
     finished = replace(
         run,
         status=RunStatus.SUCCEEDED,
-        mode=RunMode.FALLBACK,
+        mode=mode,
         finished_at=now,
         forecast_id=state.forecast_id,
         trace=tuple(trace.steps),
@@ -513,7 +614,7 @@ def request_reschedule(
         outflow, to_date, state.active_mandate, state.as_of, owner_approved=True
     )
     lane = decision.lane
-    trace.add("POLICY", f"{outflow.counterparty}: {lane.value.replace('_', ' ').lower()}", now)
+    trace.add("POLICY", f"{outflow.counterparty}: {_lane_text(lane)}", now)
     before = impact(before_summary)
     rec = Recommendation(
         id=uuid4(),

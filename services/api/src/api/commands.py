@@ -49,10 +49,14 @@ def plan_closure(
     now: datetime,
     credit_until: date,
     credit_rounding: Cents,
+    agent: bool = False,
 ) -> Run:
-    """Record a planned closure, bump the financial version and run the decision pipeline.
+    """Record a planned closure, bump the financial version and start a run.
 
-    Until the agent exists, the backend runs the pipeline itself (FALLBACK mode)."""
+    With the agent enabled the run stays RUNNING for the AI service; otherwise the backend
+    runs the decision pipeline itself (FALLBACK mode)."""
+    if agent and any(r.status is RunStatus.RUNNING for r in state.runs.values()):
+        raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.RUN_IN_PROGRESS)
     if date_to < date_from:
         raise _invalid("date_to must not be before date_from")
     if date_from < state.as_of:
@@ -95,10 +99,13 @@ def plan_closure(
         trigger_type=event.type,
         trigger_label=closure_label(date_from, date_to),
         status=RunStatus.RUNNING,
-        mode=RunMode.FALLBACK,
+        mode=RunMode.AGENT if agent else RunMode.FALLBACK,
         created_at=now,
+        started_financial_version=state.financial_version,
     )
     state.runs[run.id] = run
+    if agent:
+        return run
     return run_fallback(state, run, now, credit_until, credit_rounding)
 
 
