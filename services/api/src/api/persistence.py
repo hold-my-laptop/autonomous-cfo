@@ -7,11 +7,12 @@ writers (or replicas) are serialized."""
 import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, BigInteger, DateTime, delete
+from sqlalchemy import JSON, BigInteger, DateTime
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Field, Session, SQLModel, create_engine, select
@@ -26,9 +27,14 @@ from api.domain.models import (
     MandateStatus,
     PlannedEvent,
     PlannedEventKind,
+    Receipt,
+    Recommendation,
+    RecommendationKind,
+    RecommendationStatus,
     Run,
     RunMode,
     RunStatus,
+    TraceStep,
 )
 from api.state import (
     BaseData,
@@ -40,6 +46,14 @@ from api.state import (
 )
 
 COMPANY_ROW_ID = 1
+SCHEMA_VERSION = 2
+
+
+class SchemaMetaRow(SQLModel, table=True):
+    __tablename__ = "schema_meta"
+
+    id: int = Field(default=1, primary_key=True)
+    version: int
 
 
 class CompanyStateRow(SQLModel, table=True):
@@ -104,8 +118,8 @@ class EventRow(SQLModel, table=True):
 class RunRow(SQLModel, table=True):
     __tablename__ = "runs"
 
-    seq: int = Field(primary_key=True)
-    id: UUID = Field(unique=True)
+    id: UUID = Field(primary_key=True)
+    seq: int
     event_id: UUID
     trigger_type: str
     trigger_label: str
@@ -114,6 +128,55 @@ class RunRow(SQLModel, table=True):
     created_at: datetime = Field(sa_type=DateTime(timezone=True))
     finished_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     forecast_id: UUID | None = None
+    trace: list[dict[str, Any]] = Field(default_factory=list, sa_type=JSON)
+    recommendation_ids: list[str] = Field(default_factory=list, sa_type=JSON)
+    headline: str | None = None
+    gap_closed: bool | None = None
+
+
+class OutflowChangeRow(SQLModel, table=True):
+    __tablename__ = "outflow_changes"
+
+    outflow_id: UUID = Field(primary_key=True)
+    scheduled_date: date
+    version: int
+
+
+class RecommendationRow(SQLModel, table=True):
+    __tablename__ = "recommendations"
+
+    id: UUID = Field(primary_key=True)
+    seq: int
+    run_id: UUID
+    kind: str
+    lane: str
+    status: str
+    created_at: datetime = Field(sa_type=DateTime(timezone=True))
+    based_on_financial_version: int
+    details: dict[str, Any] = Field(sa_type=JSON)
+    outflow_id: UUID | None = None
+    outflow_version: int | None = None
+    to_date: date | None = None
+    credit_amount: int | None = Field(default=None, sa_type=BigInteger)
+    credit_from: date | None = None
+    credit_until: date | None = None
+    receipt_ids: list[str] = Field(default_factory=list, sa_type=JSON)
+    decided_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    executed_by: str | None = None
+    confirmation_ref: str | None = None
+    executed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
+    note: str | None = None
+
+
+class ReceiptRow(SQLModel, table=True):
+    __tablename__ = "receipts"
+
+    id: UUID = Field(primary_key=True)
+    seq: int
+    recommendation_id: UUID
+    kind: str
+    created_at: datetime = Field(sa_type=DateTime(timezone=True))
+    body: dict[str, Any] = Field(sa_type=JSON)
 
 
 class IdempotencyRow(SQLModel, table=True):
@@ -124,7 +187,93 @@ class IdempotencyRow(SQLModel, table=True):
     response: Any = Field(sa_type=JSON)
 
 
-_CHANGEABLE_TABLES = (MandateRow, PlannedEventRow, CreditLineRow, EventRow, RunRow, IdempotencyRow)
+_CHANGEABLE_TABLES = (
+    MandateRow,
+    PlannedEventRow,
+    CreditLineRow,
+    EventRow,
+    RunRow,
+    IdempotencyRow,
+    OutflowChangeRow,
+    RecommendationRow,
+    ReceiptRow,
+)
+_ALL_TABLES = (SchemaMetaRow, CompanyStateRow, *_CHANGEABLE_TABLES)
+
+
+def _trace_json(step: TraceStep) -> dict[str, Any]:
+    return {
+        "seq": step.seq,
+        "kind": step.kind,
+        "source": step.source,
+        "label": step.label,
+        "at": step.at.isoformat(),
+        "tool": step.tool,
+        "data": step.data,
+    }
+
+
+def _trace_step(data: dict[str, Any]) -> TraceStep:
+    return TraceStep(
+        seq=data["seq"],
+        kind=data["kind"],
+        source=data["source"],
+        label=data["label"],
+        at=datetime.fromisoformat(data["at"]),
+        tool=data.get("tool"),
+        data=data.get("data"),
+    )
+
+
+def _recommendation_row(seq: int, r: Recommendation) -> RecommendationRow:
+    return RecommendationRow(
+        id=r.id,
+        seq=seq,
+        run_id=r.run_id,
+        kind=r.kind.value,
+        lane=r.lane,
+        status=r.status.value,
+        created_at=r.created_at,
+        based_on_financial_version=r.based_on_financial_version,
+        details=r.details,
+        outflow_id=r.outflow_id,
+        outflow_version=r.outflow_version,
+        to_date=r.to_date,
+        credit_amount=r.credit_line.amount if r.credit_line else None,
+        credit_from=r.credit_line.available_from if r.credit_line else None,
+        credit_until=r.credit_line.available_until if r.credit_line else None,
+        receipt_ids=[str(i) for i in r.receipt_ids],
+        decided_at=r.decided_at,
+        executed_by=r.executed_by,
+        confirmation_ref=r.confirmation_ref,
+        executed_at=r.executed_at,
+        note=r.note,
+    )
+
+
+def _recommendation(r: RecommendationRow) -> Recommendation:
+    return Recommendation(
+        id=r.id,
+        run_id=r.run_id,
+        kind=RecommendationKind(r.kind),
+        lane=r.lane,
+        status=RecommendationStatus(r.status),
+        created_at=r.created_at,
+        based_on_financial_version=r.based_on_financial_version,
+        details=r.details,
+        outflow_id=r.outflow_id,
+        outflow_version=r.outflow_version,
+        to_date=r.to_date,
+        credit_line=CreditLine(r.credit_amount, r.credit_from, r.credit_until)
+        if r.credit_amount is not None
+        else None,
+        receipt_ids=tuple(UUID(i) for i in r.receipt_ids),
+        decided_at=r.decided_at,
+        executed_by=r.executed_by,
+        confirmation_ref=r.confirmation_ref,
+        executed_at=r.executed_at,
+        note=r.note,
+    )
 
 
 def _mandate_row(m: Mandate) -> MandateRow:
@@ -172,7 +321,10 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
     events = session.exec(select(EventRow).order_by(EventRow.seq)).all()
     runs = session.exec(select(RunRow).order_by(RunRow.seq)).all()
     keys = session.exec(select(IdempotencyRow)).all()
-    return DemoState.from_base(
+    changes = {r.outflow_id: r for r in session.exec(select(OutflowChangeRow)).all()}
+    recommendations = session.exec(select(RecommendationRow).order_by(RecommendationRow.seq)).all()
+    receipts = session.exec(select(ReceiptRow).order_by(ReceiptRow.seq)).all()
+    state = DemoState.from_base(
         base,
         [_mandate(r) for r in mandates],
         planned_events=[
@@ -209,11 +361,26 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
                 created_at=r.created_at,
                 finished_at=r.finished_at,
                 forecast_id=r.forecast_id,
+                trace=tuple(_trace_step(t) for t in r.trace),
+                recommendation_ids=tuple(UUID(i) for i in r.recommendation_ids),
+                headline=r.headline,
+                gap_closed=r.gap_closed,
             )
             for r in runs
         },
         idempotency={r.key: StoredResponse(r.request_hash, r.response) for r in keys},
+        recommendations={r.id: _recommendation(r) for r in recommendations},
+        receipts={
+            r.id: Receipt(r.id, r.recommendation_id, r.kind, r.created_at, r.body) for r in receipts
+        },
     )
+    state.outflows = [
+        replace(o, scheduled_date=changes[o.id].scheduled_date, version=changes[o.id].version)
+        if o.id in changes
+        else o
+        for o in state.outflows
+    ]
+    return state
 
 
 def _save(session: Session, state: DemoState) -> None:
@@ -222,10 +389,17 @@ def _save(session: Session, state: DemoState) -> None:
             id=COMPANY_ROW_ID, as_of=state.as_of, financial_version=state.financial_version
         )
     )
-    for table in _CHANGEABLE_TABLES:
-        session.exec(delete(table))
-    session.add_all([_mandate_row(m) for m in state.mandates])
-    session.add_all(
+
+    mandate_rows = {row.version: row for row in session.exec(select(MandateRow)).all()}
+    desired_mandate_versions = {mandate.version for mandate in state.mandates}
+    for row in mandate_rows.values():
+        if row.version not in desired_mandate_versions:
+            session.delete(row)
+    for mandate in state.mandates:
+        session.merge(_mandate_row(mandate))
+
+    existing_planned = session.exec(select(PlannedEventRow)).all()
+    desired_planned = [
         PlannedEventRow(
             seq=i,
             id=e.id,
@@ -236,8 +410,17 @@ def _save(session: Session, state: DemoState) -> None:
             note=e.note,
         )
         for i, e in enumerate(state.planned_events)
-    )
-    session.add_all(
+    ]
+    planned_by_id = {row.id: row for row in desired_planned}
+    for row in existing_planned:
+        desired = planned_by_id.get(row.id)
+        if desired is None or row.seq != desired.seq:
+            session.delete(row)
+    for row in desired_planned:
+        session.merge(row)
+
+    existing_credit_lines = {row.seq: row for row in session.exec(select(CreditLineRow)).all()}
+    desired_credit_lines = [
         CreditLineRow(
             seq=i,
             amount=c.amount,
@@ -245,8 +428,20 @@ def _save(session: Session, state: DemoState) -> None:
             available_until=c.available_until,
         )
         for i, c in enumerate(state.credit_lines)
-    )
-    session.add_all(
+    ]
+    for seq, row in existing_credit_lines.items():
+        if seq >= len(desired_credit_lines):
+            session.delete(row)
+    for row in desired_credit_lines:
+        session.merge(row)
+
+    existing_events = session.exec(select(EventRow)).all()
+    existing_event_ids = {row.id for row in existing_events}
+    desired_event_ids = {event.id for event in state.events}
+    for row in existing_events:
+        if row.id not in desired_event_ids:
+            session.delete(row)
+    new_events = [
         EventRow(
             seq=i,
             id=e.id,
@@ -256,26 +451,86 @@ def _save(session: Session, state: DemoState) -> None:
             financial_version_after=e.financial_version_after,
         )
         for i, e in enumerate(state.events)
+        if e.id not in existing_event_ids
+    ]
+    session.add_all(new_events)
+
+    _sync(
+        session,
+        RunRow,
+        [
+            RunRow(
+                id=r.id,
+                seq=i,
+                event_id=r.event_id,
+                trigger_type=r.trigger_type.value,
+                trigger_label=r.trigger_label,
+                status=r.status.value,
+                mode=r.mode.value,
+                created_at=r.created_at,
+                finished_at=r.finished_at,
+                forecast_id=r.forecast_id,
+                trace=[_trace_json(t) for t in r.trace],
+                recommendation_ids=[str(i) for i in r.recommendation_ids],
+                headline=r.headline,
+                gap_closed=r.gap_closed,
+            )
+            for i, r in enumerate(state.runs.values())
+        ],
     )
+    _sync(
+        session,
+        OutflowChangeRow,
+        [
+            OutflowChangeRow(outflow_id=o.id, scheduled_date=o.scheduled_date, version=o.version)
+            for o in state.outflows
+            if o.version > 1 or o.scheduled_date != o.due_date
+        ],
+    )
+    _sync(
+        session,
+        RecommendationRow,
+        [_recommendation_row(i, r) for i, r in enumerate(state.recommendations.values())],
+    )
+    existing_receipts = set(session.exec(select(ReceiptRow.id)).all())
+    for receipt_id in existing_receipts - set(state.receipts):
+        session.delete(session.get(ReceiptRow, receipt_id))
     session.add_all(
-        RunRow(
-            seq=i,
+        ReceiptRow(
             id=r.id,
-            event_id=r.event_id,
-            trigger_type=r.trigger_type.value,
-            trigger_label=r.trigger_label,
-            status=r.status.value,
-            mode=r.mode.value,
+            seq=i,
+            recommendation_id=r.recommendation_id,
+            kind=r.kind,
             created_at=r.created_at,
-            finished_at=r.finished_at,
-            forecast_id=r.forecast_id,
+            body=r.body,
         )
-        for i, r in enumerate(state.runs.values())
+        for i, r in enumerate(state.receipts.values())
+        if r.id not in existing_receipts
     )
-    session.add_all(
-        IdempotencyRow(key=k, request_hash=v.request_hash, response=v.response)
-        for k, v in state.idempotency.items()
-    )
+
+    existing_keys = {row.key: row for row in session.exec(select(IdempotencyRow)).all()}
+    for key, row in existing_keys.items():
+        if key not in state.idempotency:
+            session.delete(row)
+    for key, value in state.idempotency.items():
+        session.merge(
+            IdempotencyRow(
+                key=key,
+                request_hash=value.request_hash,
+                response=value.response,
+            )
+        )
+
+
+def _sync(session: Session, table: type[SQLModel], desired: list[SQLModel]) -> None:
+    """Make `table` contain exactly `desired`, keyed by primary key: update, insert, delete."""
+    key = table.__table__.primary_key.columns.values()[0].name
+    wanted = {getattr(row, key) for row in desired}
+    for existing in session.exec(select(table)).all():
+        if getattr(existing, key) not in wanted:
+            session.delete(existing)
+    for row in desired:
+        session.merge(row)
 
 
 def _lock_company(session: Session) -> CompanyStateRow | None:
@@ -294,9 +549,7 @@ class PostgresStateRepository:
 
     def start(self) -> None:
         try:
-            SQLModel.metadata.create_all(
-                self._engine, tables=[t.__table__ for t in (CompanyStateRow, *_CHANGEABLE_TABLES)]
-            )
+            self._ensure_schema()
             base = self._rebuild_base()
             with Session(self._engine) as session:
                 company = session.get(CompanyStateRow, COMPANY_ROW_ID)
@@ -307,6 +560,21 @@ class PostgresStateRepository:
 
     def close(self) -> None:
         self._engine.dispose()
+
+    def _ensure_schema(self) -> None:
+        """Create the tables; recreate them when they were made by an older SCHEMA_VERSION."""
+        tables = [t.__table__ for t in _ALL_TABLES]
+        SQLModel.metadata.create_all(self._engine, tables=[SchemaMetaRow.__table__])
+        with Session(self._engine) as session:
+            meta = session.get(SchemaMetaRow, 1)
+            current = meta.version if meta else None
+        if current != SCHEMA_VERSION:
+            SQLModel.metadata.drop_all(self._engine, tables=tables)
+            SQLModel.metadata.create_all(self._engine, tables=tables)
+            with Session(self._engine) as session, session.begin():
+                session.add(SchemaMetaRow(id=1, version=SCHEMA_VERSION))
+        else:
+            SQLModel.metadata.create_all(self._engine, tables=tables)
 
     def _rebuild_base(self) -> BaseData:
         base = build_base(self._settings)

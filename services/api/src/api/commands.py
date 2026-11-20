@@ -2,10 +2,11 @@
 
 from dataclasses import replace
 from datetime import date, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import status
 
+from api.decisions import request_reschedule, run_fallback
 from api.domain.models import (
     Category,
     Event,
@@ -46,10 +47,12 @@ def plan_closure(
     variable_costs_stop: bool,
     note: str | None,
     now: datetime,
+    credit_until: date,
+    credit_rounding: Cents,
 ) -> Run:
-    """Record a planned closure, bump the financial version and complete a run.
+    """Record a planned closure, bump the financial version and run the decision pipeline.
 
-    Until the agent and decision steps exist, the run finishes immediately in FALLBACK mode."""
+    Until the agent exists, the backend runs the pipeline itself (FALLBACK mode)."""
     if date_to < date_from:
         raise _invalid("date_to must not be before date_from")
     if date_from < state.as_of:
@@ -91,14 +94,39 @@ def plan_closure(
         event_id=event.id,
         trigger_type=event.type,
         trigger_label=closure_label(date_from, date_to),
-        status=RunStatus.SUCCEEDED,
+        status=RunStatus.RUNNING,
         mode=RunMode.FALLBACK,
         created_at=now,
-        finished_at=now,
-        forecast_id=state.forecast_id,
     )
     state.runs[run.id] = run
-    return run
+    return run_fallback(state, run, now, credit_until, credit_rounding)
+
+
+def request_outflow_reschedule(
+    state: DemoState, outflow_id: UUID, to_date: date, note: str | None, now: datetime
+) -> Run:
+    outflow = next((o for o in state.outflows if o.id == outflow_id), None)
+    if outflow is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, f"no outflow {outflow_id}")
+    event = Event(
+        id=uuid4(),
+        type=EventType.RESCHEDULE_REQUESTED,
+        payload={"outflow_id": str(outflow_id), "to_date": to_date.isoformat(), "note": note},
+        created_at=now,
+        financial_version_after=state.financial_version,
+    )
+    state.events.append(event)
+    run = Run(
+        id=uuid4(),
+        event_id=event.id,
+        trigger_type=event.type,
+        trigger_label=f"You asked to move {outflow.counterparty} to {_day_month(to_date)}",
+        status=RunStatus.RUNNING,
+        mode=RunMode.FALLBACK,
+        created_at=now,
+    )
+    state.runs[run.id] = run
+    return request_reschedule(state, run, outflow, to_date, now)
 
 
 REQUIRED_PROTECTED = frozenset({Category.PAYROLL, Category.SOCIAL_SECURITY, Category.TAX})

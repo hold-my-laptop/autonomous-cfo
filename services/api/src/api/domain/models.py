@@ -159,6 +159,7 @@ class Outflow:
 
 class EventType(StrEnum):
     CLOSURE_PLANNED = "CLOSURE_PLANNED"
+    RESCHEDULE_REQUESTED = "RESCHEDULE_REQUESTED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -183,6 +184,19 @@ class RunMode(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
+class TraceStep:
+    """One plain-language line of what a run did. `source` is BACKEND or AGENT."""
+
+    seq: int
+    kind: str
+    source: str
+    label: str
+    at: datetime
+    tool: str | None = None
+    data: dict | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class Run:
     id: UUID
     event_id: UUID
@@ -193,3 +207,58 @@ class Run:
     created_at: datetime
     finished_at: datetime | None = None
     forecast_id: UUID | None = None
+    trace: tuple[TraceStep, ...] = ()
+    recommendation_ids: tuple[UUID, ...] = ()
+    headline: str | None = None
+    gap_closed: bool | None = None
+
+
+class RecommendationKind(StrEnum):
+    RESCHEDULE_PAYMENT = "RESCHEDULE_PAYMENT"
+    CREDIT_LINE = "CREDIT_LINE"
+
+
+class RecommendationStatus(StrEnum):
+    EXECUTED = "EXECUTED"
+    PENDING = "PENDING"
+    APPROVED_EXECUTED = "APPROVED_EXECUTED"
+    REJECTED = "REJECTED"
+    BLOCKED = "BLOCKED"
+    STALE = "STALE"
+    SUPERSEDED = "SUPERSEDED"
+
+
+@dataclass(frozen=True, slots=True)
+class Recommendation:
+    """A proposed or executed action. `details` holds JSON-ready display data: subject,
+    reason, checks, impact and explanation."""
+
+    id: UUID
+    run_id: UUID
+    kind: RecommendationKind
+    lane: str
+    status: RecommendationStatus
+    created_at: datetime
+    based_on_financial_version: int
+    details: dict
+    outflow_id: UUID | None = None
+    outflow_version: int | None = None
+    to_date: date | None = None
+    credit_line: CreditLine | None = None
+    receipt_ids: tuple[UUID, ...] = ()
+    decided_at: datetime | None = None
+    executed_by: str | None = None
+    confirmation_ref: str | None = None
+    executed_at: datetime | None = None
+    note: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Receipt:
+    """Immutable evidence of a proposal (PROPOSAL) or an owner decision (DECISION)."""
+
+    id: UUID
+    recommendation_id: UUID
+    kind: str
+    created_at: datetime
+    body: dict

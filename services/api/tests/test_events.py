@@ -75,7 +75,7 @@ def test_run_can_be_polled(client: TestClient) -> None:
         "type": "CLOSURE_PLANNED",
         "label": "You plan to close 1 Jun – 30 Jun",
     }
-    assert run["result"] == {"forecast_id": client.get("/api/v1/forecast").json()["id"]}
+    assert run["result"]["forecast_id"] == client.get("/api/v1/forecast").json()["id"]
     assert run["created_at"] == run["finished_at"]
 
 

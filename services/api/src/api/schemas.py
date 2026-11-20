@@ -17,6 +17,8 @@ from api.domain.models import (
     MandateStatus,
     OutflowSource,
     PlannedEventKind,
+    RecommendationKind,
+    RecommendationStatus,
     RunMode,
     RunStatus,
 )
@@ -480,8 +482,33 @@ class RunTrigger(BaseModel):
     label: str
 
 
+class Explanation(BaseModel):
+    text: str
+    source: Literal["MODEL", "REPLAY", "TEMPLATE"]
+
+
+class RunCounts(BaseModel):
+    done_within_mandate: int
+    needs_approval: int
+    not_allowed: int
+
+
 class RunResult(BaseModel):
     forecast_id: UUID
+    recommendation_ids: list[UUID]
+    headline: Explanation | None
+    counts: RunCounts
+    gap_closed: bool | None
+
+
+class TraceStep(BaseModel):
+    seq: int
+    kind: str
+    source: str
+    label: str
+    tool: str | None
+    data: dict | None
+    at: datetime
 
 
 class Run(BaseModel):
@@ -489,23 +516,231 @@ class Run(BaseModel):
     status: RunStatus
     mode: RunMode
     trigger: RunTrigger
-    trace: list[dict]
+    trace: list[TraceStep]
     result: RunResult | None
     created_at: datetime
     finished_at: datetime | None
 
     @classmethod
-    def from_domain(cls, r: dm.Run) -> Self:
+    def from_domain(cls, r: dm.Run, state: DemoState) -> Self:
+        recs = [
+            state.recommendations[i] for i in r.recommendation_ids if i in state.recommendations
+        ]
         return cls(
             run_id=r.id,
             status=r.status,
             mode=r.mode,
             trigger=RunTrigger(type=r.trigger_type, label=r.trigger_label),
-            trace=[],
-            result=RunResult(forecast_id=r.forecast_id) if r.forecast_id else None,
+            trace=[
+                TraceStep(
+                    seq=t.seq,
+                    kind=t.kind,
+                    source=t.source,
+                    label=t.label,
+                    tool=t.tool,
+                    data=t.data,
+                    at=t.at,
+                )
+                for t in r.trace
+            ],
+            result=RunResult(
+                forecast_id=r.forecast_id,
+                recommendation_ids=list(r.recommendation_ids),
+                headline=Explanation(text=r.headline, source="TEMPLATE") if r.headline else None,
+                counts=RunCounts(
+                    done_within_mandate=sum(x.lane == "DONE_WITHIN_MANDATE" for x in recs),
+                    needs_approval=sum(x.lane == "NEEDS_APPROVAL" for x in recs),
+                    not_allowed=sum(x.lane == "NOT_ALLOWED" for x in recs),
+                ),
+                gap_closed=r.gap_closed,
+            )
+            if r.forecast_id
+            else None,
             created_at=r.created_at,
             finished_at=r.finished_at,
         )
+
+
+class Check(BaseModel):
+    rule: str
+    result: Literal["PASS", "FAIL", "INFO"]
+    effect: Literal["NEEDS_APPROVAL", "NOT_ALLOWED"] | None
+    text: str
+
+
+class ImpactState(BaseModel):
+    first_breach: date | None
+    lowest: Money
+    lowest_date: date
+    days_below_floor: int
+
+
+class Impact(BaseModel):
+    before: ImpactState
+    after_if_executed: ImpactState
+
+
+class RescheduleSubject(BaseModel):
+    kind: Literal["RESCHEDULE_PAYMENT"]
+    outflow_id: UUID
+    ref: str
+    counterparty: str
+    category: Category
+    amount: Money
+    original_amount: Money | None
+    original_currency: str | None
+    from_date: date
+    to_date: date
+
+
+class CreditLineSubject(BaseModel):
+    kind: Literal["CREDIT_LINE"]
+    product: Literal["SHORT_TERM_CREDIT_LINE"]
+    amount: Money
+    available_from: date
+    available_until: date
+    shortfall: Money
+    rounded_to: Money
+    headroom_at_lowest: Money
+    illustrative: Literal[True]
+
+
+class Reason(BaseModel):
+    first_breach: date | None
+    shortfall: Money
+    requested_by: Literal["OWNER"] | None = None
+
+
+class Execution(BaseModel):
+    execution: Literal["SIMULATED"]
+    confirmation_ref: str
+    executed_by: Literal["VERO", "OWNER"]
+    executed_at: datetime
+
+
+class Recommendation(BaseModel):
+    id: UUID
+    run_id: UUID
+    kind: RecommendationKind
+    lane: Literal["DONE_WITHIN_MANDATE", "NEEDS_APPROVAL", "NOT_ALLOWED"]
+    status: RecommendationStatus
+    execution: Literal["SIMULATED"]
+    subject: RescheduleSubject | CreditLineSubject = Field(discriminator="kind")
+    reason: Reason
+    checks: list[Check]
+    impact: Impact
+    explanation: Explanation
+    receipt_ids: list[UUID]
+    executed: Execution | None
+    note: str | None
+    created_at: datetime
+    decided_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, r: dm.Recommendation) -> Self:
+        d = r.details
+        return cls(
+            id=r.id,
+            run_id=r.run_id,
+            kind=r.kind,
+            lane=r.lane,
+            status=r.status,
+            execution="SIMULATED",
+            subject=d["subject"],
+            reason=d["reason"],
+            checks=d["checks"],
+            impact=d["impact"],
+            explanation=d["explanation"],
+            receipt_ids=list(r.receipt_ids),
+            executed=Execution(
+                execution="SIMULATED",
+                confirmation_ref=r.confirmation_ref,
+                executed_by=r.executed_by,
+                executed_at=r.executed_at,
+            )
+            if r.executed_at
+            else None,
+            note=r.note,
+            created_at=r.created_at,
+            decided_at=r.decided_at,
+        )
+
+
+class Receipt(BaseModel):
+    id: UUID
+    recommendation_id: UUID
+    kind: Literal["PROPOSAL", "DECISION"]
+    created_at: datetime
+    trigger: str
+    subject: RescheduleSubject | CreditLineSubject = Field(discriminator="kind")
+    lane: str
+    decision: Literal["APPROVED", "REJECTED", "REQUESTED"] | None
+    checks: list[Check]
+    before: ImpactState
+    after: ImpactState
+    assumptions: list[str]
+    mandate_version: int
+    financial_version: int
+    versions: dict[str, str]
+    execution: Literal["SIMULATED"]
+    explanation: Explanation
+
+    @classmethod
+    def from_domain(cls, r: dm.Receipt) -> Self:
+        return cls(
+            id=r.id,
+            recommendation_id=r.recommendation_id,
+            kind=r.kind,
+            created_at=r.created_at,
+            **r.body,
+        )
+
+
+class DecisionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: str | None = Field(default=None, max_length=500)
+
+
+class DecisionResult(BaseModel):
+    recommendation: Recommendation
+    forecast_summary: ForecastSummary
+    receipt_id: UUID
+    follow_up_recommendation_ids: list[UUID]
+
+
+class RescheduleIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    to_date: date
+    note: str | None = Field(default=None, max_length=200)
+
+
+class Finding(BaseModel):
+    kind: Literal["DRIVER", "RECURRING", "FX_EXPOSURE", "BACKTEST"]
+    text: str
+
+
+class Lanes(BaseModel):
+    ANALYSED: list[Finding]
+    DONE_WITHIN_MANDATE: list[Recommendation]
+    NEEDS_APPROVAL: list[Recommendation]
+    NOT_ALLOWED: list[Recommendation]
+
+
+class RunRef(BaseModel):
+    run_id: UUID
+    status: RunStatus
+
+
+class Overview(BaseModel):
+    company: Company
+    cash_floor: Money
+    forecast_summary: ForecastSummary
+    headline: Explanation
+    lanes: Lanes
+    pending_count: int
+    latest_run: RunRef | None
 
 
 class MandateIn(BaseModel):

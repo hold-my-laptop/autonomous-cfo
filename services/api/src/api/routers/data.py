@@ -1,11 +1,23 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Annotated
+from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request, status
 
+from api.commands import request_outflow_reschedule
 from api.deps import RepositoryDep
 from api.domain.models import Category
-from api.schemas import Company, Inflow, Outflow, PlannedEvent, RevenueModel, Transaction
+from api.idempotency import IdempotencyKeyDep, request_hash, run_idempotent
+from api.schemas import (
+    Company,
+    Inflow,
+    Outflow,
+    PlannedEvent,
+    RescheduleIn,
+    RevenueModel,
+    RunAccepted,
+    Transaction,
+)
 
 router = APIRouter(tags=["data"])
 
@@ -57,3 +69,23 @@ def get_revenue_model(repository: RepositoryDep) -> RevenueModel:
 def list_planned_events(repository: RepositoryDep) -> list[PlannedEvent]:
     with repository.read() as state:
         return [PlannedEvent.from_domain(e) for e in state.planned_events]
+
+
+@router.post("/outflows/{outflow_id}/reschedule-requests", status_code=status.HTTP_202_ACCEPTED)
+def request_reschedule(
+    outflow_id: UUID,
+    body: RescheduleIn,
+    key: IdempotencyKeyDep,
+    repository: RepositoryDep,
+    request: Request,
+) -> RunAccepted:
+    """The owner asks to move a payment. The same rules apply; protected payments are refused."""
+    with repository.write() as state:
+
+        def apply() -> RunAccepted:
+            run = request_outflow_reschedule(
+                state, outflow_id, body.to_date, body.note, datetime.now(UTC)
+            )
+            return RunAccepted(run_id=run.id, status=run.status)
+
+        return run_idempotent(state, key, request_hash("POST", request.url.path, body), apply)
