@@ -225,7 +225,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 ### B29 · Container + config for OpenShift — MUST (with DevOps)
 - Containerfile (UBI Python, non-root), `fastapi run`.
 - Env: `DATABASE_URL`, `AI_URL`, `INTERNAL_TOKEN`, `DEMO_MODE`, `DEMO_AS_OF_DATE`, `STATEMENT_PATH`.
-- Readiness checks the DB.
+- Readiness checks the DB. If the database (or the statement) is not available at startup, later requests retry loading at most every `STATE_LOAD_RETRY_S` (5 s), so the pod becomes ready on its own once the database is up; interrupted agent runs are then recovered.
 - **Single replica only** (`replicas: 1`, `strategy: Recreate`). Agent run deadlines live in process memory, a starting pod falls back every run still `RUNNING`, and a pod whose `DEMO_AS_OF_DATE` differs from the database resets it. Two API pods must never run at once.
 - The sample CSV is available in the image or a volume (**decide** whether it may be committed to `data/`).
 

@@ -211,3 +211,23 @@ def test_endpoints_return_503_when_state_is_not_loaded() -> None:
 def test_money_is_documented_as_string() -> None:
     schema = create_app(settings).openapi()["components"]["schemas"]
     assert schema["Company"]["properties"]["balance"]["type"] == "string"
+
+
+@needs_sample
+@pytest.mark.parametrize(("retry_s", "ready_after_file"), [(0.0, True), (60.0, False)])
+def test_state_loads_on_a_later_request_after_a_failed_start(
+    tmp_path: Path, retry_s: float, ready_after_file: bool
+) -> None:
+    statement = tmp_path / "statement.csv"
+    late = Settings(
+        **(settings.model_dump() | {"statement_path": statement, "state_load_retry_s": retry_s})
+    )
+    with TestClient(create_app(late)) as client:
+        assert client.get("/api/v1/health/ready").status_code == 503
+
+        statement.write_bytes(settings.statement_path.read_bytes())
+
+        ready = client.get("/api/v1/health/ready")
+        assert (ready.status_code == 200) is ready_after_file
+        if ready_after_file:
+            assert client.get("/api/v1/company").json()["as_of_date"] == "2025-05-05"

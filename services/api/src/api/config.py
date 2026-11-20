@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     agent_start_timeout_s: float = 5.0
     explain_timeout_s: float = 10.0
     model_health_timeout_s: float = 20.0
+    state_load_retry_s: float = 5.0
 
     @property
     def agent_enabled(self) -> bool:

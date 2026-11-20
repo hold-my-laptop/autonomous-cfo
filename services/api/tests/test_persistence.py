@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 
+from api.agent import AgentUnavailableError
 from api.config import Settings, get_settings
 from api.main import build_repository, create_app
 from api.persistence import PostgresStateRepository
@@ -128,3 +129,42 @@ def test_unreachable_database_is_not_ready() -> None:
         response = client.get("/api/v1/forecast")
         assert response.status_code == 503
         assert response.json()["code"] == "STATE_NOT_LOADED"
+
+
+class StartOnlyAI:
+    def start_run(self, payload: dict) -> None:
+        return None
+
+    def explain(self, payload: dict):
+        raise AgentUnavailableError("not running")
+
+    def model_health(self):
+        raise AgentUnavailableError("not running")
+
+
+def test_api_becomes_ready_when_the_database_comes_up_later() -> None:
+    agent_settings = pg_settings(reset_on_startup=True, internal_token="t")
+    with TestClient(create_app(agent_settings, StartOnlyAI())) as client:
+        run_id = client.post(
+            "/api/v1/events", json=closure(), headers={"Idempotency-Key": str(uuid4())}
+        ).json()["run_id"]
+        assert client.get(f"/api/v1/runs/{run_id}").json()["status"] == "RUNNING"
+
+    down = pg_settings(
+        database_url="postgresql://app:wrong@localhost:1/app",
+        internal_token="t",
+        state_load_retry_s=0.0,
+    )
+    app = create_app(down, StartOnlyAI())
+    with TestClient(app) as client:
+        assert client.get("/api/v1/health/ready").status_code == 503
+
+        app.state.repository._engine = create_engine(
+            Settings(database_url=TEST_DATABASE_URL).sqlalchemy_url
+        )
+
+        assert client.get("/api/v1/health/ready").status_code == 200
+        recovered = client.get(f"/api/v1/runs/{run_id}").json()
+        assert (recovered["status"], recovered["mode"]) == ("SUCCEEDED", "FALLBACK")
+        [step] = [s for s in recovered["trace"] if s["kind"] == "FALLBACK"]
+        assert step["label"] == "Vero restarted during the analysis, using standard checks"

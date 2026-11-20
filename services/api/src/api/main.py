@@ -1,4 +1,3 @@
-import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -7,7 +6,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.agent import AgentClient, AgentOrchestrator, HttpAgentClient
 from api.config import Settings, get_settings
-from api.domain.importer import StatementImportError
 from api.errors import Problem, install_error_handlers
 from api.routers import (
     data,
@@ -20,10 +18,10 @@ from api.routers import (
     recommendations,
     runs,
 )
-from api.state import InMemoryStateRepository, StateNotLoadedError, StateRepository
+from api.startup import StateLoader
+from api.state import InMemoryStateRepository, StateRepository
 
 API_PREFIX = "/api/v1"
-logger = logging.getLogger(__name__)
 
 
 def build_repository(settings: Settings) -> StateRepository:
@@ -42,12 +40,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        try:
-            app.state.repository.start()
-        except (StatementImportError, StateNotLoadedError):
-            logger.exception("demo state not loaded at startup")
-        else:
-            app.state.agent.recover()
+        app.state.loader.load()
         yield
         app.state.agent.close()
         app.state.repository.close()
@@ -64,6 +57,9 @@ def create_app(
     app.state.repository = build_repository(settings)
     app.state.agent_client = agent_client or HttpAgentClient(settings)
     app.state.agent = AgentOrchestrator(app.state.repository, settings, app.state.agent_client)
+    app.state.loader = StateLoader(
+        app.state.repository, app.state.agent, settings.state_load_retry_s
+    )
     install_error_handlers(app)
     app.add_middleware(
         CORSMiddleware,
