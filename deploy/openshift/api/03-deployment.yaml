@@ -34,6 +34,13 @@ spec:
                 secretKeyRef:
                   name: db
                   key: DATABASE_URL
+            - name: AI_URL
+              value: http://ai:8080
+            - name: INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: internal-token
+                  key: INTERNAL_TOKEN
           volumeMounts:
             - name: statement
               mountPath: /opt/app-root/data

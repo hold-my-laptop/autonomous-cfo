@@ -5,7 +5,7 @@ COMPOSE_APP := $(COMPOSE) --profile app
 OC_NS := autonomous-cfo
 STATEMENT := data/pizzeria-amalfi-bank-statement-2025-v6.csv
 
-.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy
+.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy oc-ai-secret oc-ai-build oc-ai-deploy
 
 up:
 > test -f infra/.env || cp infra/.env.example infra/.env
@@ -48,7 +48,7 @@ oc-api-build:
 > oc apply -n $(OC_NS) -f deploy/openshift/api/01-imagestream.yaml -f deploy/openshift/api/02-buildconfig.yaml
 > oc start-build api -n $(OC_NS) --follow
 
-oc-api-deploy:
+oc-api-deploy: oc-db-secret oc-ai-secret
 > oc create configmap api-statement -n $(OC_NS) --from-file=$(STATEMENT) --dry-run=client -o yaml | oc apply --server-side -n $(OC_NS) -f -
 > oc apply -n $(OC_NS) -f deploy/openshift/api/03-deployment.yaml -f deploy/openshift/api/04-service.yaml
 > oc rollout status deployment/api -n $(OC_NS) --timeout=180s
@@ -59,3 +59,14 @@ oc-db-secret:
 oc-db-deploy: oc-db-secret
 > oc apply -n $(OC_NS) -f deploy/openshift/db/
 > oc rollout status deployment/db -n $(OC_NS) --timeout=180s
+
+oc-ai-secret:
+> @oc get secret internal-token -n $(OC_NS) >/dev/null 2>&1 || oc create secret generic internal-token -n $(OC_NS) --from-literal=INTERNAL_TOKEN=$$(openssl rand -hex 24)
+
+oc-ai-build:
+> oc apply -n $(OC_NS) -f deploy/openshift/ai/01-imagestream.yaml -f deploy/openshift/ai/02-buildconfig.yaml
+> oc start-build ai -n $(OC_NS) --follow
+
+oc-ai-deploy: oc-ai-secret
+> oc apply -n $(OC_NS) -f deploy/openshift/ai/03-deployment.yaml -f deploy/openshift/ai/04-service.yaml
+> oc rollout status deployment/ai -n $(OC_NS) --timeout=180s
