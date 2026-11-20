@@ -45,6 +45,7 @@ from api.state import (
     build_base,
     fresh_state,
 )
+from api.statement_db import read_statement_table
 
 COMPANY_ROW_ID = 1
 SCHEMA_VERSION = 4
@@ -590,7 +591,10 @@ class PostgresStateRepository:
             SQLModel.metadata.create_all(self._engine, tables=tables)
 
     def _rebuild_base(self) -> BaseData:
-        base = build_base(self._settings)
+        statement = None
+        if self._settings.statement_source == "db":
+            statement = read_statement_table(self._engine)
+        base = build_base(self._settings, statement)
         with self._base_lock:
             self._base = base
         return base

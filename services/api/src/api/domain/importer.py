@@ -119,7 +119,11 @@ def parse_statement(text: str) -> StatementImport:
     if missing:
         raise StatementImportError(f"missing columns: {', '.join(missing)}")
 
-    rows = [(line, row) for line, row in enumerate(reader, start=2)]
+    return parse_rows(list(enumerate(reader, start=2)))
+
+
+def parse_rows(rows: list[tuple[int, dict[str, str]]]) -> StatementImport:
+    """Statement lines as (line number, column name → text), in the CSV's column order."""
     if not rows:
         raise StatementImportError("statement has no transactions")
 

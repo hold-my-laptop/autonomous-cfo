@@ -181,9 +181,10 @@ class DemoState:
         )
 
 
-def build_base(settings: Settings) -> BaseData:
-    """Import the sample statement and derive everything Vero knows on `demo_as_of_date`."""
-    statement = load_statement(settings.statement_path)
+def build_base(settings: Settings, statement: StatementImport | None = None) -> BaseData:
+    """Derive everything Vero knows on `demo_as_of_date` from the statement (by default the CSV
+    file at `statement_path`)."""
+    statement = statement or load_statement(settings.statement_path)
     as_of = settings.demo_as_of_date
     history = [t for t in statement.transactions if t.booking_date < as_of]
     end = window_end(as_of, settings.forecast_horizon_days)
