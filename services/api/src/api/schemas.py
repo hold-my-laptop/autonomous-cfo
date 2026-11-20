@@ -2,10 +2,10 @@
 string of integer cents."""
 
 from datetime import date, datetime
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
 from api.domain import backtest as bt
 from api.domain import forecast as fc
@@ -26,6 +26,16 @@ from api.money import Money
 from api.state import DemoState
 
 WEEKS_IN_FORECAST = 13
+
+
+def _public_status(status: object) -> object:
+    """A run waiting for its texts is still running for the frontend."""
+    return RunStatus.RUNNING.value if status == RunStatus.FINALIZING else status
+
+
+PublicRunStatus = Annotated[
+    Literal["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"], BeforeValidator(_public_status)
+]
 
 
 class Company(BaseModel):
@@ -474,7 +484,7 @@ EventIn = ClosurePlannedIn
 
 class RunAccepted(BaseModel):
     run_id: UUID
-    status: RunStatus
+    status: PublicRunStatus
 
 
 class RunTrigger(BaseModel):
@@ -513,7 +523,7 @@ class TraceStep(BaseModel):
 
 class Run(BaseModel):
     run_id: UUID
-    status: RunStatus
+    status: PublicRunStatus
     mode: RunMode
     trigger: RunTrigger
     trace: list[TraceStep]
@@ -546,7 +556,9 @@ class Run(BaseModel):
             result=RunResult(
                 forecast_id=r.forecast_id,
                 recommendation_ids=list(r.recommendation_ids),
-                headline=Explanation(text=r.headline, source="TEMPLATE") if r.headline else None,
+                headline=Explanation(text=r.headline, source=r.headline_source)
+                if r.headline
+                else None,
                 counts=RunCounts(
                     done_within_mandate=sum(x.lane == "DONE_WITHIN_MANDATE" for x in recs),
                     needs_approval=sum(x.lane == "NEEDS_APPROVAL" for x in recs),
@@ -716,6 +728,14 @@ class RescheduleIn(BaseModel):
     note: str | None = Field(default=None, max_length=200)
 
 
+class ModelHealth(BaseModel):
+    ok: bool
+    model: str
+    mode: Literal["live", "replay", "stub"] | None = None
+    latency_ms: int
+    error: str | None = None
+
+
 class Finding(BaseModel):
     kind: Literal["DRIVER", "RECURRING", "FX_EXPOSURE", "BACKTEST"]
     text: str
@@ -730,7 +750,7 @@ class Lanes(BaseModel):
 
 class RunRef(BaseModel):
     run_id: UUID
-    status: RunStatus
+    status: PublicRunStatus
 
 
 class Overview(BaseModel):

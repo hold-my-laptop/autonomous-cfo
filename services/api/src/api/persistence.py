@@ -46,7 +46,7 @@ from api.state import (
 )
 
 COMPANY_ROW_ID = 1
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 4
 
 
 class SchemaMetaRow(SQLModel, table=True):
@@ -132,6 +132,10 @@ class RunRow(SQLModel, table=True):
     recommendation_ids: list[str] = Field(default_factory=list, sa_type=JSON)
     headline: str | None = None
     gap_closed: bool | None = None
+    started_financial_version: int | None = None
+    tool_log: dict[str, Any] | None = Field(default=None, sa_type=JSON)
+    headline_source: str = "TEMPLATE"
+    explain_request: dict[str, Any] | None = Field(default=None, sa_type=JSON)
 
 
 class OutflowChangeRow(SQLModel, table=True):
@@ -365,6 +369,10 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
                 recommendation_ids=tuple(UUID(i) for i in r.recommendation_ids),
                 headline=r.headline,
                 gap_closed=r.gap_closed,
+                started_financial_version=r.started_financial_version,
+                tool_log=r.tool_log,
+                headline_source=r.headline_source,
+                explain_request=r.explain_request,
             )
             for r in runs
         },
@@ -474,6 +482,10 @@ def _save(session: Session, state: DemoState) -> None:
                 recommendation_ids=[str(i) for i in r.recommendation_ids],
                 headline=r.headline,
                 gap_closed=r.gap_closed,
+                started_financial_version=r.started_financial_version,
+                tool_log=r.tool_log,
+                headline_source=r.headline_source,
+                explain_request=r.explain_request,
             )
             for i, r in enumerate(state.runs.values())
         ],

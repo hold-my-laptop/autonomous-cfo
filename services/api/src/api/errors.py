@@ -29,6 +29,8 @@ class ErrorCode(StrEnum):
     DEMO_DISABLED = "DEMO_DISABLED"
     STATE_NOT_LOADED = "STATE_NOT_LOADED"
     HTTP_ERROR = "HTTP_ERROR"
+    UNAUTHORIZED = "UNAUTHORIZED"
+    RUN_CLOSED = "RUN_CLOSED"
 
 
 _TITLES = {
@@ -46,6 +48,8 @@ _TITLES = {
     ErrorCode.DEMO_DISABLED: "Demo mode is off",
     ErrorCode.STATE_NOT_LOADED: "Data is not loaded",
     ErrorCode.HTTP_ERROR: "Request failed",
+    ErrorCode.UNAUTHORIZED: "Missing or invalid internal token",
+    ErrorCode.RUN_CLOSED: "The run is no longer running",
 }
 
 _HTTP_CODES = {
