@@ -211,6 +211,8 @@ class Run:
     recommendation_ids: tuple[UUID, ...] = ()
     headline: str | None = None
     gap_closed: bool | None = None
+    started_financial_version: int | None = None
+    tool_log: dict | None = None
 
 
 class RecommendationKind(StrEnum):

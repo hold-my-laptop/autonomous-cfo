@@ -8,7 +8,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.config import Settings, get_settings
 from api.domain.importer import StatementImportError
 from api.errors import Problem, install_error_handlers
-from api.routers import data, demo, events, forecast, health, mandate, recommendations, runs
+from api.routers import (
+    data,
+    demo,
+    events,
+    forecast,
+    health,
+    internal,
+    mandate,
+    recommendations,
+    runs,
+)
 from api.state import InMemoryStateRepository, StateNotLoadedError, StateRepository
 
 API_PREFIX = "/api/v1"
@@ -74,6 +84,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     api.include_router(recommendations.router)
     api.include_router(demo.router)
     app.include_router(api)
+    app.include_router(internal.router)
     return app
 
 

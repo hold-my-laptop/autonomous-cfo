@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173"]
     ai_url: str = "http://localhost:8001"
     internal_token: SecretStr | None = None
+    agent_max_tool_calls: int = 8
 
     @property
     def sqlalchemy_url(self) -> str | None:

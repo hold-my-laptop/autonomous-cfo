@@ -195,7 +195,7 @@ def _supersede_pending(state: DemoState, now: datetime) -> None:
             )
 
 
-def _moved_alone_today(state: DemoState) -> Cents:
+def moved_alone_today(state: DemoState) -> Cents:
     return sum(
         r.details["subject"]["amount"]
         for r in state.recommendations.values()
@@ -257,7 +257,7 @@ def run_fallback(
     for candidate in plan.candidates:
         outflow = by_id[candidate.outflow_id]
         decision = evaluate_move(
-            outflow, candidate.to_date, mandate, state.as_of, _moved_alone_today(state)
+            outflow, candidate.to_date, mandate, state.as_of, moved_alone_today(state)
         )
         before_move = state.forecast().summary
         after_move = _summary_with(state, [candidate])
