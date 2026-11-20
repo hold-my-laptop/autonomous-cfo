@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     demo_as_of_date: date = date(2025, 5, 5)
     statement_path: Path = REPO_ROOT / "local" / "pizzeria-amalfi-bank-statement-2025-v6.csv"
     opening_balance: int = 250_000
+    forecast_horizon_days: int = 91
+    partner_transfer_movable_days: int = 45
 
     database_url: str | None = None
     ai_url: str = "http://localhost:8001"

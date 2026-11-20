@@ -57,6 +57,7 @@ class StatementImportError(ValueError):
 class StatementImport:
     account: str
     transactions: list[Transaction]
+    date_from: date
     date_to: date
     possible_duplicates: int
 
