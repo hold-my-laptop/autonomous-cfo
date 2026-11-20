@@ -289,7 +289,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | 7 | Planned events | `GET /planned-events` | **PlannedEvent[]** |
 | 8 | Rules screen | `GET /mandate`, `GET /mandate/versions` | **Mandate**, **Mandate[]** |
 | 9 | Owner edits / activates / pauses rules | `POST /mandate` (**MandateIn**), `POST /mandate/{version}/activate` (`{ expected_active_version }`), `POST /mandate/pause` / `resume` | **Mandate** |
-| 10 | Something changes (e.g. "we close in June") | `POST /events` with **EventIn** | **202** `{ run_id, status: "QUEUED" }` |
+| 10 | Something changes (e.g. "we close in June") | `POST /events` with **EventIn** | **202** `{ run_id, status }`: the run's current status (`QUEUED`/`RUNNING`, or `SUCCEEDED` if it already finished) |
 | 11 | Watching the agent work | `GET /runs/{run_id}` (poll ~500 ms) | **Run** |
 | 12 | Recommendations | `GET /recommendations?lane=&status=` | **Recommendation[]** |
 | 13 | Owner approves / rejects | `POST /recommendations/{id}/approve` or `/reject` with `{ note? }` | **DecisionResult** |
