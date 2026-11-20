@@ -315,7 +315,12 @@ def _check_policy(state, run, args: CheckPolicyArgs, settings) -> ToolOutput:
         if outflow is None:
             raise ToolError("INVALID_ARGUMENT", f"no outflow {proposal.move.outflow_id}")
         decision = evaluate_move(
-            outflow, proposal.move.to_date, mandate, state.as_of, moved_alone_today(state)
+            outflow,
+            proposal.move.to_date,
+            mandate,
+            state.as_of,
+            moved_alone_today(state),
+            window_end=state.window_end,
         )
         what = outflow.counterparty
     else:

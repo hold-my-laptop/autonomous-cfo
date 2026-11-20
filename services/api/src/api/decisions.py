@@ -246,7 +246,14 @@ def _propose_move(
     state: DemoState, run: Run, trace: Tracer, outflow: Outflow, to_date: date, now: datetime
 ) -> Recommendation:
     mandate = state.active_mandate
-    decision = evaluate_move(outflow, to_date, mandate, state.as_of, moved_alone_today(state))
+    decision = evaluate_move(
+        outflow,
+        to_date,
+        mandate,
+        state.as_of,
+        moved_alone_today(state),
+        window_end=state.window_end,
+    )
     before_move = state.forecast().summary
     after_move = _summary_with(state, moves=[(outflow.id, to_date)])
     lane = decision.lane
@@ -706,7 +713,14 @@ def decide(
     mandate = state.active_mandate
     if rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
         outflow = next(o for o in state.outflows if o.id == rec.outflow_id)
-        decision = evaluate_move(outflow, rec.to_date, mandate, state.as_of, owner_approved=True)
+        decision = evaluate_move(
+            outflow,
+            rec.to_date,
+            mandate,
+            state.as_of,
+            owner_approved=True,
+            window_end=state.window_end,
+        )
     else:
         decision = evaluate_credit(rec.credit_line, mandate, owner_approved=True)
     details = rec.details | {"checks": _checks(decision)}
@@ -745,7 +759,12 @@ def request_reschedule(
     trace = Tracer(run)
     before_summary = state.forecast().summary
     decision = evaluate_move(
-        outflow, to_date, state.active_mandate, state.as_of, owner_approved=True
+        outflow,
+        to_date,
+        state.active_mandate,
+        state.as_of,
+        owner_approved=True,
+        window_end=state.window_end,
     )
     lane = decision.lane
     trace.add("POLICY", f"{outflow.counterparty}: {_lane_text(lane)}", now)

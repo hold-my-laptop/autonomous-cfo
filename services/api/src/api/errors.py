@@ -1,5 +1,6 @@
 """Errors as RFC 9457 problem details (application/problem+json) with a machine-readable code."""
 
+import logging
 from enum import StrEnum
 from typing import Any
 
@@ -12,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from api.state import StateNotLoadedError
 
 PROBLEM_MEDIA_TYPE = "application/problem+json"
+logger = logging.getLogger(__name__)
 
 
 class ErrorCode(StrEnum):
@@ -31,6 +33,7 @@ class ErrorCode(StrEnum):
     HTTP_ERROR = "HTTP_ERROR"
     UNAUTHORIZED = "UNAUTHORIZED"
     RUN_CLOSED = "RUN_CLOSED"
+    INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
 _TITLES = {
@@ -50,6 +53,7 @@ _TITLES = {
     ErrorCode.HTTP_ERROR: "Request failed",
     ErrorCode.UNAUTHORIZED: "Missing or invalid internal token",
     ErrorCode.RUN_CLOSED: "The run is no longer running",
+    ErrorCode.INTERNAL_ERROR: "Something went wrong on our side",
 }
 
 _HTTP_CODES = {
@@ -134,11 +138,18 @@ async def _state_not_loaded(request: Request, exc: StateNotLoadedError) -> JSONR
     )
 
 
+async def _unexpected(request: Request, exc: Exception) -> JSONResponse:
+    """Any other failure: logged in full, answered without internal details."""
+    logger.error("unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
+    return problem_response(status.HTTP_500_INTERNAL_SERVER_ERROR, ErrorCode.INTERNAL_ERROR)
+
+
 def install_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(ApiError, _api_error)
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(StarletteHTTPException, _http_error)
     app.add_exception_handler(StateNotLoadedError, _state_not_loaded)
+    app.add_exception_handler(Exception, _unexpected)
 
 
 def version_conflict(current: dict[str, Any], detail: str) -> ApiError:

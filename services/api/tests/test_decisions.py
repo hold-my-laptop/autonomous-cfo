@@ -221,12 +221,28 @@ def test_payroll_reschedule_request_is_not_allowed(client: TestClient) -> None:
 
 def test_owner_may_postpone_a_movable_payment(client: TestClient) -> None:
     transfer = next(o for o in client.get("/api/v1/outflows").json() if o["ref"] == "CHF-07")
-    post(client, f"/outflows/{transfer['id']}/reschedule-requests", {"to_date": "2025-08-20"})
+    post(client, f"/outflows/{transfer['id']}/reschedule-requests", {"to_date": "2025-08-03"})
 
     moved = next(o for o in client.get("/api/v1/outflows").json() if o["ref"] == "CHF-07")
-    assert moved["scheduled_date"] == "2025-08-20"
+    assert moved["scheduled_date"] == "2025-08-03"
     [done] = [r for r in lanes(client)["DONE_WITHIN_MANDATE"] if r["subject"]["ref"] == "CHF-07"]
     assert done["status"] == "APPROVED_EXECUTED"
+    assert summary(client)["end_balance"] == "239220"
+
+
+def test_owner_may_not_postpone_past_the_forecast_window(client: TestClient) -> None:
+    transfer = outflow(client, "CHF-07")
+    before = summary(client)
+
+    post(client, f"/outflows/{transfer['id']}/reschedule-requests", {"to_date": "2025-08-04"})
+
+    assert outflow(client, "CHF-07")["scheduled_date"] == "2025-07-15"
+    assert summary(client) == before
+    [blocked] = lanes(client)["NOT_ALLOWED"]
+    assert blocked["status"] == "BLOCKED"
+    [validity] = [c for c in blocked["checks"] if c["rule"] == "VALIDITY"]
+    assert (validity["result"], validity["effect"]) == ("FAIL", "NOT_ALLOWED")
+    assert validity["text"] == "2025-08-04 is after the forecast window, which ends on 2025-08-03"
 
 
 def test_unknown_ids_are_not_found(client: TestClient) -> None:
@@ -317,3 +333,26 @@ def test_rejecting_leaves_the_other_pending_item_untouched(client: TestClient) -
 
     assert rejected["follow_up_recommendation_ids"] == []
     assert client.get(f"/api/v1/recommendations/{credit['id']}").json() == credit
+
+
+def test_backtest_leaves_out_simulated_actions(client: TestClient) -> None:
+    activate_v2(client)
+    close_june(client)
+    [credit] = lanes(client)["NEEDS_APPROVAL"]
+    post(client, f"/recommendations/{credit['id']}/approve")
+    assert summary(client)["first_breach"] is None
+
+    backtest = client.get("/api/v1/forecast/backtest").json()
+
+    assert backtest["forecast"]["first_breach"] == {
+        "date": "2025-06-15",
+        "closing": "-751625",
+        "shortfall": "251625",
+    }
+    assert backtest["forecast"]["lowest"] == {"date": "2025-07-03", "closing": "-2276082"}
+    assert backtest["forecast"]["days_below_floor"] == 50
+    assert backtest["actual"]["lowest"] == {"date": "2025-07-03", "closing": "-2209760"}
+    assert backtest["actual"]["days_below_floor"] == 48
+    assert backtest["lowest_error_bp"] == 300
+    assert "without Vero's simulated actions" in backtest["note"]
+    assert backtest["forecast_id"] == client.get("/api/v1/forecast").json()["id"]

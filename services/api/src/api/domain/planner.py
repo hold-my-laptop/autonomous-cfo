@@ -43,10 +43,13 @@ class PlanResult:
     planner_version: str = PLANNER_VERSION
 
 
-def _target(outflow: Outflow, max_delay_days: int) -> date | None:
+def _target(outflow: Outflow, max_delay_days: int, window_end: date) -> date | None:
+    """The latest date allowed, kept inside the forecast window so the payment stays in it."""
     if outflow.latest_allowed_date is None:
         return None
-    return min(outflow.latest_allowed_date, outflow.due_date + timedelta(days=max_delay_days))
+    return min(
+        outflow.latest_allowed_date, outflow.due_date + timedelta(days=max_delay_days), window_end
+    )
 
 
 def _breach_day(summary: ForecastSummary, window_end: date) -> date:
@@ -85,7 +88,7 @@ def plan_moves(
         breach = summary.first_breach.date
         eligible = []
         for outflow in current.outflows:
-            target = _target(outflow, max_delay_days)
+            target = _target(outflow, max_delay_days, window_end)
             if (
                 target is None
                 or outflow.id in moved

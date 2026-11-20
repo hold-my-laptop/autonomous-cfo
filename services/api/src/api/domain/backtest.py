@@ -82,6 +82,6 @@ def compute_backtest(
         mean_abs_error=sum(abs(d.difference) for d in days) // len(days),
         lowest_error=lowest_error,
         lowest_error_bp=abs(lowest_error) * 10_000 // lowest_actual if lowest_actual else 0,
-        note=f"Backtest on the sample year: forecast made on {forecast.as_of:%d %b %Y} "
-        f"compared with the balance that was actually booked.",
+        note=f"Backtest on the sample year: forecast made on {forecast.as_of:%d %b %Y}, "
+        "without Vero's simulated actions, compared with the balance that was actually booked.",
     )

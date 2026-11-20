@@ -170,3 +170,9 @@ def test_applied_plan_matches_forecast_engine() -> None:
         ),
     )
     assert compute_forecast(applied).summary == state.plan().forecast_if_all_applied
+
+
+def test_target_stays_inside_the_forecast_window() -> None:
+    [move] = plan_moves(scenario([outflow(2, 2000, "A")], horizon=10), PROTECTED, 45).candidates
+
+    assert move.to_date == START + timedelta(days=9)
