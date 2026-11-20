@@ -28,6 +28,8 @@ from api.domain.models import (
     MandateStatus,
     Outflow,
     PlannedEvent,
+    Receipt,
+    Recommendation,
     RecurringPayment,
     Run,
     Transaction,
@@ -84,6 +86,8 @@ class DemoState:
     financial_version: int = 1
     events: list[Event] = field(default_factory=list)
     runs: dict[UUID, Run] = field(default_factory=dict)
+    recommendations: dict[UUID, Recommendation] = field(default_factory=dict)
+    receipts: dict[UUID, Receipt] = field(default_factory=dict)
     idempotency: dict[str, StoredResponse] = field(default_factory=dict)
 
     @classmethod
