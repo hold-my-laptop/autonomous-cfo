@@ -118,7 +118,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 - **Done when:** v1 → v2 (act alone on, 5 000 / 5 000 €) works, and removing `TAX` returns 422.
 
 ### B14 · Planner (greedy) — MUST
-- Candidates: movable, not protected, not already moved, `date ≤ first_breach < latest_allowed_date`.
+- Candidates: movable, not protected, not already moved, `date ≤ first_breach < latest_allowed_date`. The target date is kept inside the forecast window.
 - **Minimum benefit:** use a candidate only if it delays the first breach or cuts days below the floor by **≥ 3 days**.
 - **Order:** larger amount first, then the target date furthest away, then ref.
 - Move it, recompute, repeat.
@@ -132,7 +132,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
   - at S1 (v1, no move): 17 760,82 € → 20 000 € from 15 Jun.
 
 ### B16 · Policy engine — MUST
-- Evaluate **every** rule and record each check: R4 protected, validity (within `latest_allowed_date` and `max_delay_days`, not before today), pause, R2 act-alone, R3 per action / per decision day, R5 credit (enabled, ≤ max, **always** needs approval), R1 info.
+- Evaluate **every** rule and record each check: R4 protected, validity (within `latest_allowed_date` and `max_delay_days`, not before today, not after the forecast window), pause, R2 act-alone, R3 per action / per decision day, R5 credit (enabled, ≤ max, **always** needs approval), R1 info.
 - The strictest result wins → lane `DONE_WITHIN_MANDATE`, `NEEDS_APPROVAL` or `NOT_ALLOWED`.
 - With owner approval, R2, R3 and pause are lifted. R4 and validity are not.
 - Pure function with a `policy_version`.

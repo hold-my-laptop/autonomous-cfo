@@ -183,11 +183,11 @@ The owner's rules for what Vero may do alone (one version).
 **Assumption**: `{ code: string, text: string }`. Codes are generated from the inputs: `REVENUE_WEEKDAY_AVERAGE_<N>W` and `CALENDAR_DAYS` and `CLOSING_DAY_CONVENTION` (always), `<CURRENCY>_AT_LAST_RATE` (foreign-currency outflows, e.g. `CHF_AT_LAST_RATE`), `OWNER_SCHEDULE` (owner-entered outflows), `CLOSURE_STOPS_VARIABLE_COSTS` (a closure that also stops supplier spending).
 
 ### Backtest *(demo)*
-Forecast vs what really happened (possible because the sample covers all of 2025). Actual balances use the same opening balance and floor, without credit lines.
+Forecast vs what really happened (possible because the sample covers all of 2025). Actual balances use the same opening balance and floor, without credit lines. The forecast side leaves out Vero's simulated actions (every payment on its due date, no credit lines), because they never happened in reality: the numbers stay those of the plan as the owner made it (e.g. S1) after moves or approvals.
 
 | Field | Type | Description |
 |---|---|---|
-| `forecast_id` | UUID | The forecast compared (same as `Forecast.id`) |
+| `forecast_id` | UUID | The current forecast (same as `Forecast.id`) this backtest belongs to |
 | `complete` | bool | False if the statement ends before the forecast window does |
 | `days` | `{ date: Date, forecast: Money, actual: Money }[]` | |
 | `forecast`, `actual` | `{ first_breach: Breach?, lowest: { date, closing }, days_below_floor: int, end_balance: Money }` | e.g. lowest 3 Jul −22 760,82 € vs 3 Jul −22 097,60 € |
@@ -264,6 +264,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | `UNAUTHORIZED` | 401 | `/internal/v1` without a valid `Bearer INTERNAL_TOKEN` |
 | `RUN_CLOSED` | 409 | Agent callback for a run that is no longer running |
 | `HTTP_ERROR` | other | Any other HTTP error |
+| `INTERNAL_ERROR` | 500 | Unexpected server failure (logged; no internal details in the body) |
 
 **Idempotency:** a repeated request with the same key and body returns the original response without repeating the change. Only successful responses are stored, so a request rejected with `VERSION_CONFLICT` can be retried with the same key after refreshing. A demo reset forgets all keys.
 
