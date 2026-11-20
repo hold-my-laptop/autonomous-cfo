@@ -11,7 +11,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, BigInteger, DateTime, delete
+from sqlalchemy import JSON, BigInteger, DateTime
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Field, Session, SQLModel, create_engine, select
@@ -222,10 +222,17 @@ def _save(session: Session, state: DemoState) -> None:
             id=COMPANY_ROW_ID, as_of=state.as_of, financial_version=state.financial_version
         )
     )
-    for table in _CHANGEABLE_TABLES:
-        session.exec(delete(table))
-    session.add_all([_mandate_row(m) for m in state.mandates])
-    session.add_all(
+
+    mandate_rows = {row.version: row for row in session.exec(select(MandateRow)).all()}
+    desired_mandate_versions = {mandate.version for mandate in state.mandates}
+    for row in mandate_rows.values():
+        if row.version not in desired_mandate_versions:
+            session.delete(row)
+    for mandate in state.mandates:
+        session.merge(_mandate_row(mandate))
+
+    existing_planned = session.exec(select(PlannedEventRow)).all()
+    desired_planned = [
         PlannedEventRow(
             seq=i,
             id=e.id,
@@ -236,8 +243,17 @@ def _save(session: Session, state: DemoState) -> None:
             note=e.note,
         )
         for i, e in enumerate(state.planned_events)
-    )
-    session.add_all(
+    ]
+    planned_by_id = {row.id: row for row in desired_planned}
+    for row in existing_planned:
+        desired = planned_by_id.get(row.id)
+        if desired is None or row.seq != desired.seq:
+            session.delete(row)
+    for row in desired_planned:
+        session.merge(row)
+
+    existing_credit_lines = {row.seq: row for row in session.exec(select(CreditLineRow)).all()}
+    desired_credit_lines = [
         CreditLineRow(
             seq=i,
             amount=c.amount,
@@ -245,8 +261,20 @@ def _save(session: Session, state: DemoState) -> None:
             available_until=c.available_until,
         )
         for i, c in enumerate(state.credit_lines)
-    )
-    session.add_all(
+    ]
+    for seq, row in existing_credit_lines.items():
+        if seq >= len(desired_credit_lines):
+            session.delete(row)
+    for row in desired_credit_lines:
+        session.merge(row)
+
+    existing_events = session.exec(select(EventRow)).all()
+    existing_event_ids = {row.id for row in existing_events}
+    desired_event_ids = {event.id for event in state.events}
+    for row in existing_events:
+        if row.id not in desired_event_ids:
+            session.delete(row)
+    new_events = [
         EventRow(
             seq=i,
             id=e.id,
@@ -256,8 +284,17 @@ def _save(session: Session, state: DemoState) -> None:
             financial_version_after=e.financial_version_after,
         )
         for i, e in enumerate(state.events)
-    )
-    session.add_all(
+        if e.id not in existing_event_ids
+    ]
+    session.add_all(new_events)
+
+    existing_runs = session.exec(select(RunRow)).all()
+    existing_run_ids = {row.id for row in existing_runs}
+    desired_run_ids = {run_id for run_id in state.runs}
+    for row in existing_runs:
+        if row.id not in desired_run_ids:
+            session.delete(row)
+    new_runs = [
         RunRow(
             seq=i,
             id=r.id,
@@ -271,11 +308,22 @@ def _save(session: Session, state: DemoState) -> None:
             forecast_id=r.forecast_id,
         )
         for i, r in enumerate(state.runs.values())
-    )
-    session.add_all(
-        IdempotencyRow(key=k, request_hash=v.request_hash, response=v.response)
-        for k, v in state.idempotency.items()
-    )
+        if r.id not in existing_run_ids
+    ]
+    session.add_all(new_runs)
+
+    existing_keys = {row.key: row for row in session.exec(select(IdempotencyRow)).all()}
+    for key, row in existing_keys.items():
+        if key not in state.idempotency:
+            session.delete(row)
+    for key, value in state.idempotency.items():
+        session.merge(
+            IdempotencyRow(
+                key=key,
+                request_hash=value.request_hash,
+                response=value.response,
+            )
+        )
 
 
 def _lock_company(session: Session) -> CompanyStateRow | None:
