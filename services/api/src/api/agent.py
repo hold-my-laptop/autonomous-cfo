@@ -4,6 +4,7 @@ the texts once the run has acted."""
 
 import logging
 import threading
+import time
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -15,6 +16,7 @@ from api.config import Settings
 from api.decisions import fall_back, finalize_agent_run
 from api.domain.models import Run, RunStatus, TraceStep
 from api.explain import ExplainResult, settle
+from api.schemas import ModelHealth
 from api.state import DemoState, StateRepository
 
 logger = logging.getLogger(__name__)
@@ -33,6 +35,8 @@ class AgentClient(Protocol):
 
     def explain(self, payload: dict[str, Any]) -> ExplainResult: ...
 
+    def model_health(self) -> ModelHealth: ...
+
 
 class HttpAgentClient:
     """Calls the AI service; any failure raises AgentUnavailableError."""
@@ -40,15 +44,17 @@ class HttpAgentClient:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def _post(self, path: str, payload: dict[str, Any], timeout: float) -> httpx.Response:
+    def _headers(self) -> dict[str, str]:
         token = self._settings.internal_token
-        headers = {"Authorization": f"Bearer {token.get_secret_value()}"} if token else {}
+        return {"Authorization": f"Bearer {token.get_secret_value()}"} if token else {}
+
+    def _url(self, path: str) -> str:
+        return f"{self._settings.ai_url.rstrip('/')}{path}"
+
+    def _post(self, path: str, payload: dict[str, Any], timeout: float) -> httpx.Response:
         try:
             return httpx.post(
-                f"{self._settings.ai_url.rstrip('/')}{path}",
-                json=payload,
-                headers=headers,
-                timeout=timeout,
+                self._url(path), json=payload, headers=self._headers(), timeout=timeout
             )
         except httpx.HTTPError as exc:
             raise AgentUnavailableError(str(exc)) from exc
@@ -66,6 +72,26 @@ class HttpAgentClient:
             return ExplainResult.model_validate_json(response.content)
         except ValueError as exc:
             raise AgentUnavailableError(f"unusable explain result: {exc}") from exc
+
+    def model_health(self) -> ModelHealth:
+        """The AI service's own model check, passed through. When the AI service itself
+        cannot be reached or answers nonsense, a failed ModelHealth says so."""
+        started = time.perf_counter()
+        try:
+            response = httpx.get(
+                self._url("/health/model"),
+                headers=self._headers(),
+                timeout=self._settings.model_health_timeout_s,
+            )
+            return ModelHealth.model_validate_json(response.content)
+        except (httpx.HTTPError, ValueError) as exc:
+            return ModelHealth(
+                ok=False,
+                model="unknown",
+                mode=None,
+                latency_ms=int((time.perf_counter() - started) * 1000),
+                error=f"AI service unavailable: {type(exc).__name__}"[:300],
+            )
 
 
 def start_payload(state: DemoState, run: Run, settings: Settings) -> dict[str, Any]:

@@ -62,9 +62,8 @@ def create_app(
     )
     app.state.settings = settings
     app.state.repository = build_repository(settings)
-    app.state.agent = AgentOrchestrator(
-        app.state.repository, settings, agent_client or HttpAgentClient(settings)
-    )
+    app.state.agent_client = agent_client or HttpAgentClient(settings)
+    app.state.agent = AgentOrchestrator(app.state.repository, settings, app.state.agent_client)
     install_error_handlers(app)
     app.add_middleware(
         CORSMiddleware,

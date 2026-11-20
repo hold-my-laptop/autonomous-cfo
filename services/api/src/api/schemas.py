@@ -728,6 +728,14 @@ class RescheduleIn(BaseModel):
     note: str | None = Field(default=None, max_length=200)
 
 
+class ModelHealth(BaseModel):
+    ok: bool
+    model: str
+    mode: Literal["live", "replay", "stub"] | None = None
+    latency_ms: int
+    error: str | None = None
+
+
 class Finding(BaseModel):
     kind: Literal["DRIVER", "RECURRING", "FX_EXPOSURE", "BACKTEST"]
     text: str
