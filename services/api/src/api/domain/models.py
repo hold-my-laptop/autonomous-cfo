@@ -35,6 +35,51 @@ class Transaction:
     fx_rate: str | None = None
 
 
+class PlannedEventKind(StrEnum):
+    CLOSURE = "CLOSURE"
+
+
+@dataclass(frozen=True, slots=True)
+class PlannedEvent:
+    id: UUID
+    kind: PlannedEventKind
+    date_from: date
+    date_to: date
+    variable_costs_stop: bool = True
+    note: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.date_to < self.date_from:
+            raise ValueError("date_to must not be before date_from")
+
+    def covers(self, day: date) -> bool:
+        return self.date_from <= day <= self.date_to
+
+
+@dataclass(frozen=True, slots=True)
+class Inflow:
+    """A known incoming payment other than card revenue. `amount` is positive."""
+
+    id: UUID
+    ref: str
+    counterparty: str
+    amount: Cents
+    expected_date: date
+    original_expected_date: date
+
+
+@dataclass(frozen=True, slots=True)
+class CreditLine:
+    """Approved headroom, available from `available_from` to `available_until` inclusive."""
+
+    amount: Cents
+    available_from: date
+    available_until: date
+
+    def available_on(self, day: date) -> Cents:
+        return self.amount if self.available_from <= day <= self.available_until else 0
+
+
 class OutflowSource(StrEnum):
     DETECTED = "DETECTED"
     OWNER = "OWNER"
