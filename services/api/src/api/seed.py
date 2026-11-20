@@ -1,9 +1,39 @@
 """Demo data for Pizzeria Amalfi that is not in the bank statement."""
 
-from api.domain.models import Category
+from datetime import datetime
+
+from api.domain.models import Category, Company, Mandate, MandateStatus
 from api.domain.schedule import ScheduledPayment
 
 TAX_OFFICE = "Tax Office Frankfurt am Main"
+
+PIZZERIA_COMPANY = Company(
+    name="Pizzeria Amalfi",
+    owner="Vincenzo Amalfi",
+    currency="EUR",
+    account="DE89370400440532013000",
+)
+
+
+def initial_mandate(created_at: datetime) -> Mandate:
+    """Mandate v1: conservative, Vero may not act alone."""
+    return Mandate(
+        version=1,
+        status=MandateStatus.ACTIVE,
+        cash_floor=-500_000,
+        act_alone_enabled=False,
+        max_delay_days=45,
+        max_amount_per_action=500_000,
+        max_amount_per_day=500_000,
+        protected_categories=frozenset({Category.PAYROLL, Category.SOCIAL_SECURITY, Category.TAX}),
+        credit_enabled=True,
+        max_credit_amount=3_000_000,
+        paused=False,
+        created_at=created_at,
+        activated_at=created_at,
+        note="Initial rules: stay within the 5 000 € overdraft, always ask before acting.",
+    )
+
 
 PIZZERIA_TAX_SCHEDULE = (
     ScheduledPayment(

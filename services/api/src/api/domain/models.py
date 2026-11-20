@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 from uuid import UUID
 
@@ -33,6 +33,40 @@ class Transaction:
     original_amount: Cents | None = None
     original_currency: str | None = None
     fx_rate: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Company:
+    name: str
+    owner: str
+    currency: str
+    account: str
+
+
+class MandateStatus(StrEnum):
+    DRAFT = "DRAFT"
+    ACTIVE = "ACTIVE"
+    SUPERSEDED = "SUPERSEDED"
+
+
+@dataclass(frozen=True, slots=True)
+class Mandate:
+    """The owner's rules for what Vero may do alone (one version)."""
+
+    version: int
+    status: MandateStatus
+    cash_floor: Cents
+    act_alone_enabled: bool
+    max_delay_days: int
+    max_amount_per_action: Cents
+    max_amount_per_day: Cents
+    protected_categories: frozenset[Category]
+    credit_enabled: bool
+    max_credit_amount: Cents
+    paused: bool
+    created_at: datetime
+    activated_at: datetime | None = None
+    note: str | None = None
 
 
 class PlannedEventKind(StrEnum):
