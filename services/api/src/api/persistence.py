@@ -2,7 +2,8 @@
 
 Data derived from the bank statement is rebuilt at startup and kept in memory; only the
 changeable part of DemoState is stored. Every write locks the company row, so concurrent
-writers (or replicas) are serialized."""
+requests are serialized. The API still runs as a single replica: agent run deadlines live in
+process memory, and a starting process falls back every run still RUNNING."""
 
 import threading
 from collections.abc import Iterator
