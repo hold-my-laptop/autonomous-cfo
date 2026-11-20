@@ -46,7 +46,7 @@ from api.state import (
 )
 
 COMPANY_ROW_ID = 1
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 class SchemaMetaRow(SQLModel, table=True):
@@ -134,6 +134,8 @@ class RunRow(SQLModel, table=True):
     gap_closed: bool | None = None
     started_financial_version: int | None = None
     tool_log: dict[str, Any] | None = Field(default=None, sa_type=JSON)
+    headline_source: str = "TEMPLATE"
+    explain_request: dict[str, Any] | None = Field(default=None, sa_type=JSON)
 
 
 class OutflowChangeRow(SQLModel, table=True):
@@ -369,6 +371,8 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
                 gap_closed=r.gap_closed,
                 started_financial_version=r.started_financial_version,
                 tool_log=r.tool_log,
+                headline_source=r.headline_source,
+                explain_request=r.explain_request,
             )
             for r in runs
         },
@@ -480,6 +484,8 @@ def _save(session: Session, state: DemoState) -> None:
                 gap_closed=r.gap_closed,
                 started_financial_version=r.started_financial_version,
                 tool_log=r.tool_log,
+                headline_source=r.headline_source,
+                explain_request=r.explain_request,
             )
             for i, r in enumerate(state.runs.values())
         ],

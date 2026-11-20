@@ -174,6 +174,7 @@ class Event:
 class RunStatus(StrEnum):
     QUEUED = "QUEUED"
     RUNNING = "RUNNING"
+    FINALIZING = "FINALIZING"
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
 
@@ -213,6 +214,8 @@ class Run:
     gap_closed: bool | None = None
     started_financial_version: int | None = None
     tool_log: dict | None = None
+    headline_source: str = "TEMPLATE"
+    explain_request: dict | None = None
 
 
 class RecommendationKind(StrEnum):

@@ -1,5 +1,6 @@
 """Agent run orchestration: start the AI service, watch the deadline, accept its callbacks,
-and fall back to the backend pipeline whenever the agent cannot finish."""
+fall back to the backend pipeline whenever the agent cannot finish, and ask the AI service for
+the texts once the run has acted."""
 
 import logging
 import threading
@@ -13,6 +14,7 @@ import httpx
 from api.config import Settings
 from api.decisions import fall_back, finalize_agent_run
 from api.domain.models import Run, RunStatus, TraceStep
+from api.explain import ExplainResult, settle
 from api.state import DemoState, StateRepository
 
 logger = logging.getLogger(__name__)
@@ -29,27 +31,41 @@ class RunClosedError(Exception):
 class AgentClient(Protocol):
     def start_run(self, payload: dict[str, Any]) -> None: ...
 
+    def explain(self, payload: dict[str, Any]) -> ExplainResult: ...
+
 
 class HttpAgentClient:
-    """POST {AI_URL}/v1/agent/runs; anything but 202 means the agent is unavailable."""
+    """Calls the AI service; any failure raises AgentUnavailableError."""
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
 
-    def start_run(self, payload: dict[str, Any]) -> None:
+    def _post(self, path: str, payload: dict[str, Any], timeout: float) -> httpx.Response:
         token = self._settings.internal_token
         headers = {"Authorization": f"Bearer {token.get_secret_value()}"} if token else {}
         try:
-            response = httpx.post(
-                f"{self._settings.ai_url.rstrip('/')}/v1/agent/runs",
+            return httpx.post(
+                f"{self._settings.ai_url.rstrip('/')}{path}",
                 json=payload,
                 headers=headers,
-                timeout=self._settings.agent_start_timeout_s,
+                timeout=timeout,
             )
         except httpx.HTTPError as exc:
             raise AgentUnavailableError(str(exc)) from exc
+
+    def start_run(self, payload: dict[str, Any]) -> None:
+        response = self._post("/v1/agent/runs", payload, self._settings.agent_start_timeout_s)
         if response.status_code != 202:
             raise AgentUnavailableError(f"AI service answered {response.status_code}")
+
+    def explain(self, payload: dict[str, Any]) -> ExplainResult:
+        response = self._post("/v1/explain", payload, self._settings.explain_timeout_s)
+        if response.status_code != 200:
+            raise AgentUnavailableError(f"AI service answered {response.status_code}")
+        try:
+            return ExplainResult.model_validate_json(response.content)
+        except ValueError as exc:
+            raise AgentUnavailableError(f"unusable explain result: {exc}") from exc
 
 
 def start_payload(state: DemoState, run: Run, settings: Settings) -> dict[str, Any]:
@@ -108,11 +124,31 @@ class AgentOrchestrator:
             self.fall_back(run_id, "AI service unreachable")
 
     def recover(self) -> None:
-        """Runs left RUNNING by a restart have lost their agent; finish them without it."""
+        """Runs left RUNNING by a restart have lost their agent; finish them without it.
+        Runs left FINALIZING only miss their texts."""
         with self._repository.read() as state:
             running = [r.id for r in state.runs.values() if r.status is RunStatus.RUNNING]
+            finalizing = [r.id for r in state.runs.values() if r.status is RunStatus.FINALIZING]
         for run_id in running:
             self.fall_back(run_id, "service restarted")
+        for run_id in finalizing:
+            self.explain(run_id)
+
+    def explain(self, run_id: UUID) -> None:
+        """Ask the AI service for the texts of a FINALIZING run, outside any transaction,
+        then finish the run. On any failure the backend templates stay (source TEMPLATE)."""
+        with self._repository.read() as state:
+            run = state.runs.get(run_id)
+            request = run.explain_request if run and run.status is RunStatus.FINALIZING else None
+        if request is None:
+            return
+        try:
+            result = self._client.explain(request)
+        except AgentUnavailableError as exc:
+            logger.warning("explain failed for run %s, keeping templates: %s", run_id, exc)
+            result = None
+        with self._repository.write() as state:
+            settle(state, run_id, result, datetime.now(UTC))
 
     def _stop_timer(self, run_id: UUID) -> None:
         with self._lock:
@@ -134,8 +170,10 @@ class AgentOrchestrator:
         self._stop_timer(run_id)
         with self._repository.write() as state:
             run = state.runs.get(run_id)
-            if run is not None and run.status is RunStatus.RUNNING:
-                self._fall_back(state, run, reason)
+            if run is None or run.status is not RunStatus.RUNNING:
+                return
+            self._fall_back(state, run, reason)
+        self.explain(run_id)
 
     def note(self, run_id: UUID, text: str) -> None:
         with self._repository.write() as state:

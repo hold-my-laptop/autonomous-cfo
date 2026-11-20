@@ -55,7 +55,8 @@ def plan_closure(
 
     With the agent enabled the run stays RUNNING for the AI service; otherwise the backend
     runs the decision pipeline itself (FALLBACK mode)."""
-    if agent and any(r.status is RunStatus.RUNNING for r in state.runs.values()):
+    active = (RunStatus.RUNNING, RunStatus.FINALIZING)
+    if agent and any(r.status in active for r in state.runs.values()):
         raise ApiError(status.HTTP_409_CONFLICT, ErrorCode.RUN_IN_PROGRESS)
     if date_to < date_from:
         raise _invalid("date_to must not be before date_from")

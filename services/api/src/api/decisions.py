@@ -30,6 +30,7 @@ from api.domain.policy import (
     evaluate_move,
 )
 from api.domain.revenue import MODEL_VERSION
+from api.explain import explain_request
 from api.money import Cents, format_eur
 from api.state import DemoState
 
@@ -373,16 +374,23 @@ def _pin_pending(state: DemoState, created: list[Recommendation]) -> list[Recomm
 
 
 def run_fallback(
-    state: DemoState, run: Run, now: datetime, credit_until: date, credit_rounding: Cents
+    state: DemoState,
+    run: Run,
+    now: datetime,
+    credit_until: date,
+    credit_rounding: Cents,
+    finalizing: bool = False,
 ) -> Run:
-    """Backend-only pipeline: forecast, plan, check, act within the mandate, size credit."""
+    """Backend-only pipeline: forecast, plan, check, act within the mandate, size credit.
+
+    With finalizing the run waits in FINALIZING for the AI service's texts."""
     trace = Tracer(run)
     mandate = state.active_mandate
     trace.add("TOOL_CALL", "Recomputing your cash for the next 91 days", now, "get_forecast")
     before = state.forecast().summary
     if before.first_breach is None:
         trace.add("TOOL_RESULT", "Your cash stays above your floor for the next 13 weeks", now)
-        return _finish(state, run, trace, before, [], now, RunMode.FALLBACK)
+        return _finish(state, run, trace, before, [], now, RunMode.FALLBACK, finalizing=finalizing)
 
     trace.add(
         "TOOL_RESULT",
@@ -418,7 +426,16 @@ def run_fallback(
     else:
         trace.add("TOOL_RESULT", "No credit needed", now)
 
-    return _finish(state, run, trace, before, _pin_pending(state, created), now, RunMode.FALLBACK)
+    return _finish(
+        state,
+        run,
+        trace,
+        before,
+        _pin_pending(state, created),
+        now,
+        RunMode.FALLBACK,
+        finalizing=finalizing,
+    )
 
 
 def fall_back(
@@ -432,7 +449,12 @@ def fall_back(
     trace = Tracer(run)
     trace.add("FALLBACK", f"Model unavailable ({reason}), using standard checks", now)
     return run_fallback(
-        state, replace(run, trace=tuple(trace.steps)), now, credit_until, credit_rounding
+        state,
+        replace(run, trace=tuple(trace.steps)),
+        now,
+        credit_until,
+        credit_rounding,
+        finalizing=True,
     )
 
 
@@ -499,6 +521,7 @@ def finalize_agent_run(
         now,
         RunMode.AGENT,
         agent_info,
+        finalizing=True,
     )
 
 
@@ -511,13 +534,14 @@ def _finish(
     now: datetime,
     mode: RunMode = RunMode.FALLBACK,
     summary_data: dict | None = None,
+    finalizing: bool = False,
 ) -> Run:
     after = state.forecast().summary
     text = headline(run.trigger_label, state.active_mandate.cash_floor, before, recs)
     trace.add("SUMMARY", text, now, None, summary_data)
     finished = replace(
         run,
-        status=RunStatus.SUCCEEDED,
+        status=RunStatus.FINALIZING if finalizing else RunStatus.SUCCEEDED,
         mode=mode,
         finished_at=now,
         forecast_id=state.forecast_id,
@@ -525,6 +549,7 @@ def _finish(
         recommendation_ids=tuple(r.id for r in recs),
         headline=text,
         gap_closed=after.first_breach is None,
+        explain_request=explain_request(state, run, before, recs) if finalizing else None,
     )
     state.runs[run.id] = finished
     return finished

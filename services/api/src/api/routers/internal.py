@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.agent import RunClosedError
@@ -106,16 +106,21 @@ def add_note(run_id: UUID, body: NoteIn, agent: AgentDep) -> None:
 
 
 @router.post("/runs/{run_id}/complete", status_code=status.HTTP_204_NO_CONTENT)
-def complete_run(run_id: UUID, body: CompletionIn, agent: AgentDep) -> None:
+def complete_run(
+    run_id: UUID, body: CompletionIn, agent: AgentDep, background: BackgroundTasks
+) -> None:
+    """The texts are asked for after the response, so the agent is not kept waiting."""
     try:
         agent.complete(run_id, body.model_dump())
     except RunClosedError as exc:
         raise _closed(exc) from exc
+    background.add_task(agent.explain, run_id)
 
 
 @router.post("/runs/{run_id}/fail", status_code=status.HTTP_204_NO_CONTENT)
-def fail_run(run_id: UUID, body: FailureIn, agent: AgentDep) -> None:
+def fail_run(run_id: UUID, body: FailureIn, agent: AgentDep, background: BackgroundTasks) -> None:
     try:
         agent.fail(run_id, body.reason)
     except RunClosedError as exc:
         raise _closed(exc) from exc
+    background.add_task(agent.explain, run_id)

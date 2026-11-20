@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     agent_max_tool_calls: int = 8
     agent_deadline_s: float = 60.0
     agent_start_timeout_s: float = 5.0
+    explain_timeout_s: float = 10.0
 
     @property
     def agent_enabled(self) -> bool:

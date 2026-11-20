@@ -66,8 +66,9 @@ def build_overview(state: DemoState) -> Overview:
         key=lambda r: r.created_at,
     )
     latest = max(state.runs.values(), key=lambda r: r.created_at, default=None)
+    source = "TEMPLATE"
     if latest is not None and latest.headline:
-        headline = latest.headline
+        headline, source = latest.headline, latest.headline_source
     elif forecast.summary.first_breach is None:
         headline = (
             f"Your cash stays above your {format_eur(state.active_mandate.cash_floor)} floor "
@@ -81,7 +82,7 @@ def build_overview(state: DemoState) -> Overview:
         company=Company.from_state(state),
         cash_floor=state.active_mandate.cash_floor,
         forecast_summary=ForecastSummary.from_domain(forecast.summary),
-        headline=Explanation(text=headline, source="TEMPLATE"),
+        headline=Explanation(text=headline, source=source),
         lanes=Lanes(
             ANALYSED=findings(state),
             DONE_WITHIN_MANDATE=[
