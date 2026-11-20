@@ -459,7 +459,7 @@ The backend owns data and logic. The AI service runs the agent: it **reads throu
 | 8 | Agent is done | `POST /runs/{run_id}/complete` with **AgentCompletion** | `204` |
 | 9 | Agent gave up | `POST /runs/{run_id}/fail` with `{ reason, detail? }` | `204` (backend runs FALLBACK) |
 
-Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`. A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
+Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`. A completion whose proposals have the wrong shape (e.g. `move` not an object `{ outflow_id, to_date }`) returns `422 VALIDATION_ERROR` and the run keeps its deadline. An answer the backend cannot apply falls back ("The model's answer could not be applied"). A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
 
 **Backend settings:** `AI_URL`, `INTERNAL_TOKEN` (agent mode is on only when it is set; otherwise runs are FALLBACK and synchronous), `AGENT_MAX_TOOL_CALLS` (8), `AGENT_DEADLINE_S` (60), `AGENT_START_TIMEOUT_S` (5), `EXPLAIN_TIMEOUT_S` (10), `MODEL_HEALTH_TIMEOUT_S` (20).
 
@@ -499,7 +499,7 @@ Every call is **bound to a run** and answered from the state at the run's `finan
 `{ name: string, description: string (written for the LLM), input_schema: JSON Schema }`
 
 #### ToolCall
-`{ run_id: UUID, arguments: object, call_id: string }`. A repeated `call_id` returns the same result.
+`{ run_id: UUID, arguments: object, call_id: string }`. A repeated `call_id` with the same tool and arguments returns the same result; reused for a different call it returns `INVALID_ARGUMENT`. Every new call counts towards `max_tool_calls` and adds a trace step, unknown tools included.
 
 #### ToolResult
 `{ ok: bool, result: object?, error: { code, message }?, financial_version: int, tool_calls_used: int }`

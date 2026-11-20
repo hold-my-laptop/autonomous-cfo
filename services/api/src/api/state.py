@@ -6,7 +6,8 @@ else in `DemoState` is changed by the owner or by Vero and is what repositories 
 import threading
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
-from dataclasses import dataclass, field, replace
+from copy import copy
+from dataclasses import dataclass, field, fields, replace
 from datetime import UTC, date, datetime, time
 from typing import Any, Protocol
 from uuid import UUID, uuid5
@@ -262,5 +263,17 @@ class InMemoryStateRepository:
 
     @contextmanager
     def write(self) -> Iterator[DemoState]:
+        """Like a database transaction: if the block raises, the state is put back as it was.
+
+        Items are immutable and only the lists and dicts holding them change, so copying the
+        containers is enough for the snapshot."""
         with self._lock:
-            yield self._current()
+            state = self._current()
+            snapshot = replace(
+                state, **{f.name: copy(getattr(state, f.name)) for f in fields(state)}
+            )
+            try:
+                yield state
+            except BaseException:
+                self._state = snapshot
+                raise

@@ -458,12 +458,14 @@ FALLBACK_DEADLINE = "DEADLINE_PASSED"
 FALLBACK_AI_UNREACHABLE = "AI_UNREACHABLE"
 FALLBACK_DATA_CHANGED = "DATA_CHANGED"
 FALLBACK_RESTARTED = "SERVICE_RESTARTED"
+FALLBACK_INVALID_ANSWER = "INVALID_ANSWER"
 
 _FALLBACK_LABELS = {
     FALLBACK_DEADLINE: "The model took too long",
     FALLBACK_AI_UNREACHABLE: "The AI service is unavailable",
     FALLBACK_DATA_CHANGED: "Your data changed during the analysis",
     FALLBACK_RESTARTED: "Vero restarted during the analysis",
+    FALLBACK_INVALID_ANSWER: "The model's answer could not be applied",
 }
 
 

@@ -587,3 +587,59 @@ def test_restart_falls_back_running_runs(client: TestClient) -> None:
     assert (finished["status"], finished["mode"]) == ("SUCCEEDED", "FALLBACK")
     [step] = [s for s in finished["trace"] if s["kind"] == "FALLBACK"]
     assert step["label"] == "Vero restarted during the analysis, using standard checks"
+
+
+@pytest.mark.parametrize(
+    "proposal",
+    [
+        {"kind": "RESCHEDULE_PAYMENT", "move": "CHF-06"},
+        {"kind": "CREDIT_LINE", "credit_line": ["2000000"]},
+        {"kind": {"x": 1}},
+    ],
+)
+def test_malformed_proposal_is_rejected_and_the_deadline_stays(proposal: dict) -> None:
+    with TestClient(create_app(settings(agent_deadline_s=0.5), FakeAI())) as client:
+        run_id = close_june(client).json()["run_id"]
+        agent_work(client, run_id)
+
+        response = callback(client, run_id, "complete", completion([proposal]))
+
+        assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+        assert run(client, run_id)["status"] == "RUNNING"
+        finished = wait_until_finished(client, run_id)
+        assert (finished["status"], finished["mode"]) == ("SUCCEEDED", "FALLBACK")
+        assert labels(finished, "FALLBACK") == ["The model took too long, using standard checks"]
+
+
+def test_answer_that_cannot_be_applied_falls_back_cleanly(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import api.agent
+
+    real = api.agent.finalize_agent_run
+
+    def half_then_crash(*args, **kwargs):
+        real(*args, **kwargs)
+        raise RuntimeError("bug after the move was executed")
+
+    monkeypatch.setattr(api.agent, "finalize_agent_run", half_then_crash)
+    activate_v2(client)
+    run_id = close_june(client).json()["run_id"]
+    move, line = agent_work(client, run_id)
+
+    response = callback(client, run_id, "complete", completion(list(proposals(move, line))))
+
+    assert response.status_code == 204
+    finished = run(client, run_id)
+    assert (finished["status"], finished["mode"]) == ("SUCCEEDED", "FALLBACK")
+    assert labels(finished, "FALLBACK") == [
+        "The model's answer could not be applied, using standard checks"
+    ]
+    recs = client.get("/api/v1/recommendations").json()
+    assert sorted((r["kind"], r["status"]) for r in recs) == [
+        ("CREDIT_LINE", "PENDING"),
+        ("RESCHEDULE_PAYMENT", "EXECUTED"),
+    ]
+    assert {r["run_id"] for r in recs} == {run_id}
+    assert client.get("/api/v1/forecast").json()["summary"]["first_breach"]["date"] == "2025-06-27"
+    assert client.app.state.agent._timers == {}

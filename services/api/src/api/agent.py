@@ -5,6 +5,7 @@ the texts once the run has acted."""
 import logging
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -17,6 +18,7 @@ from api.decisions import (
     FALLBACK_AI_UNREACHABLE,
     FALLBACK_DATA_CHANGED,
     FALLBACK_DEADLINE,
+    FALLBACK_INVALID_ANSWER,
     FALLBACK_RESTARTED,
     fall_back,
     finalize_agent_run,
@@ -201,12 +203,13 @@ class AgentOrchestrator:
         )
 
     def fall_back(self, run_id: UUID, reason: str) -> None:
-        self._stop_timer(run_id)
         with self._repository.write() as state:
             run = state.runs.get(run_id)
             if run is None or run.status is not RunStatus.RUNNING:
+                self._stop_timer(run_id)
                 return
             self._fall_back(state, run, reason)
+        self._stop_timer(run_id)
         self.explain(run_id)
 
     def note(self, run_id: UUID, text: str) -> None:
@@ -215,10 +218,23 @@ class AgentOrchestrator:
             step = TraceStep(len(run.trace) + 1, "THINK", "AGENT", text[:500], datetime.now(UTC))
             state.runs[run_id] = replace(run, trace=(*run.trace, step))
 
+    def _settle_callback(self, run_id: UUID, apply: Callable[[DemoState, Run], None]) -> None:
+        """Apply an agent callback to its RUNNING run. The deadline stays armed until the
+        change is stored, and a callback that cannot be applied falls back, so a run is never
+        left running without a deadline."""
+        try:
+            with self._repository.write() as state:
+                apply(state, _running(state, run_id))
+        except RunClosedError:
+            raise
+        except Exception:
+            logger.exception("could not apply the agent's callback for run %s", run_id)
+            self.fall_back(run_id, FALLBACK_INVALID_ANSWER)
+            return
+        self._stop_timer(run_id)
+
     def complete(self, run_id: UUID, completion: dict[str, Any]) -> None:
-        with self._repository.write() as state:
-            run = _running(state, run_id)
-            self._stop_timer(run_id)
+        def apply(state: DemoState, run: Run) -> None:
             if state.financial_version != run.started_financial_version:
                 self._fall_back(state, run, FALLBACK_DATA_CHANGED)
                 return
@@ -233,11 +249,10 @@ class AgentOrchestrator:
                 self._settings.credit_line_rounding,
             )
 
+        self._settle_callback(run_id, apply)
+
     def fail(self, run_id: UUID, reason: str) -> None:
-        with self._repository.write() as state:
-            run = _running(state, run_id)
-            self._stop_timer(run_id)
-            self._fall_back(state, run, reason[:100])
+        self._settle_callback(run_id, lambda state, run: self._fall_back(state, run, reason[:100]))
 
     def close(self) -> None:
         with self._lock:
