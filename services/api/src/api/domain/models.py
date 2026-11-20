@@ -28,7 +28,7 @@ class Transaction:
     counterparty: str
     counterparty_account: str
     reference: str
-    amount: Cents  # EUR
+    amount: Cents
     category: Category
     original_amount: Cents | None = None
     original_currency: str | None = None
@@ -49,7 +49,7 @@ class RecurringPayment:
     counterparty: str
     category: Category
     day_of_month: int
-    amount: Cents  # EUR estimate for the next payment
+    amount: Cents
     last_seen: date
     occurrences: int
     original_amount: Cents | None = None
@@ -70,6 +70,7 @@ class Outflow:
     scheduled_date: date
     latest_allowed_date: date | None
     source: OutflowSource
+    description: str | None = None
     recurring_id: UUID | None = None
     original_amount: Cents | None = None
     original_currency: str | None = None

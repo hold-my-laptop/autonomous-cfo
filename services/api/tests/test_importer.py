@@ -28,15 +28,20 @@ def row(day: str, kind: str, reference: str, counterparty: str, amount: str, cur
 
 SMALL = HEADER + "".join(
     [
-        row("15.12.25", "INTERNATIONAL WIRE TRANSFER",
+        row(
+            "15.12.25",
+            "INTERNATIONAL WIRE TRANSFER",
             "Silent Partnership Capital Tranche 12/12 (4166.67 CHF @ 1.047 EUR/CHF)",
-            "Luigi Amalfi", "-4166,67", "CHF"),
+            "Luigi Amalfi",
+            "-4166,67",
+            "CHF",
+        ),
         row("10.12.25", "DIRECT DEBIT", "Utilities", "City Energy & Utilities AG", "-650,00"),
         row("10.12.25", "DIRECT DEBIT", "Income tax", "Tax Office Frankfurt am Main", "-1150,00"),
         row("27.11.25", "DIRECT DEBIT", "Contributions", "Techniker Krankenkasse", "-2650,00"),
         row("01.11.25", "CREDIT CARD PAYOUT", "Global Pay", "Commerzbank Global Pay", "1149,36"),
     ]
-)  # fmt: skip
+)
 
 
 def test_parse_small_statement() -> None:
@@ -57,7 +62,7 @@ def test_parse_small_statement() -> None:
 def test_chf_row_is_converted_and_keeps_original() -> None:
     chf = next(t for t in parse_statement(SMALL).transactions if t.original_currency)
 
-    assert chf.amount == -436250  # 4 166,67 CHF × 1,047 = 4 362,50 €
+    assert chf.amount == -436250
     assert (chf.original_amount, chf.original_currency, chf.fx_rate) == (-416667, "CHF", "1.047")
     assert chf.category is Category.PARTNER_TRANSFER
 
@@ -110,8 +115,6 @@ def test_foreign_currency_without_rate_is_rejected() -> None:
     with pytest.raises(StatementImportError, match="rate"):
         parse_statement(bad)
 
-
-# --- The organizers' sample file (kept in gitignored local/) ---------------------------------
 
 SAMPLE = get_settings().statement_path
 needs_sample = pytest.mark.skipif(not SAMPLE.exists(), reason=f"sample CSV not found at {SAMPLE}")

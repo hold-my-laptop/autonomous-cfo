@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from uuid import UUID, uuid5
 
+from api.dates import months_between
 from api.domain.models import Category, Outflow, OutflowSource, RecurringPayment, Transaction
 from api.money import Cents, convert
 
@@ -160,13 +161,6 @@ def detect_recurring(transactions: Iterable[Transaction], as_of: date) -> list[R
     return detected
 
 
-def _month_starts(start: date, end: date) -> Iterable[tuple[int, int]]:
-    year, month = start.year, start.month
-    while (year, month) <= (end.year, end.month):
-        yield year, month
-        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
-
-
 def project_outflows(
     recurring: Iterable[RecurringPayment],
     start: date,
@@ -180,7 +174,7 @@ def project_outflows(
     movable_days = movable_days or {}
     outflows = []
     for payment in recurring:
-        for year, month in _month_starts(start, end):
+        for year, month in months_between(start, end):
             day = min(payment.day_of_month, calendar.monthrange(year, month)[1])
             due = date(year, month, day)
             if not start <= due <= end:

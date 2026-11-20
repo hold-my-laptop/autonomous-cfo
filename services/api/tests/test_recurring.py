@@ -122,8 +122,6 @@ def test_movable_categories_get_latest_allowed_date() -> None:
     assert fixed.source is OutflowSource.DETECTED
 
 
-# --- The organizers' sample file --------------------------------------------------------------
-
 SAMPLE = get_settings().statement_path
 needs_sample = pytest.mark.skipif(not SAMPLE.exists(), reason=f"sample CSV not found at {SAMPLE}")
 
@@ -169,11 +167,25 @@ def test_sample_projection_matches_design_outflow_table(recurring) -> None:
 
     assert end == date(2025, 8, 3)
     assert [o.ref for o in outflows] == [
-        "UTIL-05", "WTAX-05", "CHF-05", "SOC-05", "PAY-05",
-        "RENT-06", "UTIL-06", "WTAX-06", "CHF-06", "SOC-06", "PAY-06",
-        "RENT-07", "UTIL-07", "WTAX-07", "CHF-07", "SOC-07", "PAY-07",
+        "UTIL-05",
+        "WTAX-05",
+        "CHF-05",
+        "SOC-05",
+        "PAY-05",
+        "RENT-06",
+        "UTIL-06",
+        "WTAX-06",
+        "CHF-06",
+        "SOC-06",
+        "PAY-06",
+        "RENT-07",
+        "UTIL-07",
+        "WTAX-07",
+        "CHF-07",
+        "SOC-07",
+        "PAY-07",
         "RENT-08",
-    ]  # fmt: skip
+    ]
     movable = {o.ref: o.latest_allowed_date for o in outflows if o.latest_allowed_date}
     assert movable == {
         "CHF-05": date(2025, 6, 29),

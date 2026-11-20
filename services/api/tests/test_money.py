@@ -30,8 +30,8 @@ def test_parse_german_amount_rejects_invalid(text: str) -> None:
 
 
 def test_convert_chf_rounds_half_up() -> None:
-    assert convert(416667, "1.047") == 436250  # 4 362,50 €
-    assert convert(416667, Decimal("1.040")) == 433334  # 4 333,34 €
+    assert convert(416667, "1.047") == 436250
+    assert convert(416667, Decimal("1.040")) == 433334
     assert convert(-416667, "1.045") == -435417
 
 

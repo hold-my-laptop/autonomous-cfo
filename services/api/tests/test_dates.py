@@ -30,4 +30,4 @@ def test_forecast_window_is_91_calendar_days() -> None:
     assert len(window) == 91
     assert window[0] == date(2025, 5, 5)
     assert window[-1] == date(2025, 8, 3) == window_end(date(2025, 5, 5), 91)
-    assert date(2025, 6, 1) in window  # Sundays included
+    assert date(2025, 6, 1) in window
