@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     demo_mode: bool = True
     demo_as_of_date: date = date(2025, 5, 5)
-    statement_path: Path = REPO_ROOT / "local" / "pizzeria-amalfi-bank-statement-2025-v6.csv"
+    statement_path: Path = REPO_ROOT / "data" / "pizzeria-amalfi-bank-statement-2025-v6.csv"
     opening_balance: int = 250_000
     forecast_horizon_days: int = 91
     revenue_model_weeks: int = 8
