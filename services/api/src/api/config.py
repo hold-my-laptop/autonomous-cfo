@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     statement_path: Path = REPO_ROOT / "local" / "pizzeria-amalfi-bank-statement-2025-v6.csv"
     opening_balance: int = 250_000
     forecast_horizon_days: int = 91
+    revenue_model_weeks: int = 8
     partner_transfer_movable_days: int = 45
 
     database_url: str | None = None
