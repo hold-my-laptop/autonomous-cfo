@@ -427,7 +427,7 @@ Immutable evidence, from `GET /receipts/{id}`.
 | `explanation` | Explanation | |
 
 #### ModelHealth
-`{ ok: bool, model: string, latency_ms: int, error: string? }`
+`{ ok: bool, model: string, mode: "live" | "replay" | "stub"?, latency_ms: int, error: string? }`, passed through from the AI service. `200` when `ok`, otherwise `503`. When the AI service itself cannot be reached, `model` is `"unknown"`, `mode` is `null` and `error` says so. Without `INTERNAL_TOKEN` (agent mode off) it is always `503`. Show `mode`: only `live` means the model on OpenShift AI answered.
 
 ---
 
@@ -460,7 +460,7 @@ The backend owns data and logic. The AI service runs the agent: it **reads throu
 
 Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`. A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
 
-**Backend settings:** `AI_URL`, `INTERNAL_TOKEN` (agent mode is on only when it is set; otherwise runs are FALLBACK and synchronous), `AGENT_MAX_TOOL_CALLS` (8), `AGENT_DEADLINE_S` (60), `AGENT_START_TIMEOUT_S` (5), `EXPLAIN_TIMEOUT_S` (10).
+**Backend settings:** `AI_URL`, `INTERNAL_TOKEN` (agent mode is on only when it is set; otherwise runs are FALLBACK and synchronous), `AGENT_MAX_TOOL_CALLS` (8), `AGENT_DEADLINE_S` (60), `AGENT_START_TIMEOUT_S` (5), `EXPLAIN_TIMEOUT_S` (10), `MODEL_HEALTH_TIMEOUT_S` (20).
 
 **MCP (bonus criterion, SHOULD):** the same tools are exposed as an **MCP server** at `http://api:8080/internal/mcp`, with identical names, schemas and results.
 
