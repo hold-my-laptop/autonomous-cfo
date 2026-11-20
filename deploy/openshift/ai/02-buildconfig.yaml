@@ -1,0 +1,31 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: ai
+  labels:
+    app: ai
+    app.kubernetes.io/part-of: vero
+spec:
+  runPolicy: Serial
+  source:
+    type: Git
+    git:
+      uri: https://github.com/hold-my-laptop/autonomous-cfo.git
+      ref: main  # while testing a branch: oc patch bc/ai -p '{"spec":{"source":{"git":{"ref":"feat/ai-agent"}}}}'
+    contextDir: services/ai
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: ai:latest
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+  triggers: []
