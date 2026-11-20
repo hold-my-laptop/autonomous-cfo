@@ -31,6 +31,7 @@ from api.domain.models import (
     Run,
     Transaction,
 )
+from api.domain.planner import PlanResult, plan_moves
 from api.domain.recurring import detect_recurring, project_outflows
 from api.domain.revenue import RevenueModel, build_revenue_model
 from api.domain.schedule import project_scheduled, sort_outflows
@@ -144,6 +145,12 @@ class DemoState:
 
     def forecast(self) -> Forecast:
         return compute_forecast(self.forecast_input())
+
+    def plan(self) -> PlanResult:
+        mandate = self.active_mandate
+        return plan_moves(
+            self.forecast_input(), mandate.protected_categories, mandate.max_delay_days
+        )
 
     def backtest(self) -> Backtest:
         return compute_backtest(self.forecast(), self.opening_balance, self.statement.transactions)
