@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai
+  labels:
+    app: ai
+    app.kubernetes.io/part-of: vero
+  annotations:
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"ai:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"ai\")].image"}]'
+spec:
+  replicas: 1  # runs live in this process (background tasks)
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ai
+  template:
+    metadata:
+      labels:
+        app: ai
+        app.kubernetes.io/part-of: vero
+    spec:
+      containers:
+        - name: ai
+          image: image-registry.openshift-image-registry.svc:5000/autonomous-cfo/ai:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: LLM_MODE
+              value: live
+            - name: LLM_BASE_URL
+              value: http://vero-llm-predictor.autonomous-cfo.svc.cluster.local:8080/v1
+            - name: LLM_MODEL
+              value: vero-llm
+            - name: API_INTERNAL_URL
+              value: http://api:8080/internal/v1
+            - name: INTERNAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: internal-token
+                  key: INTERNAL_TOKEN
+          readinessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
