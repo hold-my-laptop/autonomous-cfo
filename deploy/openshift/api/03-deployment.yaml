@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels:
+    app: api
+    app.kubernetes.io/part-of: vero
+  annotations:
+    image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"api:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"api\")].image"}]'
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: api
+  template:
+    metadata:
+      labels:
+        app: api
+        app.kubernetes.io/part-of: vero
+    spec:
+      containers:
+        - name: api
+          image: image-registry.openshift-image-registry.svc:5000/autonomous-cfo/api:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: STATEMENT_PATH
+              value: /opt/app-root/data/pizzeria-amalfi-bank-statement-2025-v6.csv
+          volumeMounts:
+            - name: statement
+              mountPath: /opt/app-root/data
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: 8080
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: statement
+          configMap:
+            name: api-statement

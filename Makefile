@@ -2,8 +2,10 @@
 .RECIPEPREFIX := >
 COMPOSE := docker compose -f infra/docker-compose.yml
 COMPOSE_APP := $(COMPOSE) --profile app
+OC_NS := autonomous-cfo
+STATEMENT := data/pizzeria-amalfi-bank-statement-2025-v6.csv
 
-.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema
+.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy
 
 up:
 > test -f infra/.env || cp infra/.env.example infra/.env
@@ -41,3 +43,12 @@ e2e:
 
 schema:
 > @echo "schema: not implemented yet (Backend)"
+
+oc-api-build:
+> oc apply -n $(OC_NS) -f deploy/openshift/api/01-imagestream.yaml -f deploy/openshift/api/02-buildconfig.yaml
+> oc start-build api -n $(OC_NS) --follow
+
+oc-api-deploy:
+> oc create configmap api-statement -n $(OC_NS) --from-file=$(STATEMENT) --dry-run=client -o yaml | oc apply --server-side -n $(OC_NS) -f -
+> oc apply -n $(OC_NS) -f deploy/openshift/api/03-deployment.yaml -f deploy/openshift/api/04-service.yaml
+> oc rollout status deployment/api -n $(OC_NS) --timeout=180s
