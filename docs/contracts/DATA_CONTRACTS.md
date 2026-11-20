@@ -235,10 +235,37 @@ A short-term credit line sized to cover the gap that remains. The terms are illu
 | `headroom_at_lowest` | Money | Unused headroom at the lowest point if approved |
 
 ### Problem
-The error body (HTTP 4xx/5xx).
+The error body for every 4xx/5xx response, sent as `application/problem+json` (RFC 9457).
 
 | Field | Type | Description |
 |---|---|---|
+| `type` | string | `urn:vero:problem:<code in lower case>`, e.g. `urn:vero:problem:version_conflict` |
+| `title` | string | Short human title |
+| `status` | int | HTTP status |
+| `code` | string | See the table below |
+| `detail` | string? | Explanation |
+| `current` | object? | Current state on a conflict, e.g. `{ "financial_version": 5 }` |
+| `errors` | `{ field, message }[]`? | For `VALIDATION_ERROR`: each invalid field, e.g. `body.note`, `query.category` |
+
+| `code` | HTTP | When |
+|---|---|---|
+| `VALIDATION_ERROR` | 422 | Invalid body, query or header (incl. a non-UUID `Idempotency-Key`) |
+| `IDEMPOTENCY_KEY_MISSING` | 400 | State-changing POST without `Idempotency-Key` |
+| `IDEMPOTENCY_KEY_REUSED` | 409 | Same key, different request |
+| `VERSION_CONFLICT` | 409 | `expected_financial_version` / `expected_active_version` is stale; `current` has the latest |
+| `STALE_RECOMMENDATION` | 409 | Data changed since the recommendation was made |
+| `NOT_PENDING` | 409 | Recommendation already decided |
+| `RUN_IN_PROGRESS` | 409 | A run is still active |
+| `MANDATE_INVALID` | 422 | e.g. removing a protected category |
+| `IMPORT_INVALID` | 422 | Unreadable statement file |
+| `NOT_FOUND` / `METHOD_NOT_ALLOWED` | 404 / 405 | Unknown path or method |
+| `DEMO_DISABLED` | 403 | `/demo/*` while `DEMO_MODE` is off |
+| `STATE_NOT_LOADED` | 503 | Data not loaded (e.g. statement missing) |
+| `HTTP_ERROR` | other | Any other HTTP error |
+
+**Idempotency:** a repeated request with the same key and body returns the original response without repeating the change. Only successful responses are stored, so a request rejected with `VERSION_CONFLICT` can be retried with the same key after refreshing. A demo reset forgets all keys.
+
+---|---|---|
 | `code` | string | `VALIDATION_ERROR`, `NOT_FOUND`, `VERSION_CONFLICT`, `STALE_RECOMMENDATION`, `NOT_PENDING`, `MANDATE_INVALID`, `RUN_IN_PROGRESS`, `IMPORT_INVALID`, `IDEMPOTENCY_KEY_MISSING`, `IDEMPOTENCY_KEY_REUSED` |
 | `title` | string | |
 | `status` | int | HTTP status |

@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
-from typing import Protocol
+from typing import Any, Protocol
 
 from api.config import Settings
 from api.dates import window_end
@@ -51,6 +51,7 @@ class DemoState:
     planned_events: list[PlannedEvent] = field(default_factory=list)
     credit_lines: list[CreditLine] = field(default_factory=list)
     financial_version: int = 1
+    idempotency: dict[str, Any] = field(default_factory=dict)
 
     @property
     def history(self) -> list[Transaction]:
