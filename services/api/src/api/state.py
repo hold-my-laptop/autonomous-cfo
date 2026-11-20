@@ -6,6 +6,7 @@ from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 from typing import Any, Protocol
+from uuid import UUID, uuid5
 
 from api.config import Settings
 from api.dates import window_end
@@ -17,12 +18,14 @@ from api.domain.models import (
     Category,
     Company,
     CreditLine,
+    Event,
     Inflow,
     Mandate,
     MandateStatus,
     Outflow,
     PlannedEvent,
     RecurringPayment,
+    Run,
     Transaction,
 )
 from api.domain.recurring import detect_recurring, project_outflows
@@ -30,6 +33,8 @@ from api.domain.revenue import RevenueModel, build_revenue_model
 from api.domain.schedule import project_scheduled, sort_outflows
 from api.money import Cents
 from api.seed import PIZZERIA_COMPANY, PIZZERIA_TAX_SCHEDULE, initial_mandate
+
+_FORECAST_ID_NAMESPACE = UUID("4a9f0e2b-7c1d-4e3f-8a5b-6c7d8e9f0a1b")
 
 
 class StateNotLoadedError(RuntimeError):
@@ -51,6 +56,8 @@ class DemoState:
     planned_events: list[PlannedEvent] = field(default_factory=list)
     credit_lines: list[CreditLine] = field(default_factory=list)
     financial_version: int = 1
+    events: list[Event] = field(default_factory=list)
+    runs: dict[UUID, Run] = field(default_factory=dict)
     idempotency: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -73,6 +80,14 @@ class DemoState:
     @property
     def active_mandate(self) -> Mandate:
         return next(m for m in self.mandates if m.status is MandateStatus.ACTIVE)
+
+    @property
+    def forecast_id(self) -> UUID:
+        """Same inputs, same id: derived from the financial and mandate versions."""
+        return uuid5(
+            _FORECAST_ID_NAMESPACE,
+            f"{self.as_of}|{self.financial_version}|{self.active_mandate.version}",
+        )
 
     def forecast_input(self) -> ForecastInput:
         return ForecastInput(

@@ -155,3 +155,41 @@ class Outflow:
     original_currency: str | None = None
     fx_rate: str | None = None
     version: int = 1
+
+
+class EventType(StrEnum):
+    CLOSURE_PLANNED = "CLOSURE_PLANNED"
+
+
+@dataclass(frozen=True, slots=True)
+class Event:
+    id: UUID
+    type: EventType
+    payload: dict
+    created_at: datetime
+    financial_version_after: int
+
+
+class RunStatus(StrEnum):
+    QUEUED = "QUEUED"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+
+
+class RunMode(StrEnum):
+    AGENT = "AGENT"
+    FALLBACK = "FALLBACK"
+
+
+@dataclass(frozen=True, slots=True)
+class Run:
+    id: UUID
+    event_id: UUID
+    trigger_type: EventType
+    trigger_label: str
+    status: RunStatus
+    mode: RunMode
+    created_at: datetime
+    finished_at: datetime | None = None
+    forecast_id: UUID | None = None

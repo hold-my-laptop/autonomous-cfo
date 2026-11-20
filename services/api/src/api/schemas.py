@@ -3,20 +3,27 @@ string of integer cents."""
 
 from datetime import date, datetime
 from typing import Literal, Self
-from uuid import UUID, uuid5
+from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.domain import backtest as bt
 from api.domain import forecast as fc
 from api.domain import models as dm
 from api.domain import revenue as rv
-from api.domain.models import Category, MandateStatus, OutflowSource, PlannedEventKind
+from api.domain.models import (
+    Category,
+    EventType,
+    MandateStatus,
+    OutflowSource,
+    PlannedEventKind,
+    RunMode,
+    RunStatus,
+)
 from api.money import Money
 from api.state import DemoState
 
 WEEKS_IN_FORECAST = 13
-_FORECAST_ID_NAMESPACE = UUID("4a9f0e2b-7c1d-4e3f-8a5b-6c7d8e9f0a1b")
 
 
 class Company(BaseModel):
@@ -325,7 +332,7 @@ class Forecast(BaseModel):
     def from_domain(cls, f: fc.Forecast, state: DemoState, weekly: bool = False) -> Self:
         mandate_version = state.active_mandate.version
         return cls(
-            id=forecast_id(state),
+            id=state.forecast_id,
             label="CURRENT",
             as_of_date=f.as_of,
             horizon_days=f.horizon_days,
@@ -365,14 +372,6 @@ class Forecast(BaseModel):
             mandate_version=mandate_version,
             weeks=weekly_buckets(f) if weekly else None,
         )
-
-
-def forecast_id(state: DemoState) -> UUID:
-    """Same inputs, same id: derived from the financial and mandate versions."""
-    return uuid5(
-        _FORECAST_ID_NAMESPACE,
-        f"{state.as_of}|{state.financial_version}|{state.active_mandate.version}",
-    )
 
 
 def weekly_buckets(f: fc.Forecast) -> list[ForecastWeek]:
@@ -439,7 +438,7 @@ class Backtest(BaseModel):
     @classmethod
     def from_domain(cls, b: bt.Backtest, state: DemoState) -> Self:
         return cls(
-            forecast_id=forecast_id(state),
+            forecast_id=state.forecast_id,
             complete=b.complete,
             days=[BacktestDay(date=d.date, forecast=d.forecast, actual=d.actual) for d in b.days],
             forecast=BalanceSummary.from_domain(b.forecast),
@@ -448,4 +447,62 @@ class Backtest(BaseModel):
             lowest_error=b.lowest_error,
             lowest_error_bp=b.lowest_error_bp,
             note=b.note,
+        )
+
+
+class ClosurePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    date_from: date
+    date_to: date
+    variable_costs_stop: bool = True
+    note: str | None = Field(default=None, max_length=200)
+
+
+class ClosurePlannedIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["CLOSURE_PLANNED"]
+    expected_financial_version: int = Field(ge=1)
+    payload: ClosurePayload
+
+
+EventIn = ClosurePlannedIn
+
+
+class RunAccepted(BaseModel):
+    run_id: UUID
+    status: RunStatus
+
+
+class RunTrigger(BaseModel):
+    type: EventType
+    label: str
+
+
+class RunResult(BaseModel):
+    forecast_id: UUID
+
+
+class Run(BaseModel):
+    run_id: UUID
+    status: RunStatus
+    mode: RunMode
+    trigger: RunTrigger
+    trace: list[dict]
+    result: RunResult | None
+    created_at: datetime
+    finished_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, r: dm.Run) -> Self:
+        return cls(
+            run_id=r.id,
+            status=r.status,
+            mode=r.mode,
+            trigger=RunTrigger(type=r.trigger_type, label=r.trigger_label),
+            trace=[],
+            result=RunResult(forecast_id=r.forecast_id) if r.forecast_id else None,
+            created_at=r.created_at,
+            finished_at=r.finished_at,
         )
