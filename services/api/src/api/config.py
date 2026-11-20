@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     forecast_horizon_days: int = 91
     revenue_model_weeks: int = 8
     partner_transfer_movable_days: int = 45
+    credit_line_available_until: date = date(2025, 9, 30)
+    credit_line_rounding: int = 500_000
 
     database_url: str | None = None
     reset_on_startup: bool = False

@@ -15,6 +15,7 @@ from api.config import Settings
 from api.dates import window_end
 from api.domain.backtest import Backtest, compute_backtest
 from api.domain.balances import balance_before
+from api.domain.credit import CreditSizing, size_credit_line
 from api.domain.forecast import Forecast, ForecastInput, compute_forecast
 from api.domain.importer import StatementImport, load_statement
 from api.domain.models import (
@@ -31,7 +32,7 @@ from api.domain.models import (
     Run,
     Transaction,
 )
-from api.domain.planner import PlanResult, plan_moves
+from api.domain.planner import PlanResult, apply_moves, plan_moves
 from api.domain.recurring import detect_recurring, project_outflows
 from api.domain.revenue import RevenueModel, build_revenue_model
 from api.domain.schedule import project_scheduled, sort_outflows
@@ -151,6 +152,15 @@ class DemoState:
         return plan_moves(
             self.forecast_input(), mandate.protected_categories, mandate.max_delay_days
         )
+
+    def credit_sizing(
+        self, available_until: date, rounding: Cents, apply_plan: bool = True
+    ) -> CreditSizing:
+        """Credit line for the remaining gap, after the planner's moves when `apply_plan`."""
+        data = self.forecast_input()
+        if apply_plan:
+            data = apply_moves(data, self.plan().candidates)
+        return size_credit_line(data, available_until, rounding)
 
     def backtest(self) -> Backtest:
         return compute_backtest(self.forecast(), self.opening_balance, self.statement.transactions)

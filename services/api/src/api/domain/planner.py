@@ -63,6 +63,13 @@ def _with_move(data: ForecastInput, outflow_id: UUID, to: date) -> ForecastInput
     )
 
 
+def apply_moves(data: ForecastInput, moves: Collection[MoveCandidate]) -> ForecastInput:
+    """The forecast input with each proposed move applied (input is not modified)."""
+    for move in moves:
+        data = _with_move(data, move.outflow_id, move.to_date)
+    return data
+
+
 def plan_moves(
     data: ForecastInput,
     protected_categories: Collection[Category],
