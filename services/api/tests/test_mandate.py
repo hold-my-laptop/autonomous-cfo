@@ -175,3 +175,11 @@ def test_reset_restores_mandate_v1(client: TestClient) -> None:
     client.post("/api/v1/demo/reset")
 
     assert [m["version"] for m in client.get("/api/v1/mandate/versions").json()] == [1]
+
+
+def test_amount_too_large_for_storage_is_a_validation_error(client: TestClient) -> None:
+    response = post(client, "", V2 | {"cash_floor": "-99999999999999999999"})
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "VALIDATION_ERROR"
+    assert response.json()["errors"][0]["field"] == "body.cash_floor"

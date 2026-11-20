@@ -22,7 +22,7 @@ apps/web ──/api/v1──▶ services/api ──start run / explain──▶ 
 
 | Topic | Rule |
 |---|---|
-| **Money** | A string holding an integer number of **cents**: `"125050"` = 1 250,50 €. Never floats. Negative allowed (`"-2276082"`) |
+| **Money** | A string holding an integer number of **cents**: `"125050"` = 1 250,50 €. Never floats. Negative allowed (`"-2276082"`). At most 15 digits (`^-?[0-9]{1,15}$`), otherwise `VALIDATION_ERROR` |
 | **Currency** | Account currency **EUR**. Foreign-currency items (CHF tranches) also carry `original_amount`, `original_currency` and `fx_rate` |
 | **Business date** | `"YYYY-MM-DD"`, Europe/Berlin |
 | **Timestamp** | UTC RFC 3339, e.g. `"2025-05-05T09:15:00Z"` |
@@ -402,9 +402,9 @@ Response to `POST /recommendations/{id}/approve` and `/reject` (body `{ note? }`
 | `recommendation` | Recommendation | Updated status; `executed` set when approved |
 | `forecast_summary` | ForecastSummary | Cash after the decision |
 | `receipt_id` | UUID | The DECISION receipt |
-| `follow_up_recommendation_ids` | UUID[] | Empty for now (reserved for e.g. a resized credit line) |
+| `follow_up_recommendation_ids` | UUID[] | New recommendations made because this approval changed the data, e.g. the pending credit line resized after a move was approved (the old one becomes `SUPERSEDED`) |
 
-Errors: `NOT_FOUND` (404), `NOT_PENDING` (409, already decided), `STALE_RECOMMENDATION` (409; the recommendation is also marked `STALE`, plan again). Approving re-checks the rules with the owner's approval: protected payments and invalid dates are still refused, and the recommendation becomes `BLOCKED`.
+Errors: `NOT_FOUND` (404), `NOT_PENDING` (409, already decided), `STALE_RECOMMENDATION` (409; the recommendation is also marked `STALE`, plan again). An approval re-checks the other pending items of the same run instead of making them stale: a pending move keeps its lane with updated impact; a pending credit line is kept if it still fits, otherwise replaced by a follow-up or dropped when no gap is left. Approving re-checks the rules with the owner's approval: protected payments and invalid dates are still refused, and the recommendation becomes `BLOCKED`.
 
 #### Receipt
 Immutable evidence, from `GET /receipts/{id}`.
@@ -519,8 +519,8 @@ Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHE
 | Field | Type | Description |
 |---|---|---|
 | `kind` | enum | `RESCHEDULE_PAYMENT`, `CREDIT_LINE` |
-| `move` | `{ outflow_id: UUID, to_date: Date }`? | Must be one of this run's planner candidates |
-| `credit_line` | `{ amount: Money, available_from: Date }`? | Must equal this run's `size_credit_line` result |
+| `move` | `{ outflow_id: UUID, to_date: Date }`? | Must be one of this run's planner candidates. A repeated payment is discarded |
+| `credit_line` | `{ amount: Money, available_from: Date }`? | Must equal this run's `size_credit_line` result. Only one per completion. The backend sizes it again after the moves are applied, since moves waiting for approval have not happened, and notes a resize in the trace |
 | `rationale` | string? | Shown as "Vero's note", never as a fact |
 
 #### AgentCompletion

@@ -489,3 +489,83 @@ def test_http_client_reads_explain_result(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert (result.headline, result.source) == ("Closing in June needs a credit line.", "MODEL")
     assert str(result.items[0].recommendation_id) == rec_id
+
+
+def proposals(move: dict, line: dict) -> tuple[dict, dict]:
+    return {"kind": "RESCHEDULE_PAYMENT", "move": move}, {
+        "kind": "CREDIT_LINE",
+        "credit_line": line,
+    }
+
+
+def labels(finished: dict, kind: str) -> list[str]:
+    return [s["label"] for s in finished["trace"] if s["kind"] == kind]
+
+
+def test_credit_is_resized_when_the_move_waits_for_approval(client: TestClient) -> None:
+    run_id = close_june(client).json()["run_id"]
+    move, line = agent_work(client, run_id)
+    assert (line["amount"], line["available_from"]) == ("2000000", "2025-06-27")
+
+    callback(client, run_id, "complete", completion(list(proposals(move, line))))
+
+    finished = run(client, run_id)
+    resized = "Resized the credit line to 20 000,00 € from 15 Jun for the payments that still wait"
+    assert f"{resized} for you" in labels(finished, "TOOL_RESULT")
+    pending = {r["kind"]: r for r in client.get("/api/v1/recommendations").json()}
+    assert {r["status"] for r in pending.values()} == {"PENDING"}
+    credit = pending["CREDIT_LINE"]
+    assert (credit["subject"]["amount"], credit["subject"]["available_from"]) == (
+        "2000000",
+        "2025-06-15",
+    )
+    assert credit["impact"]["after_if_executed"]["first_breach"] is None
+
+    approved = post(client, f"/recommendations/{credit['id']}/approve").json()
+    assert approved["forecast_summary"]["first_breach"] is None
+    move_rec = pending["RESCHEDULE_PAYMENT"]
+    assert post(client, f"/recommendations/{move_rec['id']}/approve").status_code == 200
+
+
+def test_credit_proposed_before_the_move_is_sized_after_it(client: TestClient) -> None:
+    activate_v2(client)
+    run_id = close_june(client).json()["run_id"]
+    move, line = agent_work(client, run_id)
+    move_proposal, credit_proposal = proposals(move, line)
+
+    callback(client, run_id, "complete", completion([credit_proposal, move_proposal]))
+
+    finished = run(client, run_id)
+    assert not any(label.startswith("Resized") for label in labels(finished, "TOOL_RESULT"))
+    credit = client.get("/api/v1/overview").json()["lanes"]["NEEDS_APPROVAL"][0]
+    assert (credit["subject"]["amount"], credit["subject"]["available_from"]) == (
+        "2000000",
+        "2025-06-27",
+    )
+
+
+def test_repeated_proposals_are_discarded(client: TestClient) -> None:
+    activate_v2(client)
+    run_id = close_june(client).json()["run_id"]
+    move, line = agent_work(client, run_id)
+    move_proposal, credit_proposal = proposals(move, line)
+
+    callback(
+        client,
+        run_id,
+        "complete",
+        completion([move_proposal, move_proposal, credit_proposal, credit_proposal]),
+    )
+
+    finished = run(client, run_id)
+    assert labels(finished, "DISCARDED") == [
+        "Proposal 2 ignored: payment already proposed",
+        "Proposal 4 ignored: credit line already proposed",
+    ]
+    assert finished["result"]["counts"] == {
+        "done_within_mandate": 1,
+        "needs_approval": 1,
+        "not_allowed": 0,
+    }
+    kinds = sorted(r["kind"] for r in client.get("/api/v1/recommendations").json())
+    assert kinds == ["CREDIT_LINE", "RESCHEDULE_PAYMENT"]

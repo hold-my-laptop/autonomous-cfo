@@ -8,7 +8,9 @@ from pydantic import BeforeValidator, PlainSerializer, WithJsonSchema
 
 type Cents = int
 
-MONEY_PATTERN = r"^-?[0-9]+$"
+MAX_MONEY_DIGITS = 15
+MONEY_PATTERN = rf"^-?[0-9]{{1,{MAX_MONEY_DIGITS}}}$"
+_MONEY_LIMIT = 10**MAX_MONEY_DIGITS
 _MONEY_RE = re.compile(MONEY_PATTERN)
 _GERMAN_AMOUNT_RE = re.compile(r"^(-?)(\d{1,3}(?:\.\d{3})+|\d+)(?:,(\d{1,2}))?$")
 
@@ -43,11 +45,14 @@ def format_eur(cents: Cents) -> str:
 def _validate_money(value: object) -> Cents:
     if isinstance(value, bool):
         raise ValueError("money must be integer cents")
-    if isinstance(value, int):
+    if isinstance(value, int) and abs(value) < _MONEY_LIMIT:
         return value
     if isinstance(value, str) and _MONEY_RE.fullmatch(value):
         return int(value)
-    raise ValueError('money must be a string of integer cents, e.g. "125050"')
+    raise ValueError(
+        f"money must be a string of at most {MAX_MONEY_DIGITS} digits of integer cents, "
+        'e.g. "125050"'
+    )
 
 
 Money = Annotated[
@@ -58,7 +63,8 @@ Money = Annotated[
         {
             "type": "string",
             "pattern": MONEY_PATTERN,
-            "description": 'Integer cents as a string: "125050" = 1 250,50 €',
+            "description": 'Integer cents as a string: "125050" = 1 250,50 €, '
+            f"at most {MAX_MONEY_DIGITS} digits",
             "examples": ["125050"],
         }
     ),

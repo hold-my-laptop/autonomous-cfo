@@ -5,7 +5,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request, status
 
 from api.decisions import DecisionError, decide
-from api.deps import RepositoryDep
+from api.deps import RepositoryDep, SettingsDep
 from api.domain.models import RecommendationStatus
 from api.errors import ApiError, ErrorCode
 from api.idempotency import IdempotencyKeyDep, request_hash, run_idempotent
@@ -52,20 +52,27 @@ def _decide(
     body: DecisionIn | None,
     key: str,
     repository: RepositoryDep,
+    settings: SettingsDep,
     request: Request,
 ) -> DecisionResult:
     failure: DecisionError | None = None
     with repository.write() as state:
 
         def apply() -> DecisionResult:
-            rec, receipt = decide(
-                state, recommendation_id, approve, body.note if body else None, datetime.now(UTC)
+            rec, receipt, follow_ups = decide(
+                state,
+                recommendation_id,
+                approve,
+                body.note if body else None,
+                datetime.now(UTC),
+                settings.credit_line_available_until,
+                settings.credit_line_rounding,
             )
             return DecisionResult(
                 recommendation=Recommendation.from_domain(rec),
                 forecast_summary=ForecastSummary.from_domain(state.forecast().summary),
                 receipt_id=receipt.id,
-                follow_up_recommendation_ids=[],
+                follow_up_recommendation_ids=follow_ups,
             )
 
         try:
@@ -81,11 +88,12 @@ def approve(
     recommendation_id: UUID,
     key: IdempotencyKeyDep,
     repository: RepositoryDep,
+    settings: SettingsDep,
     request: Request,
     body: DecisionIn | None = None,
 ) -> DecisionResult:
     """Approve a pending recommendation; it is executed in simulation."""
-    return _decide(recommendation_id, True, body, key, repository, request)
+    return _decide(recommendation_id, True, body, key, repository, settings, request)
 
 
 @router.post("/recommendations/{recommendation_id}/reject")
@@ -93,11 +101,12 @@ def reject(
     recommendation_id: UUID,
     key: IdempotencyKeyDep,
     repository: RepositoryDep,
+    settings: SettingsDep,
     request: Request,
     body: DecisionIn | None = None,
 ) -> DecisionResult:
     """Reject a pending recommendation. Nothing changes; the payment keeps its date."""
-    return _decide(recommendation_id, False, body, key, repository, request)
+    return _decide(recommendation_id, False, body, key, repository, settings, request)
 
 
 @router.get("/receipts/{receipt_id}")

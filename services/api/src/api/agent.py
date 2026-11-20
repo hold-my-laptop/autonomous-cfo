@@ -221,6 +221,8 @@ class AgentOrchestrator:
                 completion.get("summary_note"),
                 {k: completion.get(k) for k in ("model", "prompt_version", "tool_calls")},
                 datetime.now(UTC),
+                self._settings.credit_line_available_until,
+                self._settings.credit_line_rounding,
             )
 
     def fail(self, run_id: UUID, reason: str) -> None:

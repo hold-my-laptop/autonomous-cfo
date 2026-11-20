@@ -150,10 +150,19 @@ def test_deciding_twice_is_not_pending(client: TestClient) -> None:
     assert (response.status_code, response.json()["code"]) == (409, "NOT_PENDING")
 
 
+def outflow(client: TestClient, ref: str) -> dict:
+    return next(o for o in client.get("/api/v1/outflows").json() if o["ref"] == ref)
+
+
+def summary(client: TestClient) -> dict:
+    return client.get("/api/v1/forecast").json()["summary"]
+
+
 def test_stale_recommendation_is_marked_and_refused(client: TestClient) -> None:
     close_june(client)
     move, credit = lanes(client)["NEEDS_APPROVAL"]
-    post(client, f"/recommendations/{move['id']}/approve")
+    chf07 = outflow(client, "CHF-07")
+    post(client, f"/outflows/{chf07['id']}/reschedule-requests", {"to_date": "2025-07-25"})
     response = post(client, f"/recommendations/{credit['id']}/approve")
 
     assert (response.status_code, response.json()["code"]) == (409, "STALE_RECOMMENDATION")
@@ -246,3 +255,65 @@ def test_runs_list_newest_first(client: TestClient) -> None:
 
     runs = client.get("/api/v1/runs").json()
     assert [r["trigger"]["type"] for r in runs] == ["RESCHEDULE_REQUESTED", "CLOSURE_PLANNED"]
+
+
+def test_approving_the_move_resizes_the_pending_credit_line(client: TestClient) -> None:
+    close_june(client)
+    move, credit = lanes(client)["NEEDS_APPROVAL"]
+    assert (credit["subject"]["amount"], credit["subject"]["available_from"]) == (
+        "2000000",
+        "2025-06-15",
+    )
+
+    approved = post(client, f"/recommendations/{move['id']}/approve").json()
+
+    [follow_up_id] = approved["follow_up_recommendation_ids"]
+    old = client.get(f"/api/v1/recommendations/{credit['id']}").json()
+    assert old["status"] == "SUPERSEDED"
+    resized = client.get(f"/api/v1/recommendations/{follow_up_id}").json()
+    assert (resized["lane"], resized["status"]) == ("NEEDS_APPROVAL", "PENDING")
+    assert resized["run_id"] == credit["run_id"]
+    assert (resized["subject"]["amount"], resized["subject"]["available_from"]) == (
+        "2000000",
+        "2025-06-27",
+    )
+    assert resized["subject"]["headroom_at_lowest"] == "391889"
+    pending = [r["id"] for r in lanes(client)["NEEDS_APPROVAL"] if r["status"] == "PENDING"]
+    assert pending == [follow_up_id]
+    trace = client.get(f"/api/v1/runs/{credit['run_id']}").json()["trace"]
+    assert "Resized the credit line to 20 000,00 € from 27 Jun after your decision" in [
+        s["label"] for s in trace
+    ]
+
+    final = post(client, f"/recommendations/{follow_up_id}/approve")
+    assert final.status_code == 200
+    assert final.json()["forecast_summary"]["first_breach"] is None
+    assert final.json()["forecast_summary"]["headroom_at_lowest"] == "391889"
+
+
+def test_approving_the_credit_line_keeps_the_pending_move(client: TestClient) -> None:
+    close_june(client)
+    move, credit = lanes(client)["NEEDS_APPROVAL"]
+
+    approved = post(client, f"/recommendations/{credit['id']}/approve").json()
+
+    assert approved["follow_up_recommendation_ids"] == []
+    assert approved["forecast_summary"]["first_breach"] is None
+    refreshed = client.get(f"/api/v1/recommendations/{move['id']}").json()
+    assert refreshed["status"] == "PENDING"
+    assert refreshed["impact"]["before"]["first_breach"] is None
+    final = post(client, f"/recommendations/{move['id']}/approve")
+    assert final.status_code == 200
+    assert final.json()["recommendation"]["status"] == "APPROVED_EXECUTED"
+    assert summary(client)["first_breach"] is None
+    assert outflow(client, "CHF-06")["scheduled_date"] == "2025-07-30"
+
+
+def test_rejecting_leaves_the_other_pending_item_untouched(client: TestClient) -> None:
+    close_june(client)
+    move, credit = lanes(client)["NEEDS_APPROVAL"]
+
+    rejected = post(client, f"/recommendations/{move['id']}/reject").json()
+
+    assert rejected["follow_up_recommendation_ids"] == []
+    assert client.get(f"/api/v1/recommendations/{credit['id']}").json() == credit

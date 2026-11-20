@@ -16,7 +16,7 @@ Phase 1, Vero Cash. Every feature traces back to [`DESIGN.md`](DESIGN.md) (rules
 - **Done when:** `GET /api/v1/health/live` returns `{"status":"ok"}` and `uv run pytest` runs.
 
 ### B02 · Money and dates — MUST
-- Money is an integer number of **cents** everywhere. JSON serializes it as a string (`"125050"`), and input accepts only `^-?\d+$`.
+- Money is an integer number of **cents** everywhere. JSON serializes it as a string (`"125050"`), and input accepts only `^-?[0-9]{1,15}$` (15 digits keep every value and sum within PostgreSQL BIGINT).
 - Parse German amounts (`-4166,67`, `275,35`) without floats.
 - Parse dates in `dd.mm.yy` format.
 - Calendar days only.

@@ -373,6 +373,18 @@ def _pin_pending(state: DemoState, created: list[Recommendation]) -> list[Recomm
     return [state.recommendations[r.id] for r in created]
 
 
+def _credit_now(
+    state: DemoState, credit_until: date, credit_rounding: Cents
+) -> CreditProposal | None:
+    """The credit line the current data needs, after whatever has been executed so far."""
+    sizing = size_credit_line(state.forecast_input(), credit_until, credit_rounding)
+    if not sizing.needed or sizing.credit_line is None:
+        return None
+    return CreditProposal(
+        sizing.credit_line, sizing.shortfall, sizing.rounded_to, sizing.headroom_at_lowest
+    )
+
+
 def run_fallback(
     state: DemoState,
     run: Run,
@@ -417,11 +429,8 @@ def run_fallback(
     ]
 
     trace.add("TOOL_CALL", "Sizing a credit line for what's left", now, "size_credit_line")
-    sizing = size_credit_line(state.forecast_input(), credit_until, credit_rounding)
-    if sizing.needed and sizing.credit_line is not None:
-        credit = CreditProposal(
-            sizing.credit_line, sizing.shortfall, sizing.rounded_to, sizing.headroom_at_lowest
-        )
+    credit = _credit_now(state, credit_until, credit_rounding)
+    if credit is not None:
         created.append(_propose_credit(state, run, trace, credit, now))
     else:
         trace.add("TOOL_RESULT", "No credit needed", now)
@@ -458,6 +467,14 @@ def fall_back(
     )
 
 
+def _resize_label(credit: CreditProposal, reason: str) -> str:
+    line = credit.line
+    return (
+        f"Resized the credit line to {format_eur(line.amount)} from "
+        f"{_day(line.available_from)} {reason}"
+    )
+
+
 def finalize_agent_run(
     state: DemoState,
     run: Run,
@@ -465,11 +482,15 @@ def finalize_agent_run(
     summary_note: str | None,
     agent_info: dict | None,
     now: datetime,
+    credit_until: date,
+    credit_rounding: Cents,
 ) -> Run:
     """Apply the agent's proposals through the same rules as the fallback.
 
     Moves must be candidates of this run's find_reschedule_options and the credit line must
-    equal this run's size_credit_line result; anything else is discarded and noted."""
+    equal this run's size_credit_line result; anything else, and any repeat, is discarded and
+    noted. Moves are applied first. The credit line is then sized again on the data after
+    those moves, since a move waiting for approval has not happened."""
     trace = Tracer(run)
     log = run.tool_log or {}
     candidates = {tuple(c) for c in log.get("candidates", [])}
@@ -480,38 +501,55 @@ def finalize_agent_run(
         )
     before = state.forecast().summary
     _supersede_pending(state, now)
-    by_id = {str(o.id): o for o in state.outflows}
     created: list[Recommendation] = []
+    moved: set[str] = set()
+    credit_offered: dict | None = None
     for index, proposal in enumerate(proposals, start=1):
         kind = proposal.get("kind")
         if kind == RecommendationKind.RESCHEDULE_PAYMENT.value:
             move = proposal.get("move") or {}
             key = (str(move.get("outflow_id")), str(move.get("to_date")))
-            if key not in candidates or key[0] not in by_id:
+            if key[0] in moved:
+                trace.add("DISCARDED", f"Proposal {index} ignored: payment already proposed", now)
+                continue
+            outflow = next((o for o in state.outflows if str(o.id) == key[0]), None)
+            if key not in candidates or outflow is None:
                 trace.add("DISCARDED", f"Proposal {index} ignored: not a planner candidate", now)
                 continue
+            moved.add(key[0])
             created.append(
-                _propose_move(state, run, trace, by_id[key[0]], date.fromisoformat(key[1]), now)
+                _propose_move(state, run, trace, outflow, date.fromisoformat(key[1]), now)
             )
         elif kind == RecommendationKind.CREDIT_LINE.value:
             line = proposal.get("credit_line") or {}
             offered = [str(line.get("amount")), str(line.get("available_from"))]
-            if not credit_log or offered != [credit_log["amount"], credit_log["available_from"]]:
+            if credit_offered is not None:
+                trace.add(
+                    "DISCARDED", f"Proposal {index} ignored: credit line already proposed", now
+                )
+            elif not credit_log or offered != [credit_log["amount"], credit_log["available_from"]]:
                 trace.add("DISCARDED", f"Proposal {index} ignored: credit line was not sized", now)
-                continue
-            credit = CreditProposal(
-                CreditLine(
-                    int(credit_log["amount"]),
-                    date.fromisoformat(credit_log["available_from"]),
-                    date.fromisoformat(credit_log["available_until"]),
-                ),
-                int(credit_log["shortfall"]),
-                int(credit_log["rounded_to"]),
-                int(credit_log["headroom_at_lowest"]),
-            )
-            created.append(_propose_credit(state, run, trace, credit, now))
+            else:
+                credit_offered = credit_log
         else:
             trace.add("DISCARDED", f"Proposal {index} ignored: unknown kind", now)
+
+    if credit_offered is not None:
+        credit = _credit_now(state, credit_until, credit_rounding)
+        if credit is None:
+            trace.add("DISCARDED", "Credit line dropped: no gap is left", now)
+        else:
+            if [str(credit.line.amount), credit.line.available_from.isoformat()] != [
+                credit_offered["amount"],
+                credit_offered["available_from"],
+            ]:
+                trace.add(
+                    "TOOL_RESULT",
+                    _resize_label(credit, "for the payments that still wait for you"),
+                    now,
+                    "size_credit_line",
+                )
+            created.append(_propose_credit(state, run, trace, credit, now))
     return _finish(
         state,
         run,
@@ -571,11 +609,81 @@ def _is_stale(state: DemoState, rec: Recommendation) -> bool:
     return False
 
 
+def _refresh_pending(
+    state: DemoState,
+    decided: Recommendation,
+    now: datetime,
+    credit_until: date,
+    credit_rounding: Cents,
+) -> list[UUID]:
+    """An approval changed the data; the other items of the same run still waiting for the
+    owner are brought up to date instead of going stale.
+
+    A move whose payment is unchanged keeps its lane with fresh impact numbers. A credit line
+    is sized again: unchanged it is kept, otherwise it is superseded by the resized line (a
+    follow-up) or dropped when no gap is left. Returns the follow-up ids."""
+    follow_ups: list[UUID] = []
+    current = state.forecast().summary
+    for rec in list(state.recommendations.values()):
+        if (
+            rec.id == decided.id
+            or rec.run_id != decided.run_id
+            or rec.status is not RecommendationStatus.PENDING
+        ):
+            continue
+        if rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
+            outflow = next((o for o in state.outflows if o.id == rec.outflow_id), None)
+            if outflow is None or outflow.version != rec.outflow_version:
+                continue
+            after = _summary_with(state, moves=[(outflow.id, rec.to_date)])
+        else:
+            credit = _credit_now(state, credit_until, credit_rounding)
+            if credit is None or credit.line != rec.credit_line:
+                state.recommendations[rec.id] = replace(
+                    rec, status=RecommendationStatus.SUPERSEDED, decided_at=now
+                )
+                run = state.runs.get(rec.run_id)
+                if run is None:
+                    continue
+                trace = Tracer(run)
+                if credit is None:
+                    trace.add(
+                        "TOOL_RESULT", "Credit line no longer needed after your decision", now
+                    )
+                else:
+                    trace.add(
+                        "TOOL_RESULT",
+                        _resize_label(credit, "after your decision"),
+                        now,
+                        "size_credit_line",
+                    )
+                    follow_ups.append(_propose_credit(state, run, trace, credit, now).id)
+                state.runs[run.id] = replace(run, trace=tuple(trace.steps))
+                continue
+            after = _summary_with(state, lines=(rec.credit_line,))
+        state.recommendations[rec.id] = replace(
+            rec,
+            based_on_financial_version=state.financial_version,
+            details=rec.details
+            | {"impact": {"before": impact(current), "after_if_executed": impact(after)}},
+        )
+    return follow_ups
+
+
 def decide(
-    state: DemoState, rec_id: UUID, approve: bool, note: str | None, now: datetime
-) -> tuple[Recommendation, Receipt]:
+    state: DemoState,
+    rec_id: UUID,
+    approve: bool,
+    note: str | None,
+    now: datetime,
+    credit_until: date,
+    credit_rounding: Cents,
+) -> tuple[Recommendation, Receipt, list[UUID]]:
     """Approve or reject a pending recommendation. Raises DecisionError for NOT_FOUND,
-    NOT_PENDING and STALE_RECOMMENDATION; a stale recommendation is marked STALE first."""
+    NOT_PENDING and STALE_RECOMMENDATION; a stale recommendation is marked STALE first.
+
+    Returns the recommendation, its DECISION receipt and the ids of follow-up
+    recommendations made because an approval changed the data."""
     rec = state.recommendations.get(rec_id)
     if rec is None:
         raise DecisionError("NOT_FOUND", f"no recommendation {rec_id}")
@@ -593,7 +701,7 @@ def decide(
     if not approve:
         rec = replace(rec, status=RecommendationStatus.REJECTED, decided_at=now, note=note)
         receipt = _receipt(state, rec, "DECISION", now, "Your decision", before, before, "REJECTED")
-        return _store(state, rec, receipt), receipt
+        return _store(state, rec, receipt), receipt, []
 
     mandate = state.active_mandate
     if rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
@@ -608,7 +716,7 @@ def decide(
             rec, status=RecommendationStatus.BLOCKED, decided_at=now, note=note, details=details
         )
         receipt = _receipt(state, rec, "DECISION", now, "Your decision", before, before, "APPROVED")
-        return _store(state, rec, receipt), receipt
+        return _store(state, rec, receipt), receipt, []
 
     if rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
         execute_move(state, rec.outflow_id, rec.to_date)
@@ -626,7 +734,8 @@ def decide(
     )
     after = impact(state.forecast().summary)
     receipt = _receipt(state, rec, "DECISION", now, "Your decision", before, after, "APPROVED")
-    return _store(state, rec, receipt), receipt
+    rec = _store(state, rec, receipt)
+    return rec, receipt, _refresh_pending(state, rec, now, credit_until, credit_rounding)
 
 
 def request_reschedule(
