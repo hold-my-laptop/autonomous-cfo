@@ -255,22 +255,17 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | `VERSION_CONFLICT` | 409 | `expected_financial_version` / `expected_active_version` is stale; `current` has the latest |
 | `STALE_RECOMMENDATION` | 409 | Data changed since the recommendation was made |
 | `NOT_PENDING` | 409 | Recommendation already decided |
-| `RUN_IN_PROGRESS` | 409 | A run is still active |
+| `RUN_IN_PROGRESS` | 409 | An agent run is still active (only one at a time) |
 | `MANDATE_INVALID` | 422 | e.g. removing a protected category |
 | `IMPORT_INVALID` | 422 | Unreadable statement file |
 | `NOT_FOUND` / `METHOD_NOT_ALLOWED` | 404 / 405 | Unknown path or method |
 | `DEMO_DISABLED` | 403 | `/demo/*` while `DEMO_MODE` is off |
 | `STATE_NOT_LOADED` | 503 | Data not loaded (e.g. statement missing) |
+| `UNAUTHORIZED` | 401 | `/internal/v1` without a valid `Bearer INTERNAL_TOKEN` |
+| `RUN_CLOSED` | 409 | Agent callback for a run that is no longer running |
 | `HTTP_ERROR` | other | Any other HTTP error |
 
 **Idempotency:** a repeated request with the same key and body returns the original response without repeating the change. Only successful responses are stored, so a request rejected with `VERSION_CONFLICT` can be retried with the same key after refreshing. A demo reset forgets all keys.
-
----|---|---|
-| `code` | string | `VALIDATION_ERROR`, `NOT_FOUND`, `VERSION_CONFLICT`, `STALE_RECOMMENDATION`, `NOT_PENDING`, `MANDATE_INVALID`, `RUN_IN_PROGRESS`, `IMPORT_INVALID`, `IDEMPOTENCY_KEY_MISSING`, `IDEMPOTENCY_KEY_REUSED` |
-| `title` | string | |
-| `status` | int | HTTP status |
-| `detail` | string? | |
-| `current` | object? | Current state on a conflict, e.g. `{ "financial_version": 5 }` |
 
 ---
 
@@ -444,7 +439,7 @@ The backend owns data and logic. The AI service runs the agent: it **reads throu
 
 ### 3.1 What is exchanged
 
-**Backend → AI service** (`http://ai:8001`)
+**Backend → AI service** (`AI_URL`, in the cluster `http://ai:8080`)
 
 | # | When | Backend sends | AI returns |
 |---|---|---|---|
@@ -453,17 +448,21 @@ The backend owns data and logic. The AI service runs the agent: it **reads throu
 | 3 | Health | `GET /health/live`, `GET /health/model` | `{ status }` / **ModelHealth** (+ `mode`) |
 | 4 | *(SHOULD)* Rules from a sentence | `POST /v1/mandate/draft` with `{ text, current: Mandate }` | **MandateDraftResult** |
 
-**AI service → backend** (`http://api:8000/internal/v1`)
+**AI service → backend** (`http://api:8080/internal/v1` in the cluster)
 
 | # | When | AI sends | Backend returns |
 |---|---|---|---|
 | 5 | Agent starts | `GET /tools` | **ToolSpec[]** |
 | 6 | Agent calls a tool | `POST /tools/{name}` with **ToolCall** | **ToolResult** (the backend also writes the trace step) |
 | 7 | *(optional)* Agent note | `POST /runs/{run_id}/notes` with `{ text }` | `204` |
-| 8 | Agent is done | `POST /runs/{run_id}/complete` with **AgentCompletion** | **202** |
-| 9 | Agent gave up | `POST /runs/{run_id}/fail` with `{ reason }` | **202** (backend runs FALLBACK) |
+| 8 | Agent is done | `POST /runs/{run_id}/complete` with **AgentCompletion** | `204` |
+| 9 | Agent gave up | `POST /runs/{run_id}/fail` with `{ reason, detail? }` | `204` (backend runs FALLBACK) |
 
-**MCP (bonus criterion, SHOULD):** the same tools are exposed as an **MCP server** at `http://api:8000/internal/mcp`, with identical names, schemas and results.
+Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`. A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
+
+**Backend settings:** `AI_URL`, `INTERNAL_TOKEN` (agent mode is on only when it is set; otherwise runs are FALLBACK and synchronous), `AGENT_MAX_TOOL_CALLS` (8), `AGENT_DEADLINE_S` (60), `AGENT_START_TIMEOUT_S` (5), `EXPLAIN_TIMEOUT_S` (10).
+
+**MCP (bonus criterion, SHOULD):** the same tools are exposed as an **MCP server** at `http://api:8080/internal/mcp`, with identical names, schemas and results.
 
 ### 3.2 Tools (hosted by the backend, read-only)
 
@@ -472,8 +471,8 @@ Every call is **bound to a run** and answered from the state at the run's `finan
 | Tool | `arguments` | `result` | Trace label (backend) |
 |---|---|---|---|
 | `get_mandate` | `{}` | **Mandate** | "Reading your rules (v2)" |
-| `get_forecast` | `{}` | `{ summary: ForecastSummary, drivers: Driver[], planned_events: PlannedEvent[] }` (no daily rows) | "Recomputing your cash for the next 91 days" |
-| `explain_drivers` | `{ date: Date }` | `{ outflows: Outflow[], revenue_estimate: Money, closed: bool }` within ±7 days | "Looking at what happens around 3 Jul" |
+| `get_forecast` | `{}` | `{ cash_floor: Money, summary: ForecastSummary, drivers: Driver[], planned_events: PlannedEvent[] }` (no daily rows) | "Recomputing your cash for the next 91 days" |
+| `explain_drivers` | `{ date: Date }` | `{ date, closed: bool, revenue_estimate: Money, outflows: Outflow[], days: { date, closing: Money }[] }` within ±7 days | "Looking at what happens around 3 Jul" |
 | `get_revenue_model` | `{}` | **RevenueModel** | "Checking your usual weekly takings" |
 | `list_outflows` | `{ movable_only?: bool }` | **Outflow[]** | "Listing payments that could wait" |
 | `find_reschedule_options` | `{}` | **PlanResult** | "Looking for payments that can wait" |
@@ -503,7 +502,7 @@ Every call is **bound to a run** and answered from the state at the run's `finan
 
 #### ToolResult
 `{ ok: bool, result: object?, error: { code, message }?, financial_version: int, tool_calls_used: int }`
-Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHED`, `RUN_CLOSED`.
+Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHED`, `RUN_CLOSED`. Tool errors come back as `200` with `ok: false`, not as HTTP errors.
 
 #### PlanResult (result of `find_reschedule_options`)
 
@@ -547,6 +546,8 @@ Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHE
 #### ExplainResult
 `{ headline: string (≤ 200), items: { recommendation_id, text (≤ 300) }[], source: "MODEL" | "REPLAY" | "TEMPLATE", fallback_reason: string? }`
 
+The backend stores the headline and item texts with `source` (`Run.result.headline`, `Overview.headline`, `Recommendation.explanation`). Items missing from the result keep the backend template. Receipts keep the text from proposal time.
+
 **Rule:** every number and date in the texts must appear in the facts sent, and phrases like "transferred", "sent", "guaranteed" or "approved by the bank" are rejected. Otherwise the AI service returns template texts. If `/v1/explain` fails or times out (10 s), the backend uses its own templates.
 
 #### MandateDraftResult *(SHOULD)*
@@ -560,7 +561,7 @@ Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHE
 1. **Backend:** stores the event (e.g. `CLOSURE_PLANNED`), creates the run (`QUEUED`), returns `202`, calls `POST ai/v1/agent/runs` (run → `RUNNING`).
 2. **AI:** `GET /internal/v1/tools`, then loops: LLM → `POST /internal/v1/tools/{name}`. The backend writes each call to the trace.
 3. **AI:** `POST /internal/v1/runs/{id}/complete` (or `/fail`).
-4. **Backend:** validates proposals → policy → lanes → executes `DONE_WITHIN_MANDATE` (simulated) → re-forecasts → `POST ai/v1/explain` → stores → run `SUCCEEDED` (`mode: AGENT`).
+4. **Backend:** validates proposals → policy → lanes → executes `DONE_WITHIN_MANDATE` (simulated) → re-forecasts → stores (run still shows `RUNNING`) → `POST ai/v1/explain` outside the transaction → stores the texts → run `SUCCEEDED` (`mode: AGENT`).
 5. **FALLBACK** (on `/fail`, the deadline passing, or the AI service being unreachable): the backend runs forecast → planner → credit sizing itself, then step 4 (`mode: FALLBACK`).
 
 ---
