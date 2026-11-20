@@ -57,6 +57,29 @@ One imported bank statement line.
 | `category` | enum | `CARD_REVENUE`, `VARIABLE_COST`, `RENT`, `PAYROLL`, `SOCIAL_SECURITY`, `TAX`, `UTILITIES`, `PARTNER_TRANSFER`, `OTHER` |
 | `recurring_id` | UUID? | Link to the detected recurring payment, if any |
 
+### Bank statement table (`STATEMENT_SOURCE=db`)
+
+With `STATEMENT_SOURCE=db` the backend reads the statement from table `bank_statement_lines` in the `DATABASE_URL` database instead of the CSV file. The data team creates and loads the table; the backend only reads it (it never creates, changes or drops it). It is read at startup and on `POST /demo/reset`.
+
+One row per CSV line, the CSV's text unchanged, so parsing (categories, CHF conversion, checks) and transaction ids are the same as for the CSV file:
+
+| Column | Type | CSV column |
+|---|---|---|
+| `line_no` | integer, primary key | line in the CSV file (the header is line 1, the first booking line 2); orders same-day bookings |
+| `account_number` | text | Account Number |
+| `booking_date` | text | Booking Date (`dd.mm.yy`) |
+| `value_date` | text | Value Date (`dd.mm.yy`) |
+| `transaction_type` | text | Transaction Type |
+| `payment_reference` | text | Payment Reference |
+| `beneficiary_payer` | text | Beneficiary/Payer |
+| `counterparty_account` | text | Counterparty Account |
+| `bank_code` | text | Bank Code |
+| `amount` | text | Amount (German format, e.g. `-279,16`) |
+| `currency` | text | Currency |
+| `info` | text | Info |
+
+NULL is read as an empty string. A missing or empty table, an invalid row or an unreachable database leaves the state unloaded (`STATE_NOT_LOADED`); there is no fallback to the CSV.
+
 ### Outflow
 A known future payment in the forecast window (from a detected recurring payment or entered by the owner).
 

@@ -132,7 +132,7 @@ flowchart LR
 
 - Only the web Route is public. nginx proxies **only `/api/v1/*`**, so `/internal/*` and `/internal/mcp` are never reachable from the browser.
 - Configuration (Secret/ConfigMap):
-  - api: `DATABASE_URL`, `AI_URL`, `INTERNAL_TOKEN`, `DEMO_MODE`, `DEMO_AS_OF_DATE=2025-05-05`
+  - api: `DATABASE_URL`, `AI_URL`, `INTERNAL_TOKEN`, `DEMO_MODE`, `DEMO_AS_OF_DATE=2025-05-05`, `STATEMENT_SOURCE=csv|db`
   - ai: `API_INTERNAL_URL`, `INTERNAL_TOKEN`, `LLM_BASE_URL`, `LLM_MODEL`, `LLM_API_KEY`, `LLM_MODE`
 
 ### 1.5 Who owns which data

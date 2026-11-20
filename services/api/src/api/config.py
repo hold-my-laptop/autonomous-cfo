@@ -1,8 +1,9 @@
 from datetime import date
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal, Self
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -16,6 +17,7 @@ class Settings(BaseSettings):
 
     demo_mode: bool = True
     demo_as_of_date: date = date(2025, 5, 5)
+    statement_source: Literal["csv", "db"] = "csv"
     statement_path: Path = REPO_ROOT / "data" / "pizzeria-amalfi-bank-statement-2025-v6.csv"
     opening_balance: int = 250_000
     forecast_horizon_days: int = 91
@@ -35,6 +37,12 @@ class Settings(BaseSettings):
     explain_timeout_s: float = 10.0
     model_health_timeout_s: float = 20.0
     state_load_retry_s: float = 5.0
+
+    @model_validator(mode="after")
+    def _statement_db_needs_database(self) -> Self:
+        if self.statement_source == "db" and not self.database_url:
+            raise ValueError("STATEMENT_SOURCE=db needs DATABASE_URL")
+        return self
 
     @property
     def agent_enabled(self) -> bool:
