@@ -2,8 +2,10 @@
 .RECIPEPREFIX := >
 COMPOSE := docker compose -f infra/docker-compose.yml
 COMPOSE_APP := $(COMPOSE) --profile app
+OC_NS := autonomous-cfo
+STATEMENT := data/pizzeria-amalfi-bank-statement-2025-v6.csv
 
-.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema
+.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy
 
 up:
 > test -f infra/.env || cp infra/.env.example infra/.env
@@ -41,3 +43,19 @@ e2e:
 
 schema:
 > @echo "schema: not implemented yet (Backend)"
+
+oc-api-build:
+> oc apply -n $(OC_NS) -f deploy/openshift/api/01-imagestream.yaml -f deploy/openshift/api/02-buildconfig.yaml
+> oc start-build api -n $(OC_NS) --follow
+
+oc-api-deploy:
+> oc create configmap api-statement -n $(OC_NS) --from-file=$(STATEMENT) --dry-run=client -o yaml | oc apply --server-side -n $(OC_NS) -f -
+> oc apply -n $(OC_NS) -f deploy/openshift/api/03-deployment.yaml -f deploy/openshift/api/04-service.yaml
+> oc rollout status deployment/api -n $(OC_NS) --timeout=180s
+
+oc-db-secret:
+> @oc get secret db -n $(OC_NS) >/dev/null 2>&1 || { pw=$$(openssl rand -hex 16); oc create secret generic db -n $(OC_NS) --from-literal=POSTGRESQL_USER=app --from-literal=POSTGRESQL_DATABASE=app --from-literal=POSTGRESQL_PASSWORD=$$pw --from-literal=DATABASE_URL=postgresql://app:$$pw@db:5432/app; }
+
+oc-db-deploy: oc-db-secret
+> oc apply -n $(OC_NS) -f deploy/openshift/db/
+> oc rollout status deployment/db -n $(OC_NS) --timeout=180s
