@@ -1,22 +1,28 @@
 # Recipe lines start with ">" instead of a tab (safe to paste anywhere).
 .RECIPEPREFIX := >
 COMPOSE := docker compose -f infra/docker-compose.yml
+COMPOSE_APP := $(COMPOSE) --profile app
 
-.PHONY: up down logs ps seed demo-reset test eval e2e schema
+.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema
 
 up:
 > test -f infra/.env || cp infra/.env.example infra/.env
 > $(COMPOSE) up -d --build --wait
 > $(COMPOSE) ps
 
+up-app:
+> test -f infra/.env || cp infra/.env.example infra/.env
+> $(COMPOSE_APP) up -d --build --wait
+> $(COMPOSE_APP) ps
+
 down:
-> $(COMPOSE) down
+> $(COMPOSE_APP) down
 
 logs:
-> $(COMPOSE) logs -f --tail=100
+> $(COMPOSE_APP) logs -f --tail=100
 
 ps:
-> $(COMPOSE) ps
+> $(COMPOSE_APP) ps
 
 seed:
 > @echo "seed: not implemented yet (Backend)"
