@@ -5,94 +5,64 @@ Every call is bound to a RUNNING run and the financial version it started on, is
 Tools never change financial data."""
 
 import json
-from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import date, timedelta
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import Field, ValidationError
 
 from api.config import Settings
 from api.decisions import Tracer, moved_alone_today
 from api.domain.credit import size_credit_line
 from api.domain.forecast import ForecastInput, compute_forecast
-from api.domain.models import Category, CreditLine, Run, RunStatus
+from api.domain.models import Category, CreditLine, Run, RunKind, RunStatus
 from api.domain.policy import evaluate_credit, evaluate_move
 from api.money import Money, format_eur
+from api.proof_tools import PROOF_TOOLS
 from api.schemas import Driver, ForecastSummary, Mandate, Outflow, PlannedEvent, RevenueModel
 from api.state import DemoState
+from api.tool_base import Args, NoArgs, Tool, ToolError, ToolOutput
 
 
-class ToolError(Exception):
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-
-
-class _Args(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class NoArgs(_Args):
-    pass
-
-
-class ExplainArgs(_Args):
+class ExplainArgs(Args):
     day: date = Field(
         alias="date", description="Business date (YYYY-MM-DD) to look around, ±7 days"
     )
 
 
-class ListOutflowsArgs(_Args):
+class ListOutflowsArgs(Args):
     movable_only: bool = Field(default=False, description="Only payments that may be postponed")
 
 
-class MoveArg(_Args):
+class MoveArg(Args):
     outflow_id: UUID
     to_date: date
 
 
-class SimulateArgs(_Args):
+class SimulateArgs(Args):
     moves: list[MoveArg] = Field(min_length=1, description="Moves from find_reschedule_options")
 
 
-class SizeCreditArgs(_Args):
+class SizeCreditArgs(Args):
     after_moves: list[MoveArg] = Field(
         default_factory=list, description="Moves to assume first (from find_reschedule_options)"
     )
 
 
-class CreditArg(_Args):
+class CreditArg(Args):
     amount: Money
     available_from: date
 
 
-class ProposalArg(_Args):
+class ProposalArg(Args):
     kind: Literal["RESCHEDULE_PAYMENT", "CREDIT_LINE"]
     move: MoveArg | None = None
     credit_line: CreditArg | None = None
 
 
-class CheckPolicyArgs(_Args):
+class CheckPolicyArgs(Args):
     proposal: ProposalArg
-
-
-@dataclass(frozen=True)
-class ToolOutput:
-    result: Any
-    label: str
-    result_label: str | None = None
-    log: dict | None = None
-
-
-@dataclass(frozen=True)
-class Tool:
-    name: str
-    description: str
-    args: type[_Args]
-    handler: Callable[[DemoState, Run, Any, Settings], ToolOutput]
 
 
 def _day(d: date) -> str:
@@ -347,7 +317,7 @@ def _check_policy(state, run, args: CheckPolicyArgs, settings) -> ToolOutput:
     )
 
 
-TOOLS: dict[str, Tool] = {
+CASH_TOOLS: dict[str, Tool] = {
     t.name: t
     for t in (
         Tool(
@@ -436,15 +406,25 @@ def _inline(schema: dict) -> dict:
     return resolve(schema)
 
 
-def tool_specs() -> list[dict]:
+TOOLS: dict[RunKind, dict[str, Tool]] = {RunKind.CASH: CASH_TOOLS, RunKind.PROOF: PROOF_TOOLS}
+
+
+def tool_specs(kind: RunKind = RunKind.CASH) -> list[dict]:
+    """The tools a run of this kind may call: a Proof run gets only the Proof tools."""
     return [
         {
             "name": t.name,
             "description": t.description,
             "input_schema": _inline(t.args.model_json_schema()),
         }
-        for t in TOOLS.values()
+        for t in TOOLS[kind].values()
     ]
+
+
+def tool_limit(run: Run, settings: Settings) -> int:
+    if run.kind is RunKind.PROOF:
+        return settings.investigation_max_tool_calls
+    return settings.agent_max_tool_calls
 
 
 def _error(code: str, message: str, state: DemoState, used: int) -> dict:
@@ -490,21 +470,19 @@ def call_tool(
             "INVALID_ARGUMENT", "call_id was already used for a different call", state, used
         )
 
-    tool = TOOLS.get(name)
-    if used >= settings.agent_max_tool_calls:
-        response = _error(
-            "TOOL_LIMIT_REACHED",
-            f"limit of {settings.agent_max_tool_calls} calls reached",
-            state,
-            used,
-        )
+    tool = TOOLS[run.kind].get(name)
+    limit = tool_limit(run, settings)
+    if used >= limit:
+        response = _error("TOOL_LIMIT_REACHED", f"limit of {limit} calls reached", state, used)
     elif state.financial_version != run.started_financial_version:
         response = _error("STALE_RUN", "the data changed since this run started; stop", state, used)
     else:
         used += 1
         tracer = Tracer(run)
         if tool is None:
-            response = _error("UNKNOWN_TOOL", f"no tool {name!r}", state, used)
+            response = _error(
+                "UNKNOWN_TOOL", f"no tool {name!r} for a {run.kind.value} run", state, used
+            )
             tracer.add("TOOL_CALL", f"Tool {name[:60]}: unknown tool", now)
         else:
             try:

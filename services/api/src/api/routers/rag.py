@@ -12,6 +12,7 @@ from api.rag import retrieve
 
 router = APIRouter(tags=["assistant"])
 
+
 class AskRequest(BaseModel):
     question: str = Field(min_length=3, max_length=500)
 
@@ -28,10 +29,17 @@ def _listing(sources: list[dict[str, str]], reason: str) -> AskResponse:
     """Used when the AI service cannot be reached: the retrieved records, by relevance."""
     items = sources[:5]
     head = f"Records matching your question ({len(items)}):"
-    lines = [f"• {s['date']} · {s['counterparty']} · {format_eur(int(s['amount_cents']))} ({s['category']})"
-             for s in items]
-    return AskResponse(answer="\n".join([head, *lines]), sources=items,
-                       answer_source="TEMPLATE", fallback_reason=reason)
+    lines = [
+        f"• {s['date']} · {s['counterparty']} · "
+        f"{format_eur(int(s['amount_cents']))} ({s['category']})"
+        for s in items
+    ]
+    return AskResponse(
+        answer="\n".join([head, *lines]),
+        sources=items,
+        answer_source="TEMPLATE",
+        fallback_reason=reason,
+    )
 
 
 @router.post("/assistant/ask", response_model=AskResponse)
@@ -41,8 +49,11 @@ def ask(body: AskRequest, repository: RepositoryDep, agent_client: AgentClientDe
     with repository.read() as state:
         sources = retrieve(state, body.question)
     if not sources:
-        return AskResponse(answer="I found no financial records matching this question.",
-                           sources=[], answer_source="TEMPLATE")
+        return AskResponse(
+            answer="I found no financial records matching this question.",
+            sources=[],
+            answer_source="TEMPLATE",
+        )
     try:
         result = agent_client.ask({"question": body.question, "sources": sources})
         return AskResponse.model_validate(result)
