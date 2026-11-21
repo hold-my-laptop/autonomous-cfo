@@ -242,6 +242,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
   7. the activity log (B33) verifies as a chain and lists the owner's approval and the blocked payroll request;
   8. reset → S0 again, with a new log.
 - It must pass in both FALLBACK and AGENT (fake AI) modes.
+- **As built:** `tests/test_scenario.py`, one test parametrized over `FALLBACK` (no `INTERNAL_TOKEN`) and `AGENT` (a fake AI service that accepts the run; the test calls the tools and `/complete` like the model). It asserts S0, the two lanes with CHF-06 → 30 Jul and the credit line of 2000000 from 27 Jun, S2 (27 Jun −583291, 38 days, lowest −2108111 on 2 Aug), S3 without a breach, the payroll request `NOT_ALLOWED`/`BLOCKED`, the backtest (S1 lowest −2276082 on 3 Jul, 50 days; actual 15 Jun −884869, lowest −2209760 on 3 Jul, 48 days; error −66322, 300 bp), the log's hash chain recomputed with the documented formula (owner approval, executed move, blocked payroll request; proposals by `AGENT` with `vero-llm` or `SYSTEM`), and a reset back to S0 with the same single first log entry. Passes in memory and on PostgreSQL.
 
 ### B31 · Logging — SHOULD
 - Structured logs with `run_id`. Never log full IBANs or the internal token.
