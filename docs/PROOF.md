@@ -53,7 +53,7 @@ Option B as in Phase 1: the backend owns data, tools and math; the AI service ru
 | **Evidence document** | Sets or explains amounts: lease, contract, terms, price list, notice. Stored, searched, cited; never a trigger by itself |
 | **Difference** | A billed amount or unit price that doesn't match Cost Memory (§5.3) |
 | **Known reason** | A stored price list that gives exactly the new price. CHECK can use it without the model. CHECK **never interprets clauses** |
-| **Finding** | One difference and everything Vero did about it: classification, trace, impact, evidence, propagation, actions |
+| **Finding** | One difference and everything Vero did about it: classification, trace, impact, evidence, propagation, actions. Schema name `ProofFinding` (Phase 1 already has a `Finding`: the overview's ANALYSED facts) |
 | **Routine check** | A recurring payment compared with its contract and found matching. Shown in the digest, not counted as a change |
 | **Proof run** | What an upload starts: extraction → CHECK → investigation of each unexplained finding → done. Run kind `PROOF`, next to Phase 1's `CASH` |
 | **Investigation** | One agent, one finding, at most 6 read-only tool calls, 60 s |
@@ -158,7 +158,7 @@ upload → EXTRACTING → CHECKING ─┬─► no difference ..................
                                 ├─► verified (known reason) ................. done (digest)
                                 └─► unexplained → INVESTIGATING → classified ─► PENDING_APPROVAL → RESOLVED
 ```
-Finding status: `INGESTED → EXTRACTED → CHECKED → (INVESTIGATING) → CLASSIFIED → PENDING_APPROVAL → RESOLVED`. Every transition is a trace step. One run at a time across `CASH` and `PROOF` (`RUN_IN_PROGRESS`).
+Finding status: `INGESTED → EXTRACTED → CHECKED → (INVESTIGATING) → CLASSIFIED → PENDING_APPROVAL → RESOLVED`. Every transition is a trace step. One run at a time across `CASH` and `PROOF`: an upload while a run is in progress gets 409 `RUN_IN_PROGRESS` before anything is stored. Uploaded PDFs (at most 5 MB) are stored behind the repository (PostgreSQL `bytea`), not on disk: the API is a single replica with no volume.
 
 ### 5.3 SENSE: extraction (agreed with the AI team)
 - The backend sends `{document_id, filename, content_base64, known_counterparties}` to `POST ai/v1/documents/extract` (internal token, 30 s).
@@ -167,10 +167,12 @@ Finding status: `INGESTED → EXTRACTED → CHECKED → (INVESTIGATING) → CLAS
 - **The backend checks everything again and decides:** each value re-parsed from its printed text; net per line = quantity × unit price (half-up); VAT per rate on the totals ±1 cent; gross = net + VAT on the totals; the counterparty match supported by the printed name; the date not after `as_of`.
 - **On failure:** a demo document falls back to its fixture values (run `FALLBACK`, reason in the trace); any other document ends `EXTRACTION_FAILED`. The stage demo uses the live extraction.
 - A rent adjustment is extracted as fields (`old_amount`, `new_amount`, `effective_from`, `frequency`), not as a line.
+- Unreadable input gets 422 with a code (`NO_TEXT_LAYER` and the others in `services/ai/src/ai/extraction.py`; limits 15 MB, 20 pages). Implemented in the AI service (PR #23).
+- The AI team's live test (`test_extract_live.py`) runs on our demo PDFs with the `expected.json` the PDF generator writes (P03).
 
 ### 5.4 CHECK: what counts as a difference
 - **Fixed recurring costs** (rent, utilities, CHF tranche): the billed amount against Cost Memory, ±2 % as in Phase 1's recurring detection; the CHF tranche in CHF. For a rent adjustment, `new_amount` from `effective_from` is the billed amount.
-- **Supplier invoices:** unit price per line against the **previous invoice** of the same supplier (the difference); then the price list valid on the invoice date (the known reason → `verified`). A line never seen before is a difference.
+- **Supplier invoices:** unit price per line against the **previous invoice** of the same supplier (the difference); then the price list valid on the invoice date (the known reason → `verified`). A goods line never seen before is explained if it is priced as in the valid price list; a line on no price list (the surcharge) is a difference. Preloaded invoices are checked in date order, so AS-11607 is compared with AS-72217.
 - **Routine checks:** each statement payment of a recurring item with a contract behind it is compared with the contract amount. A match is a routine check; a mismatch is a difference.
 - CHECK never reads a clause. Applying a clause is the investigation's job; otherwise the backend would settle the hero case alone.
 
@@ -219,7 +221,7 @@ Email and document text is untrusted data: returned as data, never followed as a
 - **Never withhold rent.** Vero recommends paying the contractual rent and asking in writing for the basis of the increase; arrears would put the lease at risk.
 - **Only `execute_move`, `execute_credit` and the new `execute_amount_change` change the schedule.** An outflow keeps its original amount, and the backtest restores it as it restores dates: simulated amount changes never change the backtest.
 - An executed amount change bumps `financial_version`; a pending Phase 1 recommendation then becomes `STALE_RECOMMENDATION`. Demo order: Vero Proof first, then the closure story.
-- **The digest** lists the findings the owner hasn't reviewed and the latest routine checks. No date window: the demo clock is fixed at 5 May; "weekly" is only the label.
+- **The digest** lists the findings the owner hasn't acknowledged or decided yet and the latest routine checks. A quiet finding leaves it with one tap (`POST /findings/{id}/acknowledge`); a finding with actions leaves it when its actions are decided. No date window: the demo clock is fixed at 5 May; "weekly" is only the label.
 - Supplier communication is in German (English available). Language is neutral and evidence-based, never accusatory.
 
 ---
@@ -302,7 +304,10 @@ Our understanding, **not legal advice**; to be checked by someone who knows Germ
 - Hero outcome: the whole increase disputed (the VPI below the threshold).
 - Money in cents, percentages in basis points, unit prices and quantities as `Decimal` strings.
 
+- Extraction implemented by the AI team as agreed (PR #23), including its 422 codes.
+- The investigation tools reuse the RAG assistant's keyword search (`api/rag.py`), split into a shared ranking function.
+
 **Still to agree**
 1. The investigation contract with the AI team: start payload, tool list per run (`GET /tools?run_id=…`), the `submit_finding` completion.
-2. The 422 codes of the extraction endpoint.
+2. The RAG assistant's field renames (`amount_cents` → `amount`, `UPPER_SNAKE` kinds), which the browser reads.
 3. The VPI values and the domain notes (§8), checked before the pitch.

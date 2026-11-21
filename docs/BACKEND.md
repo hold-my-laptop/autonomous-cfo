@@ -308,18 +308,21 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 - **Load-time validation** (a broken fixture fails the state load like a broken statement):
   - every invoice total equals a statement payment with the same counterparty, date, amount and invoice number in the reference;
   - the P08 arithmetic holds: net per line = quantity × unit price (half-up), VAT per rate on the totals, gross = net + VAT on the totals;
-  - every document is dated before `as_of`; every reference (attachment, clause, price list item) exists.
+  - every document is dated before `as_of`; every reference (attachment, clause, price list item) exists;
+  - running CHECK over the preloaded invoices **in date order** gives exactly the intended differences: every goods line of a later invoice already appears on the previous one or on the valid price list, so only the price changes and the surcharge stand out.
 - **Done when:** a test cross-checks every invoice against the statement (FLV-16261 = 103721, FLV-94818 = 89708, AS-80497 = 58474, AS-72217 = 68723, AS-11607 = 62403) and a broken total fails the load.
 
 ### P03 · PDF generator — MUST
 - `services/api/scripts/make_proof_pdfs.py`, run with `uv run --with reportlab` (not a runtime dependency): renders every document from P02 into `fixtures/proof/pdf/<doc_id>.pdf` and writes the box of every rendered number and clause back as highlight boxes, so they are exact by construction. reportlab measures from the bottom-left: boxes are converted to the top-left origin before they are stored.
 - PDFs have a real text layer (the model reads text, not images). Fixed metadata (creation date, ids) so a re-run gives identical files; the SHA-256 of each PDF is stored in the fixture for P08's fallback.
-- **Done when:** a re-run changes no file, and the stored box for "4.104,00 €" on the rent adjustment equals the box `pypdfium2` reports for that text (top-left origin).
+- It also writes `fixtures/proof/pdf/expected.json` in the AI team's format (`services/ai/tests/test_extract_live.py`: file, `known_counterparties`, and per field the value, printed text, page and box), so their live test runs on the demo PDFs with `EXTRACT_FIXTURES` pointing at that folder. No hand-written expected values.
+- **Done when:** a re-run changes no file; the stored box for "4.104,00 €" on the rent adjustment is within 2 points of the box `pypdfium2` reports for that text (top-left origin); `expected.json` lists every uploadable demo document.
 
 ### P04 · Cost Memory — MUST
 - **CostItem:** counterparty, `cost_ref` (`RENT`, `UTIL`, `XFER`, or the supplier), expected amount and currency, unit, sources (`STATEMENT`, `CONTRACT`, `PRICE_LIST`, `INVOICE`) with evidence refs.
 - Built from Phase 1's recurring detection (B04) on the rows before `as_of`, plus the fixture's documents and price lists. It is **base data** like the imported statement (rebuilt on load and reset); only changeable state is persisted.
 - Read API: `GET /api/v1/cost-memory`, `GET /api/v1/documents`, `GET /api/v1/documents/{id}` (metadata, pages, highlight boxes), `GET /api/v1/documents/{id}/file` (the PDF). The mailbox is **not** listed publicly; a document becomes visible when a finding cites it.
+- **Contracts with the feature:** CostItem and Document go into DATA_CONTRACTS §2 and `openapi.json` here, so the frontend can build against them early.
 - **Done when:** `RENT` expects 380000 (statement + lease), `XFER` expects 416667 CHF (statement + partnership agreement), Fattoria and Asimex items carry their list prices.
 
 ## Milestone G: check and engine
@@ -334,27 +337,31 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 ### P06 · CHECK — MUST
 - Input: a document's line items, or the new statement lines of a recurring item. Output: no finding, `verified`, or `unexplained`.
 - **Fixed recurring costs:** billed amount vs. the CostItem, ±2 % as in B04 (CHF compares the CHF amount).
-- **Supplier invoices:** unit price per line vs. the **previous invoice** from the same supplier (that is the difference); then the price list valid on the invoice date (that is the known reason). A line never seen before is a difference.
+- **Supplier invoices:** unit price per line vs. the **previous invoice** from the same supplier (that is the difference); then the price list valid on the invoice date (that is the known reason). A goods line never seen before is explained if it is priced as in the valid price list; a line on no price list (the surcharge) is a difference.
 - **Known reasons** (→ `verified` with evidence, no agent): a stored price list that gives exactly the new price. **CHECK never interprets clauses**: choosing and applying a clause is the investigation's job.
 - **Routine checks:** each statement payment of a recurring item that has a contract behind it (rent, utilities, CHF tranche) is compared with the contract amount (the CHF tranche in CHF, its EUR amount shown with the row's rate). A match is a routine check record, not a finding; a mismatch is a difference like any other.
-- At load and reset, CHECK runs on the preloaded documents and the statement rows before `as_of`.
+- At load and reset, CHECK runs on the preloaded documents **in document date order** (AS-11607 is compared with AS-72217, not AS-80497) and on the statement rows before `as_of`.
 - **Done when:** rent adjustment → `unexplained` (30400, 800 bps); FLV-94818 vs FLV-16261 and AS-72217 vs AS-80497 → `verified` (price lists); AS-11607 → `unexplained` (new line); the Apr rent, utilities and CHF tranche → routine checks passed, no findings.
 
 ### P07 · Findings — MUST
 - **Finding** as in the blueprint's schema: classification and history, status, counterparty, `cost_ref`, billing period, source document, line item, trace (via `run_id`), financial impact, evidence refs, propagation, recommendation ids.
 - **Status:** `INGESTED → EXTRACTED → CHECKED → (INVESTIGATING) → CLASSIFIED → PENDING_APPROVAL → RESOLVED`; every transition is a trace step.
 - Persisted behind the repository (in memory and PostgreSQL), `SCHEMA_VERSION` → 5.
-- `GET /api/v1/findings?classification=&status=`, `GET /api/v1/findings/{id}`.
-- **Done when:** findings round-trip in both repositories, and a reset recreates the preloaded findings identically.
+- `GET /api/v1/findings?classification=&status=`, `GET /api/v1/findings/{id}`, `POST /api/v1/findings/{id}/acknowledge` (`Idempotency-Key`; the owner's one tap on a quiet finding: it leaves the digest; `NOT_PENDING` if already acknowledged or not quiet). Findings with actions leave the digest when their actions are decided (P14).
+- **Schema name `ProofFinding`:** `Finding` is already Phase 1's ANALYSED fact (`schemas.py`, DATA_CONTRACTS §2.2), and OpenAPI component names must be unique. The path stays `/findings`. Written into DATA_CONTRACTS §2 and `openapi.json` with this feature.
+- **Done when:** findings round-trip in both repositories, a reset recreates the preloaded findings identically, and acknowledging the Fattoria finding removes it from the digest.
 
 ### P08 · Document upload and LLM extraction — MUST
-- `POST /api/v1/documents` (multipart PDF, size and page limits, `Idempotency-Key`; `fastapi[standard]` already brings multipart support). The backend stores the file and starts a **Proof run** (P10): extracting → checking → investigating (only if needed) → done, each phase a trace step, so the UI can show progress.
+- `POST /api/v1/documents` (multipart PDF, at most 5 MB, `Idempotency-Key`; `fastapi[standard]` already brings multipart support). The backend stores the file and starts a **Proof run** (P10): extracting → checking → investigating (only if needed) → done, each phase a trace step, so the UI can show progress.
+- **While another run is in progress** (either kind) → 409 `RUN_IN_PROGRESS`, checked before anything is stored, as for Phase 1 events.
+- **Storage:** the PDF bytes live behind the repository (PostgreSQL `bytea` in its own table; in memory for the in-memory repository). The API is a single replica with no volume, so not on disk. Reset deletes uploads.
 - Returns `202 {document_id, run_id}`; the findings appear on the run and the document. The same file (SHA-256) or the same counterparty and document number again → `DOCUMENT_ALREADY_PROCESSED` (409).
 - **Extraction by the AI service** (agreed with the AI team; full shapes in DATA_CONTRACTS §3): `POST ai/v1/documents/extract {document_id, filename, content_base64, known_counterparties: [{id, name, aliases[]}]}`, `INTERNAL_TOKEN`, answered within 30 s.
   - The AI service reads the text layer with `pypdfium2` (already a dependency). The model never writes numbers or boxes: it returns, per field, the printed text and the line it is on; code finds that text, takes its box from the PDF and parses the value (`1.234,56` → `"123456"`, `01.06.2025` → `"2025-06-01"`). Schema-constrained JSON, no tools, document text passed as data.
   - The AI service runs the arithmetic checks itself and gives the model one correction round, inside the 30 s.
   - **Response:** `{document_id, status: OK | FAILED, errors[], pages[{page, width, height}], doc_type, counterparty, document_number, date, period{from, to}, effective_from, currency, lines[], totals{net, vat, gross}}`; a rent adjustment adds `old_amount`, `new_amount`, `frequency`. Every value is `{value, source: {page, text, box}}`; absent fields are null. The counterparty also carries `matched_id` (one of the `known_counterparties`, or null).
-  - **Unreadable input** (no text layer, encrypted, more than 20 pages) → 422 with a code (`NO_TEXT_LAYER`, …). **Model trouble or failed checks** → 200 with `status: FAILED` and `errors`.
+  - **Unreadable input** → 422 `{code, message}` (`NO_TEXT_LAYER` and the others defined in `services/ai/src/ai/extraction.py`; limits there: 15 MB, 20 pages). **Model trouble or failed checks** → 200 with `status: FAILED` and `errors`.
+  - Implemented on the AI side (PR #23); the request and response go into DATA_CONTRACTS §3 with this feature.
 - **The backend validates every value anyway** (its checks are the authority):
   - each value's `source.text` parses (existing German parsers) to the same value;
   - net per line = quantity × unit price, rounded half-up to the cent;
@@ -373,7 +380,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 - Same registry and route as B22, with tools **scoped by run kind**: a Proof run can't call Cash tools and the reverse (`UNKNOWN_TOOL`). Limit per investigation: `INVESTIGATION_MAX_TOOL_CALLS=6`.
 - `GET /internal/v1/tools` today lists every tool with no run (`routers/internal.py`), and the AI loop offers all of them. It becomes `GET /tools?run_id=…`, returning only that run's kind (without `run_id`: the Cash tools, so the current AI service keeps working).
 - Tools (read-only, deterministic over the fixture):
-  - `search_inbox(query, counterparty, date_range)`, `search_documents(query, doc_type)`: keyword search with a fixed ranking, built on the **same lexical retrieval module as the RAG assistant** (`api/rag.py`), not a second implementation; German aliases added (*Miete*, *Mieterhöhung*, *Mietanpassung*, *Nebenkosten*, *Logistikzuschlag*);
+  - `search_inbox(query, counterparty, date_range)`, `search_documents(query, doc_type)`: keyword search with a fixed ranking on the **same code as the RAG assistant** (`api/rag.py`). Today `retrieve()` builds its records from the Phase 1 state and scores them inline; P09 first splits out the term handling (`_terms`, stop words, aliases) and a generic `rank(query, items, text_of)`, which `retrieve()` and the new tools both call. The existing RAG tests must still pass. German aliases mapped to the same English terms on both sides (*miete*, *mieterhöhung*, *mietanpassung* → rent; *nebenkosten*; *logistikzuschlag* → surcharge), so an English query finds German emails;
   - `read_clause(doc_id, section)`: text, page and box;
   - `get_reference_index(name, periods)`: VPI or EUR/CHF, flagged as demo values;
   - `get_price_list(supplier, item, date)`;
@@ -384,6 +391,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 
 ### P10 · Proof runs and investigations — MUST
 - Runs get a `kind` (`CASH`, `PROOF`), a `document_id` and the finding ids; new trigger `DOCUMENT_UPLOADED`. A Proof run covers the whole document: extraction (P08), CHECK, and the investigation of each `unexplained` finding, one after another.
+- **After a restart** (`AgentOrchestrator.recover()` falls back every run left `RUNNING`): a Proof run interrupted during extraction uses the fixture values for a demo document or ends `EXTRACTION_FAILED`; one interrupted during an investigation finishes with the scripted investigation (P12). Reason `SERVICE_RESTARTED`.
 - An investigation starts through the AI service (`POST ai/v1/agent/runs` with the kind and the finding's facts; contract to agree with the AI team). One run at a time across both kinds (`RUN_IN_PROGRESS`), 60 s deadline per investigation, the same fallback reasons as Phase 1.
 - `/complete` for an investigation: `{classification, compute_call_id, evidence_refs[], explanation, letter_draft?, model, prompt_version, tool_calls}`; wrong shape → 422.
 - **AI service side** (Ege): a second loop configuration for investigations, with its own prompt and its own final tool `submit_finding` next to the existing `submit_proposals`; plus the extraction endpoint (P08).
@@ -425,8 +433,9 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 - **Done when:** approving the hero's actions resolves the finding with receipts and leaves the forecast unchanged; the VPI-above-threshold variant changes `RENT-06…08` and the forecast, and the backtest numbers stay as in B08.
 
 ### P15 · Weekly digest and overview — MUST
-- `GET /api/v1/digest`: the findings the owner hasn't reviewed yet and the latest routine checks, with **no date window** (the demo clock is fixed at 5 May; "weekly" is only the label). Counts: changes handled quietly, changes needing the owner, routine checks passed. One row each with label, short reason and staged actions.
+- `GET /api/v1/digest`: the findings the owner hasn't acknowledged (P07) or decided (P14) yet and the latest routine checks, with **no date window** (the demo clock is fixed at 5 May; "weekly" is only the label). Counts: changes handled quietly, changes needing the owner, routine checks passed. One row each with label, short reason and staged actions.
 - `GET /overview` gets a Proof block: open findings by label and the latest Proof run.
+- Digest goes into DATA_CONTRACTS §2 and `openapi.json` with this feature.
 - **Done when:** after reset the digest shows 3 changes handled quietly (Fattoria prices, Asimex prices, Asimex surcharge "after investigating"), 0 needing the owner and 3 routine checks passed (rent, utilities, CHF tranche); after the hero upload: 4 changes, 3 handled quietly, **1 needing the owner**, 3 routine checks.
 
 ### P16 · Letter text — SHOULD
@@ -436,9 +445,9 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 ## Milestone J: delivery
 
 ### P17 · Contracts and OpenAPI — MUST
-- DATA_CONTRACTS: the new **`Decimal`** type in §0 (a string matching `^-?[0-9]{1,9}(\.[0-9]{1,6})?$`, no floats, no thousands separators; used for unit prices and quantities); Finding, CostItem, Document (with highlight boxes), Digest, the new recommendation kinds, the extraction request/response with its 422 codes (agreed with the AI team, see P08) and the investigation start/complete payloads (§3), and the new error codes. ARCHITECTURE: the investigation sequence. `make schema`.
-- **RAG assistant contract** (AI team's `POST /api/v1/assistant/ask`), aligned with §0 before it merges: money fields named without a `_cents` suffix (the `Money` type already means cents), `UPPER_SNAKE` enum values (`TRANSACTION`, `OUTFLOW`, `INFLOW`), and the AI being unavailable returned as problem+json with its own code (e.g. `AI_UNAVAILABLE`, 503). The RAG branch touches `agent.py`, `config.py` and `openapi.json`: review and merge it **before P10**.
-- **Done when:** `test_openapi.py` passes and the AI team has agreed the §3 payloads (extraction included) and the RAG fixes.
+- The Phase 2 shapes are written **with the feature that creates them** (CostItem and Document with P04, `ProofFinding` with P07, extraction with P08, Digest with P15), so the frontend never waits for the end. P17 is what remains and the final check: the new **`Decimal`** type in §0 (a string matching `^-?[0-9]{1,9}(\.[0-9]{1,6})?$`, no floats, no thousands separators; used for unit prices and quantities), the new recommendation kinds, the investigation start/complete payloads (§3), the new error codes, and ARCHITECTURE's Proof run sequence. `make schema`.
+- **RAG assistant contract** (`POST /api/v1/assistant/ask`, merged): align its sources with §0: `amount_cents` → `amount` (the `Money` type already means cents), `kind` values in `UPPER_SNAKE` (`TRANSACTION`, `OUTFLOW`, `INFLOW`), and `sources` typed (today `dict[str, str]`, untyped in OpenAPI). Document the endpoint in DATA_CONTRACTS §2. When the AI service is down it already answers with the matching records (`answer_source: "TEMPLATE"`) instead of an error, so no new error code is needed. Agree the renames with the AI team (the browser reads these fields).
+- **Done when:** `test_openapi.py` passes and the AI team has agreed the investigation payloads and the RAG renames.
 
 ### P18 · Demo reset for both phases — MUST
 - Reset rebuilds Cost Memory, deletes uploads, findings and Proof runs, and recreates the preloaded findings (P06, P12) without any model call. Still under 5 s on PostgreSQL.
