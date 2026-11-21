@@ -10,7 +10,7 @@ metadata:
 spec:
   replicas: 1
   strategy:
-    type: Recreate  # SQLite on a RWO volume: one pod at a time
+    type: Recreate
   selector:
     matchLabels:
       app: mlflow
@@ -45,10 +45,10 @@ spec:
           resources:
             requests:
               cpu: 100m
-              memory: 512Mi
+              memory: 1Gi
             limits:
               cpu: "1"
-              memory: 1Gi
+              memory: 2Gi
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true

@@ -1,5 +1,3 @@
-# MLflow tracking server image (Red Hat UBI, non-root). No Git source: the Dockerfile is inline.
-#   oc start-build mlflow --follow
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
