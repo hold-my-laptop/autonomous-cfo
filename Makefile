@@ -5,7 +5,7 @@ COMPOSE_APP := $(COMPOSE) --profile app
 OC_NS := autonomous-cfo
 STATEMENT := data/pizzeria-amalfi-bank-statement-2025-v6.csv
 
-.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy oc-ai-secret oc-ai-build oc-ai-deploy oc-network
+.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy oc-ai-secret oc-ai-build oc-ai-deploy oc-network oc-monitoring oc-check
 
 up:
 > test -f infra/.env || cp infra/.env.example infra/.env
@@ -74,3 +74,8 @@ oc-ai-deploy: oc-ai-secret
 oc-network:
 > oc apply -n $(OC_NS) -f deploy/openshift/network/
 > oc get networkpolicy -n $(OC_NS) -l app.kubernetes.io/part-of=vero
+
+oc-monitoring:
+> oc apply -f deploy/openshift/monitoring/cluster-monitoring-config.yaml
+> for i in $$(seq 60); do oc get statefulset prometheus-user-workload -n openshift-user-workload-monitoring >/dev/null 2>&1 && break; sleep 5; done
+> oc rollout status statefulset/prometheus-user-workload -n openshift-user-workload-monitoring --timeout=300s
