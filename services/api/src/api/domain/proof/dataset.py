@@ -129,8 +129,9 @@ class RentAdjustment(_Model):
 
 
 class Highlight(_Model):
-    """Where a value or clause is printed: `ref` is a path such as `lines.l1.unit_price`,
-    `totals.gross`, `rent_adjustment.new_amount` or `clauses.s4_2`."""
+    """Where a value is printed: `ref` is a path such as `lines.l1.unit_price`, `totals.gross`,
+    `rent_adjustment.new_amount` or `price_list.p1` (the item's price). Text blocks and clauses
+    carry their own box."""
 
     ref: str
     page: int = Field(ge=1)
@@ -326,8 +327,7 @@ def _check_box(problems: _Problems, where: str, box: Box | None, page: Page | No
 
 
 def _highlight_targets(document: Document) -> set[str]:
-    targets = {f"clauses.{c.id}" for c in document.clauses}
-    targets |= {f"blocks.{b.id}" for p in document.pages for b in p.blocks}
+    targets = {"counterparty", "document_number", "date"}
     for line in document.lines:
         targets |= {f"lines.{line.id}.{f}" for f in LineItem.model_fields if f != "id"}
     if document.totals is not None:
@@ -336,7 +336,6 @@ def _highlight_targets(document: Document) -> set[str]:
         targets |= {f"rent_adjustment.{f}" for f in RentAdjustment.model_fields}
     if document.price_list is not None:
         targets |= {f"price_list.{item.id}" for item in document.price_list.items}
-    targets |= {"counterparty", "document_number", "date"}
     return targets
 
 
