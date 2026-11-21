@@ -484,6 +484,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 
 ### P21 · Re-check on contract upload — MIGHT
 - Uploading a lease or contract updates Cost Memory and re-runs CHECK on the payments it covers.
+- **Not built (user's decision, 21 Nov 2026).** The demo's lease and contracts are preloaded (re-uploading one gives `409 DOCUMENT_ALREADY_PROCESSED`), so the feature would need a new demo document plus contract fields in the AI extraction. A contract upload today is read, finds no billing values and ends "no change". The frontend hides or drops its Contract check page in live mode.
 
 ### P22 · MCP for the investigation tools — MIGHT
 - With B26: the investigation tools on `/internal/mcp`.
