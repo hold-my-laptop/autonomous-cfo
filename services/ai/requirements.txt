@@ -3,3 +3,16 @@ pydantic==2.14.4
 pydantic-settings==2.16.3
 httpx==0.28.1
 openai==3.57.0
+mlflow-skinny==3.18.0
+# Document reading (PDF text layer + OCR). rapidocr_onnxruntime itself is installed with
+# --no-deps (it asks for opencv-python, which needs libGL; we use the headless build):
+#   pip install --no-deps rapidocr_onnxruntime==1.2.3
+pypdfium2==5.15.2
+onnxruntime==1.32.0
+opencv-python-headless==5.1.0.95
+numpy==2.5.5
+pillow==13.0.0
+pyclipper==1.4.0
+shapely==2.2.0
+PyYAML==6.0.4
+six==1.17.0

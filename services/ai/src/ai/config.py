@@ -31,6 +31,15 @@ class Settings(BaseSettings):
 
     prompt_version: str = "agent-prompt-1.0.0"
 
+    # Optional MLflow tracing (off when empty), e.g. http://mlflow:8080
+    mlflow_tracking_uri: str = ""
+    mlflow_experiment: str = "vero-agent"
+
+    # Chat (owner questions): read-only public backend API
+    api_public_url: str = "http://api:8080/api/v1"
+    chat_timeout_s: float = 45.0
+    chat_max_tool_calls: int = 6
+
 
 @lru_cache
 def get_settings() -> Settings:

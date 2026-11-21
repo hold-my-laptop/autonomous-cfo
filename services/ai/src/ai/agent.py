@@ -11,6 +11,7 @@ import json
 import logging
 from typing import Any
 
+from . import tracing
 from .backend_client import Backend, BackendUnavailable
 from .config import Settings
 from .llm import LLM
@@ -85,6 +86,19 @@ def _openai_tool(spec: ToolSpec) -> dict[str, Any]:
 
 async def run_agent(start: AgentRunStart, llm: LLM, backend: Backend, settings: Settings) -> str:
     """Runs one agent run end to end. Returns "COMPLETED", "FAILED" or "STOPPED"."""
+    inputs = {"event": start.event.model_dump(), "company": start.company.model_dump(),
+              "limits": start.limits.model_dump()}
+    with tracing.span("agent_run", "AGENT", inputs) as root:
+        root.tag_trace({"run_id": start.run_id, "event_type": start.event.type, "kind": "agent_run",
+                        "prompt_version": settings.prompt_version, "llm_mode": llm.mode})
+        status, outputs = await _run(start, llm, backend, settings)
+        root.set_outputs(outputs)
+        root.tag_trace({"status": status, "failure_reason": outputs.get("reason"),
+                        "model": outputs.get("model"), "tool_calls": outputs.get("tool_calls")})
+        return status
+
+
+async def _run(start: AgentRunStart, llm: LLM, backend: Backend, settings: Settings) -> tuple[str, dict[str, Any]]:
     run_id = start.run_id
     try:
         completion = await asyncio.wait_for(
@@ -92,7 +106,7 @@ async def run_agent(start: AgentRunStart, llm: LLM, backend: Backend, settings: 
         )
     except RunStopped as e:
         log.info("run %s stopped: %s", run_id, e)
-        return "STOPPED"
+        return "STOPPED", {"status": "STOPPED", "reason": str(e)}
     except (AgentFailed, TimeoutError, BackendUnavailable, Exception) as e:  # noqa: BLE001
         if isinstance(e, AgentFailed):
             reason, detail = e.reason, e.detail
@@ -105,11 +119,13 @@ async def run_agent(start: AgentRunStart, llm: LLM, backend: Backend, settings: 
             await backend.fail(run_id, reason, detail)
         except Exception as e2:  # noqa: BLE001 - backend's deadline will trigger FALLBACK anyway
             log.error("run %s: could not report failure: %s", run_id, e2)
-        return "FAILED"
+        return "FAILED", {"status": "FAILED", "reason": reason, "detail": detail}
     await backend.complete(run_id, completion)
     log.info("run %s COMPLETED in AGENT mode: %d proposals, %d tool calls",
              run_id, len(completion.proposals), completion.tool_calls)
-    return "COMPLETED"
+    return "COMPLETED", {"status": "COMPLETED", "model": completion.model, "tool_calls": completion.tool_calls,
+                         "proposals": [p.model_dump(exclude_none=True) for p in completion.proposals],
+                         "summary_note": completion.summary_note}
 
 
 async def _loop(start: AgentRunStart, llm: LLM, backend: Backend, settings: Settings) -> AgentCompletion:
@@ -130,12 +146,17 @@ async def _loop(start: AgentRunStart, llm: LLM, backend: Backend, settings: Sett
 
     for _ in range(max_calls + 2 * MAX_CORRECTIONS + 2):
         offered = tools if used < max_calls else [SUBMIT_TOOL]
-        try:
-            reply = await asyncio.wait_for(llm.chat(messages, offered), timeout=settings.llm_timeout_s)
-        except TimeoutError as e:
-            raise AgentFailed("MODEL_TIMEOUT", f"one model call took over {settings.llm_timeout_s}s") from e
-        except Exception as e:  # noqa: BLE001
-            raise AgentFailed("MODEL_ERROR", f"{type(e).__name__}: {e}") from e
+        with tracing.span("llm_call", "CHAT_MODEL", {
+                "messages": tracing.tail(messages), "tools": [t["function"]["name"] for t in offered]}) as sp:
+            try:
+                reply = await asyncio.wait_for(llm.chat(messages, offered), timeout=settings.llm_timeout_s)
+            except TimeoutError as e:
+                raise AgentFailed("MODEL_TIMEOUT", f"one model call took over {settings.llm_timeout_s}s") from e
+            except Exception as e:  # noqa: BLE001
+                raise AgentFailed("MODEL_ERROR", f"{type(e).__name__}: {e}") from e
+            sp.set_outputs({"content": reply.content,
+                            "tool_calls": [{"name": tc.name, "arguments": tc.arguments} for tc in reply.tool_calls]})
+            sp.set_attributes({"model": model, "tool_calls_used": used})
 
         if not reply.tool_calls:
             corrections += 1
@@ -183,7 +204,9 @@ async def _loop(start: AgentRunStart, llm: LLM, backend: Backend, settings: Sett
                     "code": "TOOL_LIMIT_REACHED", "message": "No tool calls left. Call submit_proposals now."}})
                 continue
 
-            result = await backend.call_tool(tc.name, run_id, args, call_id=tc.id)
+            with tracing.span(f"tool:{tc.name}", "TOOL", args) as sp:
+                result = await backend.call_tool(tc.name, run_id, args, call_id=tc.id)
+                sp.set_outputs(result.model_dump(exclude_none=True))
             used = result.tool_calls_used if result.tool_calls_used is not None else used + 1
             if result.error and result.error.code in STOP_CODES:
                 raise RunStopped(result.error.code)

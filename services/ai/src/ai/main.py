@@ -5,6 +5,9 @@ Endpoints
   GET  /health/model          deep check: can we reach the model?
   POST /v1/agent/runs         start an agent run (202; works in the background)
   POST /v1/explain            plain-language texts for recommendations
+  POST /v1/documents/extract  PDF / image / text upload -> plain text (text layer, OCR for scans)
+  POST /v1/chat               owner questions, answered with read-only tools (no token: the
+                              web app calls it through nginx; it cannot change any data)
 """
 
 import asyncio
@@ -12,11 +15,15 @@ import logging
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile, status
 
+from . import tracing
 from .agent import run_agent
+from .chat import ChatRequest, ChatResponse, HttpPublicApi, PublicApi
+from .chat import answer as chat_answer
 from .backend_client import Backend, HttpBackend
 from .config import Settings, get_settings
+from .documents import MAX_BYTES, DocumentError, read_document_async
 from .explain import explain
 from .llm import LLM, build_llm
 from .schemas import AgentRunStart, ExplainRequest, ExplainResult, ModelHealth
@@ -25,7 +32,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("ai")
 
 
-def create_app(settings: Settings | None = None, llm: LLM | None = None, backend: Backend | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, llm: LLM | None = None, backend: Backend | None = None,
+               public: PublicApi | None = None) -> FastAPI:
     settings = settings or get_settings()
 
     @asynccontextmanager
@@ -33,12 +41,21 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None, backend
         app.state.llm = llm or build_llm(settings)
         app.state.backend = backend or HttpBackend(settings)
         app.state.tasks = {}
+        app.state.public = public or HttpPublicApi(settings)
+        app.state.chat_slots = asyncio.Semaphore(2)  # one GPU: keep chat from starving agent runs
+        if settings.mlflow_tracking_uri:
+            try:  # never block start-up on MLflow
+                await asyncio.wait_for(asyncio.to_thread(tracing.setup, settings), timeout=15)
+            except TimeoutError:
+                log.warning("MLflow tracing off: %s did not answer in 15 s", settings.mlflow_tracking_uri)
         log.info("AI service up: llm_mode=%s backend=%s", app.state.llm.mode, settings.api_internal_url)
         yield
         for t in app.state.tasks.values():
             t.cancel()
         if isinstance(app.state.backend, HttpBackend):
             await app.state.backend.aclose()
+        if isinstance(app.state.public, HttpPublicApi):
+            await app.state.public.aclose()
 
     app = FastAPI(title="Vero AI service", lifespan=lifespan)
 
@@ -79,6 +96,27 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None, backend
     @app.post("/v1/explain", response_model=ExplainResult, dependencies=[Depends(require_token)])
     async def explain_route(req: ExplainRequest, request: Request):
         return await explain(req, request.app.state.llm, settings)
+
+    @app.post("/v1/documents/extract")
+    async def extract_route(file: UploadFile = File(...), force_ocr: bool = Form(False)):
+        """Text of an uploaded contract. Read-only and stateless: nothing is stored."""
+        data = await file.read(MAX_BYTES + 1)
+        try:
+            doc = await read_document_async(data, file.filename or "", file.content_type or "", force_ocr)
+        except DocumentError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e)) from e
+        except TimeoutError as e:
+            raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                                detail="Reading the document took too long.") from e
+        return {"filename": file.filename, "text": doc.text, **doc.summary()}
+
+    @app.post("/v1/chat", response_model=ChatResponse)
+    async def chat_route(req: ChatRequest, request: Request):
+        slots: asyncio.Semaphore = request.app.state.chat_slots
+        if slots.locked():
+            raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Vero is busy, try again")
+        async with slots:
+            return await chat_answer(req, request.app.state.llm, request.app.state.public, settings)
 
     return app
 

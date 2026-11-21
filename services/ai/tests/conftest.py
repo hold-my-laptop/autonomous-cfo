@@ -1,9 +1,12 @@
 import json
+import os
 import sys
 from pathlib import Path
 
 import pytest
 
+os.environ.setdefault("MLFLOW_DISABLE_TELEMETRY", "true")
+os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from ai.config import Settings  # noqa: E402
