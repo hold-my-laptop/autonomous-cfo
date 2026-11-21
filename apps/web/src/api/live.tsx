@@ -75,6 +75,7 @@ function pollRuns(qc: QueryClient, setState: Dispatch<SetStateAction<LiveState>>
           qc.invalidateQueries({ queryKey: keys.forecast });
           qc.invalidateQueries({ queryKey: keys.company });
           qc.invalidateQueries({ queryKey: keys.audit });
+          qc.invalidateQueries({ queryKey: keys.costs }); // a Proof run can check a new bill
         }
         seen = key;
       }

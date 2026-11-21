@@ -1,5 +1,5 @@
-import type { Company, Decision, Forecast } from "../../api/types";
-import { useCompany, useDecisions, useForecast } from "../../api/queries";
+import type { Company, CostCheck, Decision, Forecast } from "../../api/types";
+import { useCompany, useCostChecks, useDecisions, useForecast } from "../../api/queries";
 import { useLive } from "../../api/live";
 import { Icon } from "../../components/Icon";
 import { scrollBehavior } from "../../lib/a11y";
@@ -8,54 +8,12 @@ import { formatDate, formatEurWhole } from "../../lib/format";
 import { CashChart, ForecastLegend } from "../cash/CashChart";
 import { btnPrimary, btnQuiet, cardId, DecisionCard, useDecide } from "./DecisionCard";
 import { DoneList } from "./DoneList";
+import { checkedLine, costCheckRow, explainInsight, floorOf, headline, pastFloor } from "./briefing";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
 const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 const weekday = (iso: string) =>
   new Date(iso).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-
-/** The headline and one supporting line: where the owner stands. */
-function headline(f: Forecast, buffer: number, needsOk: number, suggestions: number) {
-  const low = `${formatEurWhole(f.lowestBalanceEur)} on ${formatDate(f.lowestDate)}`;
-  const actual = f.weeks.filter((w) => w.isActual);
-  if (actual.length) {
-    const lowActual = actual.reduce((a, b) => ((b.lowestEur ?? b.balanceEur) < (a.lowestEur ?? a.balanceEur) ? b : a));
-    return {
-      title: `${actual.length} of 13 weeks have happened. Here's how the forecast held up.`,
-      sub: `Bars show the real balance, the line shows the forecast from ${formatDate(f.madeOn)}. Lowest so far: ${formatEurWhole(
-        lowActual.lowestEur ?? lowActual.balanceEur,
-      )}${f.overdraftLimitEur ? `, inside your ${formatEurWhole(f.overdraftLimitEur)} overdraft facility` : ""}.`,
-    };
-  }
-  if (f.firstShortDate) {
-    if (f.overdraftLimitEur && -f.lowestBalanceEur <= f.overdraftLimitEur) {
-      return {
-        title: "The June gap is covered by your overdraft facility.",
-        sub: `The balance still goes down to ${low}, inside your ${formatEurWhole(f.overdraftLimitEur)} facility (simulated). ${
-          suggestions > 0 ? `${count(suggestions, "idea", "ideas")} can make the gap smaller.` : ""
-        }`,
-      };
-    }
-    return {
-      title: `Your account goes into overdraft from the week of ${formatDate(f.firstShortDate)}.`,
-      sub: `The June shutdown stops your card sales while fixed costs go on. The balance reaches ${low}. ${
-        needsOk > 0 ? "Your CFO has a fix ready." : "Your CFO is working on a fix."
-      }`,
-    };
-  }
-  const extra =
-    needsOk > 0
-      ? `${count(needsOk, "decision needs", "decisions need")} you.`
-      : suggestions > 0
-        ? `${count(suggestions, "idea", "ideas")} to review.`
-        : "Nothing needs you today.";
-  return {
-    title: "Your cash stays above zero for the next 13 weeks.",
-    sub: `The lowest point is ${low}, ${formatEurWhole(f.lowestBalanceEur - buffer)} ${
-      f.lowestBalanceEur >= buffer ? "above" : "below"
-    } your safety buffer. ${extra}`,
-  };
-}
 
 const order = (a: Decision, b: Decision) => (b.resolvedAt ?? b.createdAt).localeCompare(a.resolvedAt ?? a.createdAt);
 
@@ -68,8 +26,8 @@ const goTo = (id: string) => {
   el?.focus({ preventScroll: true });
 };
 
-/** Sand-edged card beside the chart: the one thing that needs the owner. */
-function NeedsOkSummary({ d, more }: { d: Decision; more: number }) {
+/** Sand-edged card beside the chart: the most important thing that needs the owner. */
+function NeedsOkSummary({ d, more, costChanges }: { d: Decision; more: number; costChanges: number }) {
   const { act, pending } = useDecide(d);
   const amount = d.offer?.amountEur ?? d.amountEur;
   return (
@@ -81,6 +39,9 @@ function NeedsOkSummary({ d, more }: { d: Decision; more: number }) {
         <p className="flex items-center gap-2 text-[14px] font-semibold text-ask">
           <span className="h-2 w-2 rounded-full bg-sand" aria-hidden="true" />
           Needs your OK{more > 0 && <span className="font-medium"> · {more} more</span>}
+          {costChanges > 0 && (
+            <span className="font-medium"> · {count(costChanges, "cost change", "cost changes")} to look at</span>
+          )}
         </p>
         <h2 id="ok-sum-h" className="mt-2 text-sm font-semibold">
           {d.offer?.name ?? agentName[d.agent]}
@@ -107,22 +68,31 @@ function NeedsOkSummary({ d, more }: { d: Decision; more: number }) {
   );
 }
 
-function AllClearSummary({ suggestion }: { suggestion?: Decision }) {
+/**
+ * Nothing waits for the owner's OK. Shows, in order: a cost change that needs a look, a suggestion,
+ * or what Vero actually checked (never a generic "all good").
+ */
+function AllClearSummary({ suggestion, costChange, checked }: { suggestion?: Decision; costChange?: CostCheck; checked: string }) {
+  const lookAt = costChange && !suggestion;
   return (
     <section
       aria-labelledby="ok-sum-h"
       className="liquid-glass-strong flex flex-col gap-4 rounded-3xl p-5 sm:flex-row sm:items-center sm:gap-8 sm:px-6"
     >
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 text-[14px] font-semibold text-safe">
-          <span className="h-2 w-2 rounded-full bg-safe" aria-hidden="true" />
-          Nothing needs your OK
+        <p className={`flex items-center gap-2 text-[14px] font-semibold ${lookAt ? "text-ask" : "text-safe"}`}>
+          <span className={`h-2 w-2 rounded-full ${lookAt ? "bg-sand" : "bg-safe"}`} aria-hidden="true" />
+          {lookAt ? "A cost change needs a look" : "Nothing needs your OK"}
         </p>
         <h2 id="ok-sum-h" className="tight mt-2 text-[20px] font-semibold leading-snug">
-          {suggestion ? suggestion.headline : "You're all set for today."}
+          {suggestion ? suggestion.headline : lookAt ? costChange.title : "You're all set for today."}
         </h2>
         <p className="mt-1 line-clamp-2 text-[13px] text-ink-soft">
-          {suggestion ? suggestion.summary : "Your agents keep watching your accounts and invoices."}
+          {suggestion
+            ? suggestion.summary
+            : lookAt
+              ? `${costChange.outcome === "conflict" ? "It is more than your contract allows." : "Vero found no reason for it yet."} See it under What Vero noticed.`
+              : checked}
         </p>
       </div>
       {suggestion && (
@@ -161,30 +131,34 @@ function CheckedCard({ at }: { at?: string }) {
 }
 
 function Summary({ company, f }: { company: Company; f: Forecast }) {
-  const buffer = company.safetyBufferEur;
-  const negWeeks = f.weeks.filter((w) => w.balanceEur < 0).length;
+  const floor = floorOf(company);
+  const past = pastFloor(f, floor);
+  const limitWord = floor.kind === "overdraft" ? "limit" : "buffer";
   const cells = [
     {
       label: "Lowest point",
       value: formatEurWhole(f.lowestBalanceEur),
       alert: f.lowestBalanceEur < 0,
       sub: (
-        <span className={f.lowestBalanceEur < buffer ? "text-short" : "text-safe"}>
+        <span className={f.lowestBalanceEur < floor.value ? "text-short" : "text-safe"}>
           {formatDate(f.lowestDate)} · W{f.lowestWeek}
         </span>
       ),
     },
     {
-      label: "Weeks below zero",
-      value: String(negWeeks),
-      alert: negWeeks > 0,
-      sub: negWeeks ? `First: week of ${formatDate(f.firstShortDate!)}` : "None in the next 13 weeks",
+      // Days, not weeks: an owner acts on the first day it happens. Counts arranged credit.
+      label: `Days past your ${limitWord}`,
+      value: String(past.days),
+      alert: past.days > 0,
+      sub: past.days && past.first ? `First: ${formatDate(past.first)}` : "None in the next 13 weeks",
     },
-    { label: "Safety buffer", value: formatEurWhole(buffer), sub: "Minimum you want to keep" },
+    floor.kind === "overdraft"
+      ? { label: "Overdraft limit", value: formatEurWhole(-floor.value), sub: "How far below €0 you allow" }
+      : { label: "Safety buffer", value: formatEurWhole(floor.value), sub: "Minimum you want to keep" },
     {
-      label: "Overdraft facility",
+      label: "Extra credit",
       value: f.overdraftLimitEur ? formatEurWhole(f.overdraftLimitEur) : "None",
-      sub: f.overdraftLimitEur ? "Arranged (simulated)" : "Not arranged yet",
+      sub: f.overdraftLimitEur ? "Arranged (simulated)" : past.days > 0 ? "Not arranged yet" : "Not needed",
     },
   ];
   return (
@@ -222,14 +196,33 @@ export function TodayPage() {
   const decisions = useDecisions();
   const forecast = useForecast();
 
+  const costChecks = useCostChecks();
+
   const all = decisions.data ?? [];
   const needsOk = all.filter((d) => d.status === "pending" && d.autonomy === "approval_required");
   const suggestions = all.filter((d) => d.status === "pending" && d.autonomy === "recommendation");
-  const handled = all.filter((d) => d.status !== "pending").sort(order);
+  const handled = all.filter((d) => d.status !== "pending");
+  // Cost checks are optional here: if /findings fails, the rest of the Overview still works.
+  const checks = costChecks.data;
+  const costNeeds = (checks ?? []).filter((c) => c.needsOwner);
+
+  // "What Vero noticed": its own observations (why they matter, what to do), cost changes needing
+  // the owner first, then the ones it explained. "Done and decided": what was done or decided.
+  // Cost checks are dated by the demo load (08:00 UTC on the demo date), so they wait for the company.
+  const at = company ? `${company.asOf}T08:00:00Z` : null;
+  const noticed = [
+    ...(at ? costNeeds.map((c) => costCheckRow(c, at)) : []),
+    ...handled.filter((d) => d.autonomy === "analysis").map((d) => explainInsight(d, needsOk.length)),
+    ...(at ? (checks ?? []).filter((c) => !c.needsOwner).map((c) => costCheckRow(c, at)) : []),
+  ];
+  const decided = handled.filter((d) => d.autonomy !== "analysis").sort(order);
 
   const f = forecast.data;
   const actuals = !!f?.weeks.some((w) => w.isActual);
-  const head = f && company ? headline(f, company.safetyBufferEur, needsOk.length, suggestions.length) : null;
+  const head =
+    f && company
+      ? headline(f, company, { decisions: needsOk.length, suggestions: suggestions.length, costChanges: costNeeds.length })
+      : null;
 
   return (
     <div className="space-y-10">
@@ -300,9 +293,9 @@ export function TodayPage() {
         {decisions.isError ? (
           <p role="alert" className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load your items. Check that the backend is running.</p>
         ) : needsOk[0] ? (
-          <NeedsOkSummary d={needsOk[0]} more={needsOk.length - 1} />
+          <NeedsOkSummary d={needsOk[0]} more={needsOk.length - 1} costChanges={costNeeds.length} />
         ) : decisions.data ? (
-          <AllClearSummary suggestion={suggestions[0]} />
+          <AllClearSummary suggestion={suggestions[0]} costChange={costNeeds[0]} checked={checkedLine(checks)} />
         ) : (
           <div className="h-28 animate-pulse rounded-3xl bg-sunk" />
         )}
@@ -333,15 +326,27 @@ export function TodayPage() {
         </section>
       )}
 
-      {/* Done and checked */}
-      {handled.length > 0 && (
+      {/* What Vero noticed: its observations, each with why it matters and what to do */}
+      {noticed.length > 0 && (
+        <section aria-labelledby="noticed-h">
+          <SectionHeader
+            id="noticed-h"
+            title="What Vero noticed"
+            sub="Found in your bank data and bills on its own. Open a row to see why it matters and what to do."
+          />
+          <DoneList items={noticed} />
+        </section>
+      )}
+
+      {/* Done and decided */}
+      {decided.length > 0 && (
         <section aria-labelledby="done-h">
           <SectionHeader
             id="done-h"
-            title="Done and checked"
-            sub="What your agents did on their own, and what you decided. Open a row to see why."
+            title="Done and decided"
+            sub="What your agents did inside your rules, and what you decided. Open a row to see why."
           />
-          <DoneList items={handled} />
+          <DoneList items={decided} />
         </section>
       )}
     </div>

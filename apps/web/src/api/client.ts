@@ -4,6 +4,7 @@ import type {
   ChatResponse,
   Company,
   ContractCheckResult,
+  CostCheck,
   CostMemoryRow,
   Decision,
   DecisionAction,
@@ -23,6 +24,7 @@ import type {
   BeDecisionResult,
   BeDocument,
   BeDocumentSummary,
+  BeFinding,
   BeForecast,
   BeMandate,
   BeOverview,
@@ -32,6 +34,8 @@ import type {
 import {
   toAuditEntry,
   toCompany,
+  mockToCostCheck,
+  toCostCheck,
   toCostMemoryRow,
   toDecision,
   toDecisions,
@@ -171,6 +175,11 @@ export const api = {
   // Live: cost memory and documents are real; findings (P07), digest (P15) and upload (P08) are coming,
   // until then those calls fail and the page shows its error/empty states.
   findings: (): Promise<Finding[]> => (USE_MOCK ? mock().then((m) => m.getFindings()) : http("/findings")),
+  /** Checked cost changes, summarised for the Overview (real GET /findings, or the mock's findings). */
+  costChecks: async (): Promise<CostCheck[]> =>
+    USE_MOCK
+      ? (await mock().then((m) => m.getFindings())).map(mockToCostCheck)
+      : (await http<BeFinding[]>("/findings")).map(toCostCheck),
   costMemory: async (): Promise<CostMemoryRow[]> =>
     USE_MOCK ? mock().then((m) => m.getCostMemory()) : (await http<BeCostItem[]>("/cost-memory")).map(toCostMemoryRow),
   costDocuments: async (): Promise<KnownDocument[]> =>

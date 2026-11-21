@@ -24,6 +24,8 @@ export const useAudit = () => useQuery({ queryKey: keys.audit, queryFn: api.audi
 
 export const useFindings = () => useQuery({ queryKey: keys.findings, queryFn: api.findings });
 export const useCostMemory = () => useQuery({ queryKey: keys.costMemory, queryFn: api.costMemory });
+/** Checked cost changes for the Overview: what Vero verified, and what needs the owner. */
+export const useCostChecks = () => useQuery({ queryKey: [...keys.costs, "checks"] as const, queryFn: api.costChecks });
 export const useCostDocuments = () => useQuery({ queryKey: keys.costDocuments, queryFn: api.costDocuments });
 export const useDigest = () => useQuery({ queryKey: keys.digest, queryFn: api.digest });
 export const useDocument = (id: string | null) =>

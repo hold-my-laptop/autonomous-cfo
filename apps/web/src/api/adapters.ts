@@ -11,6 +11,8 @@ import type {
   BeDocument,
   BeDocumentSummary,
   BeDocumentType,
+  BeEvidenceKind,
+  BeFinding,
   BeForecast,
   BeImpactState,
   BeMandate,
@@ -24,6 +26,7 @@ import type {
   AuditEntry,
   AutonomyLevel,
   Company,
+  CostCheck,
   CostMemoryRow,
   DocLine,
   KnownDocument,
@@ -31,6 +34,7 @@ import type {
   Decision,
   DecisionStatus,
   Fact,
+  Finding,
   Forecast,
   ForecastWeek,
   PaymentCategory,
@@ -118,6 +122,8 @@ export function toForecast(f: BeForecast, fetchedAt: string): Forecast {
     lowestWeek,
     spareCashEur: Math.max(0, eur(f.summary.headroom_at_lowest)),
     overdraftLimitEur: overdraft > 0 ? overdraft : undefined,
+    daysBelowFloor: f.summary.days_below_floor,
+    firstBreachDate: f.summary.first_breach?.date,
   };
 }
 
@@ -412,11 +418,14 @@ export function toCostMemoryRow(c: BeCostItem): CostMemoryRow {
 
 /** All lanes of GET /overview as one list; ANALYSED findings become analysis-only items. */
 export function toDecisions(o: BeOverview): Decision[] {
-  const at = `${o.company.as_of_date}T00:00:00Z`;
+  // The analysis is made when the demo data is loaded: 08:00 UTC on the demo date (the backend's
+  // demo_load_time, also the first activity log entry), not at midnight.
+  const at = `${o.company.as_of_date}T08:00:00Z`;
   const analysed: Decision[] = o.lanes.ANALYSED.map((f, i) => ({
     id: `analysed-${i}-${f.kind}`,
     agent: "liquidity",
     autonomy: "analysis",
+    insightKind: f.kind,
     execution: "simulated",
     status: "info",
     createdAt: at,
@@ -432,4 +441,56 @@ export function toDecisions(o: BeOverview): Decision[] {
   ]
     .map(toDecision)
     .concat(analysed);
+}
+
+// ───────────────────────── Cost checks for the Overview ─────────────────────────
+
+const evidenceWord: Record<BeEvidenceKind, string> = {
+  DOCUMENT: "documents",
+  INVOICE_LINE: "the invoice",
+  PRICE_LIST_ITEM: "your price list",
+  CLAUSE: "your contract",
+  TRANSACTION: "your bank statement",
+  EMAIL: "your emails",
+  COST_ITEM: "your usual costs",
+  REFERENCE_VALUE: "official reference values",
+};
+
+/** A real finding (GET /findings), reduced to what the Overview says about it. */
+export function toCostCheck(f: BeFinding): CostCheck {
+  const outcome: CostCheck["outcome"] =
+    f.classification === "VERIFIED" ? "matches" : f.classification === "CONFLICT" ? "conflict" : "needs_evidence";
+  return {
+    id: f.id,
+    title: f.title,
+    counterparty: f.counterparty,
+    outcome,
+    needsOwner: outcome !== "matches" || f.escalated || f.status === "PENDING_APPROVAL",
+    deltaEur: f.impact?.delta != null ? eur(f.impact.delta) : undefined,
+    evidence: [...new Set(f.differences.flatMap((d) => d.evidence.map((e) => evidenceWord[e.kind])).filter(Boolean))],
+  };
+}
+
+const mockEvidence: Record<string, string> = {
+  statement: "your bank statement",
+  notice: "the notice",
+  lease: "your lease",
+  contract: "your contract",
+  invoice: "the invoice",
+  reference: "official reference values",
+};
+
+/** The mock's (richer) finding, reduced the same way. */
+export function mockToCostCheck(f: Finding): CostCheck {
+  const outcome: CostCheck["outcome"] =
+    f.classification === "verified" ? "matches" : f.classification === "conflict" ? "conflict" : "needs_evidence";
+  return {
+    id: f.finding_id,
+    title: `${f.vendor}: ${f.line_item.description}`,
+    counterparty: f.vendor,
+    outcome,
+    needsOwner: f.status !== "resolved" && (outcome !== "matches" || f.status === "pending_approval" || !!f.evidence_request),
+    deltaEur: f.line_item.current_value - f.line_item.previous_value,
+    evidence: [...new Set(f.evidence_refs.map((e) => mockEvidence[e.type]).filter(Boolean))],
+  };
 }
