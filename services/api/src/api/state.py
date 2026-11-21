@@ -190,12 +190,19 @@ class DemoState:
         return size_credit_line(data, available_until, rounding)
 
     def backtest(self) -> Backtest:
-        """Forecast accuracy against what was really booked. Vero's simulated moves and credit
-        lines never happened in reality, so the forecast compared leaves them out: every
-        payment on its due date, no credit."""
+        """Forecast accuracy against what was really booked. Vero's simulated moves, amount
+        changes and credit lines never happened in reality, so the forecast compared leaves
+        them out: every payment on its due date at its original amount, no credit."""
         unchanged = replace(
             self.forecast_input(),
-            outflows=tuple(replace(o, scheduled_date=o.due_date) for o in self.outflows),
+            outflows=tuple(
+                replace(
+                    o,
+                    scheduled_date=o.due_date,
+                    amount=o.amount if o.base_amount is None else o.base_amount,
+                )
+                for o in self.outflows
+            ),
             credit_lines=(),
         )
         return compute_backtest(

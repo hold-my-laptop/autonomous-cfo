@@ -189,7 +189,7 @@ def test_agent_path() -> None:
         )
         steps = [(s["kind"], s["source"], s["label"]) for s in done["trace"]]
         assert ("THINK", "AGENT", "Checking the lease") in steps
-        assert steps[-4:] == [
+        assert steps[-6:] == [
             (
                 "INVESTIGATE",
                 "AGENT",
@@ -201,12 +201,18 @@ def test_agent_path() -> None:
                 "BACKEND",
                 "Keep paying 3 800,00 € for RENT; 912,00 € disputed in the next 13 weeks",
             ),
+            ("POLICY", "BACKEND", "Keep paying 3 800,00 € for RENT: needs approval"),
+            (
+                "POLICY",
+                "BACKEND",
+                "Send a letter to Main Street Real Estate GmbH: needs approval",
+            ),
             ("SUMMARY", "BACKEND", done["result"]["headline"]["text"]),
         ]
         result = finding(client, run_id)
         assert (result["classification"], result["status"], result["escalated"]) == (
             "CONFLICT",
-            "CLASSIFIED",
+            "PENDING_APPROVAL",
             False,
         )
         with client.app.state.repository.read() as state:

@@ -5198,6 +5198,89 @@
         ],
         "title": "InvestigationMode"
       },
+      "KeepPaymentSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "KEEP_PAYMENT",
+            "title": "Kind"
+          },
+          "finding_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Finding Id"
+          },
+          "cost_ref": {
+            "type": "string",
+            "title": "Cost Ref"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Category"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "billed_amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Billed Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/PaymentRef"
+            },
+            "type": "array",
+            "title": "Payments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "finding_id",
+          "cost_ref",
+          "counterparty",
+          "category",
+          "amount",
+          "billed_amount",
+          "effective_from",
+          "payments"
+        ],
+        "title": "KeepPaymentSubject",
+        "description": "Vero Proof: keep paying `amount` (what the contract allows) instead of `billed_amount`."
+      },
       "Lanes": {
         "properties": {
           "ANALYSED": {
@@ -5237,6 +5320,68 @@
           "NOT_ALLOWED"
         ],
         "title": "Lanes"
+      },
+      "LetterSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "SEND_LETTER",
+            "title": "Kind"
+          },
+          "finding_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Finding Id"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "counterparty_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Id"
+          },
+          "letter_subject": {
+            "type": "string",
+            "title": "Letter Subject"
+          },
+          "language": {
+            "type": "string",
+            "const": "de",
+            "title": "Language"
+          },
+          "draft": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft",
+            "description": "The letter's text, when written (P16)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "finding_id",
+          "counterparty",
+          "counterparty_id",
+          "letter_subject",
+          "language",
+          "draft"
+        ],
+        "title": "LetterSubject",
+        "description": "Vero Proof: a letter asking the counterparty for the basis of a change (German)."
       },
       "Mandate": {
         "properties": {
@@ -5711,6 +5856,31 @@
         ],
         "title": "PaymentDecision"
       },
+      "PaymentRef": {
+        "properties": {
+          "outflow_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Outflow Id"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          }
+        },
+        "type": "object",
+        "required": [
+          "outflow_id",
+          "ref",
+          "date"
+        ],
+        "title": "PaymentRef"
+      },
       "PlannedEvent": {
         "properties": {
           "id": {
@@ -6123,6 +6293,36 @@
               }
             ],
             "title": "Requested By"
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id",
+            "description": "Vero Proof: the finding"
+          },
+          "disputed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disputed",
+            "description": "Vero Proof: billed above what is allowed, per payment"
           }
         },
         "type": "object",
@@ -6168,6 +6368,15 @@
               },
               {
                 "$ref": "#/components/schemas/CreditLineSubject"
+              },
+              {
+                "$ref": "#/components/schemas/KeepPaymentSubject"
+              },
+              {
+                "$ref": "#/components/schemas/UpdateAmountSubject"
+              },
+              {
+                "$ref": "#/components/schemas/LetterSubject"
               }
             ],
             "title": "Subject",
@@ -6175,7 +6384,10 @@
               "propertyName": "kind",
               "mapping": {
                 "CREDIT_LINE": "#/components/schemas/CreditLineSubject",
-                "RESCHEDULE_PAYMENT": "#/components/schemas/RescheduleSubject"
+                "KEEP_PAYMENT": "#/components/schemas/KeepPaymentSubject",
+                "RESCHEDULE_PAYMENT": "#/components/schemas/RescheduleSubject",
+                "SEND_LETTER": "#/components/schemas/LetterSubject",
+                "UPDATE_RECURRING_AMOUNT": "#/components/schemas/UpdateAmountSubject"
               }
             }
           },
@@ -6304,6 +6516,15 @@
               },
               {
                 "$ref": "#/components/schemas/CreditLineSubject"
+              },
+              {
+                "$ref": "#/components/schemas/KeepPaymentSubject"
+              },
+              {
+                "$ref": "#/components/schemas/UpdateAmountSubject"
+              },
+              {
+                "$ref": "#/components/schemas/LetterSubject"
               }
             ],
             "title": "Subject",
@@ -6311,7 +6532,10 @@
               "propertyName": "kind",
               "mapping": {
                 "CREDIT_LINE": "#/components/schemas/CreditLineSubject",
-                "RESCHEDULE_PAYMENT": "#/components/schemas/RescheduleSubject"
+                "KEEP_PAYMENT": "#/components/schemas/KeepPaymentSubject",
+                "RESCHEDULE_PAYMENT": "#/components/schemas/RescheduleSubject",
+                "SEND_LETTER": "#/components/schemas/LetterSubject",
+                "UPDATE_RECURRING_AMOUNT": "#/components/schemas/UpdateAmountSubject"
               }
             }
           },
@@ -6376,6 +6600,19 @@
               }
             ],
             "title": "Decided At"
+          },
+          "finding_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finding Id",
+            "description": "Vero Proof: the finding"
           }
         },
         "type": "object",
@@ -6403,7 +6640,10 @@
         "type": "string",
         "enum": [
           "RESCHEDULE_PAYMENT",
-          "CREDIT_LINE"
+          "CREDIT_LINE",
+          "KEEP_PAYMENT",
+          "UPDATE_RECURRING_AMOUNT",
+          "SEND_LETTER"
         ],
         "title": "RecommendationKind"
       },
@@ -7008,6 +7248,82 @@
           "fx_rate"
         ],
         "title": "Transaction"
+      },
+      "UpdateAmountSubject": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "UPDATE_RECURRING_AMOUNT",
+            "title": "Kind"
+          },
+          "finding_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Finding Id"
+          },
+          "cost_ref": {
+            "type": "string",
+            "title": "Cost Ref"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Category"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "from_amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "From Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "to_amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "To Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/PaymentRef"
+            },
+            "type": "array",
+            "title": "Payments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "finding_id",
+          "cost_ref",
+          "counterparty",
+          "category",
+          "from_amount",
+          "to_amount",
+          "effective_from",
+          "payments"
+        ],
+        "title": "UpdateAmountSubject",
+        "description": "Vero Proof: pay `to_amount` instead of `from_amount` for these payments."
       },
       "UploadAccepted": {
         "properties": {

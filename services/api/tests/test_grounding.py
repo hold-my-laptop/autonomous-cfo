@@ -73,7 +73,10 @@ def test_hero_conflict_with_the_engine_numbers() -> None:
         "Looking up the consumer price index for Jan 2024 and Mar 2025",
         "Computing what the index clause allows",
     ]
-    assert result["history"][-1]["label"] == "Conflict: 4 104,00 € billed, 3 800,00 € allowed"
+    assert [h["label"] for h in result["history"][-2:]] == [
+        "Conflict: 4 104,00 € billed, 3 800,00 € allowed",
+        "Waiting for your decision on 2 actions",
+    ]
     cited = [(r["kind"], r["document_id"], r["item_id"], r["ref"]) for r in result["evidence_refs"]]
     assert cited[-3:] == [
         ("DOCUMENT", "ntc_main_street_2025_04", None, "ntc_main_street_2025_04"),
@@ -88,7 +91,7 @@ def test_a_claimed_verified_rent_ends_as_conflict() -> None:
     assert result["classification"] == "CONFLICT"
     assert result["investigation"]["proposed"] == "VERIFIED"
     assert result["investigation"]["justified"] == "380000"
-    assert steps[-3] == "Vero's agent proposed verified; the backend's check says conflict"
+    assert "Vero's agent proposed verified; the backend's check says conflict" in steps
 
 
 def test_a_citation_no_tool_returned_is_dropped() -> None:
