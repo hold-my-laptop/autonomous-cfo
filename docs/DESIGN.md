@@ -3,7 +3,7 @@
 > **Status:** draft for team review.
 > **Scope:** Phase 1 = **Vero Cash**, the challenge card's *Liquidity agent*: monitor the account, forecast cash ahead, act within the owner's rules, **propose a credit facility**, owner approves, execution simulated.
 > **Demo data:** the organizers' sample **Pizzeria Amalfi** (Frankfurt) 2025 bank statement (EUR).
-> **Out of scope (Phase 2, Vero Proof):** verifying that recurring costs are justified.
+> **Out of scope (Phase 2, Vero Proof):** verifying that recurring costs are justified, see [`PROOF.md`](PROOF.md).
 >
 > **Related documents (single source of truth for their topic):**
 > - [`contracts/DATA_CONTRACTS.md`](contracts/DATA_CONTRACTS.md): every endpoint, payload and field
@@ -332,4 +332,4 @@ See [`ARCHITECTURE.md` §2](ARCHITECTURE.md#2-sequence-diagrams).
 2. The two **demo assumptions**: the existing −5 000 € overdraft as the floor, and the partner transfers movable by up to 45 days.
 3. Whether we may commit the sample CSV to `data/`. It's currently only in `local/`, which is gitignored.
 4. Whether run orchestration is an in-process background task (assumed) or a separate worker.
-5. Phase 2 (Vero Proof) on the same company: verifying the recurring costs Vero Cash already detected (rent, utilities, the CHF tranche).
+5. ~~Phase 2 (Vero Proof) on the same company~~ **Decided:** yes, on Pizzeria Amalfi with the CSV unchanged and synthetic documents that agree with it, see [`PROOF.md`](PROOF.md).
