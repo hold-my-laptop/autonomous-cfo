@@ -17,6 +17,7 @@ from api.routers import (
     health,
     internal,
     mandate,
+    proof,
     rag,
     recommendations,
     runs,
@@ -98,6 +99,7 @@ def create_app(
     api.include_router(runs.router)
     api.include_router(recommendations.router)
     api.include_router(audit.router)
+    api.include_router(proof.router)
     api.include_router(rag.router)
     api.include_router(demo.router)
     app.include_router(api)

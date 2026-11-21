@@ -1506,6 +1506,184 @@
         }
       }
     },
+    "/api/v1/cost-memory": {
+      "get": {
+        "tags": [
+          "proof"
+        ],
+        "summary": "List Cost Memory",
+        "description": "What Vero expects each recurring cost to be: fixed costs (RENT, UTIL, XFER, PAY, SOC,\nWTAX) from the statement and their contracts, then suppliers with today's list prices.",
+        "operationId": "list_cost_memory",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CostItem"
+                  },
+                  "type": "array",
+                  "title": "Response List Cost Memory"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents": {
+      "get": {
+        "tags": [
+          "proof"
+        ],
+        "summary": "List Documents",
+        "description": "The owner's documents, oldest first.",
+        "operationId": "list_documents",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentSummary"
+                  },
+                  "type": "array",
+                  "title": "Response List Documents"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}": {
+      "get": {
+        "tags": [
+          "proof"
+        ],
+        "summary": "Get Document",
+        "description": "Metadata, pages with text blocks, values, clauses and the box of every printed value.",
+        "operationId": "get_document",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Document"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/file": {
+      "get": {
+        "tags": [
+          "proof"
+        ],
+        "summary": "Get Document File",
+        "operationId": "get_document_file",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The PDF",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
     "/api/v1/assistant/ask": {
       "post": {
         "tags": [
@@ -2156,6 +2334,290 @@
         ],
         "title": "Company"
       },
+      "CostItem": {
+        "properties": {
+          "cost_ref": {
+            "type": "string",
+            "title": "Cost Ref",
+            "description": "RENT, UTIL, XFER, PAY, SOC, WTAX or a supplier"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "FIXED",
+              "SUPPLIER"
+            ],
+            "title": "Kind"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "counterparty_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Id"
+          },
+          "category": {
+            "$ref": "#/components/schemas/Category"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "EUR",
+              "CHF"
+            ],
+            "title": "Currency"
+          },
+          "expected_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Amount",
+            "description": "FIXED: the amount per payment in `currency` (the contract's when there is one)"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "MONTHLY"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency"
+          },
+          "due_day": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due Day"
+          },
+          "eur_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eur Amount",
+            "description": "CHF costs: the euro amount of the last payment, at `fx_rate`"
+          },
+          "fx_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate"
+          },
+          "recurring_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recurring Id",
+            "description": "Phase 1's detected recurring payment"
+          },
+          "outflow_ref_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outflow Ref Prefix",
+            "description": "Prefix of its projected outflows, e.g. \"RENT\" for RENT-06 or \"CHF\" for CHF-06"
+          },
+          "prices": {
+            "items": {
+              "$ref": "#/components/schemas/ExpectedPrice"
+            },
+            "type": "array",
+            "title": "Prices",
+            "description": "SUPPLIER: the prices of the price list valid today"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/CostSource"
+            },
+            "type": "array",
+            "title": "Sources"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cost_ref",
+          "kind",
+          "counterparty",
+          "counterparty_id",
+          "category",
+          "currency",
+          "expected_amount",
+          "frequency",
+          "due_day",
+          "eur_amount",
+          "fx_rate",
+          "recurring_id",
+          "outflow_ref_prefix",
+          "prices",
+          "sources"
+        ],
+        "title": "CostItem",
+        "description": "What Vero expects one recurring cost to be, and the evidence for it."
+      },
+      "CostSource": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "STATEMENT",
+              "CONTRACT",
+              "PRICE_LIST",
+              "INVOICE"
+            ],
+            "title": "Kind"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date",
+            "description": "Last payment seen (STATEMENT) or the document's date"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "clause_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clause Id",
+            "description": "The clause that sets the amount (CONTRACT)"
+          },
+          "transaction_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Transaction Ids",
+            "description": "The statement payments (STATEMENT)"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount",
+            "description": "What this evidence says, in `currency`"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "EUR",
+                  "CHF"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "date",
+          "document_id",
+          "clause_id",
+          "transaction_ids",
+          "amount",
+          "currency"
+        ],
+        "title": "CostSource"
+      },
+      "CounterpartyRef": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CounterpartyRef"
+      },
       "CreditLine": {
         "properties": {
           "amount": {
@@ -2338,6 +2800,718 @@
         ],
         "title": "DecisionResult"
       },
+      "Document": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "LEASE",
+              "CONTRACT",
+              "INVOICE",
+              "RENT_ADJUSTMENT",
+              "NOTICE",
+              "PRICE_LIST",
+              "PAYMENT_PLAN"
+            ],
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "title_en": {
+            "type": "string",
+            "title": "Title En"
+          },
+          "counterparty": {
+            "$ref": "#/components/schemas/CounterpartyRef"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "de",
+              "en",
+              "it"
+            ],
+            "title": "Language"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "EUR",
+              "CHF"
+            ],
+            "title": "Currency"
+          },
+          "document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number"
+          },
+          "cost_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Ref"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "DOCUMENTS",
+              "MAILBOX",
+              "UPLOAD"
+            ],
+            "title": "Source",
+            "description": "DOCUMENTS (the owner's documents), MAILBOX (an email attachment, listed once a finding cites it) or UPLOAD"
+          },
+          "page_count": {
+            "type": "integer",
+            "title": "Page Count"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "file_url": {
+            "type": "string",
+            "title": "File Url"
+          },
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentPage"
+            },
+            "type": "array",
+            "title": "Pages"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentLine"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "totals": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentTotals"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "clauses": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentClause"
+            },
+            "type": "array",
+            "title": "Clauses"
+          },
+          "price_list": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentPriceList"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rent_adjustment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DocumentRentAdjustment"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "highlights": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentHighlight"
+            },
+            "type": "array",
+            "title": "Highlights"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title",
+          "title_en",
+          "counterparty",
+          "date",
+          "language",
+          "currency",
+          "document_number",
+          "cost_ref",
+          "source",
+          "page_count",
+          "sha256",
+          "file_url",
+          "pages",
+          "lines",
+          "totals",
+          "clauses",
+          "price_list",
+          "rent_adjustment",
+          "highlights"
+        ],
+        "title": "Document",
+        "description": "A document with its pages, values and where each is printed, for side-by-side views."
+      },
+      "DocumentClause": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "text_en": {
+            "type": "string",
+            "title": "Text En"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "box": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4,
+                "description": "[x0, y0, x1, y1] in PDF points, origin top-left of the page"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Parameters",
+            "description": "The clause's terms as structured values (PROOF.md §4.3)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "section",
+          "title",
+          "text",
+          "text_en",
+          "page",
+          "box",
+          "parameters"
+        ],
+        "title": "DocumentClause"
+      },
+      "DocumentHighlight": {
+        "properties": {
+          "ref": {
+            "type": "string",
+            "title": "Ref",
+            "description": "The value it marks, e.g. lines.l1.unit_price, totals.gross, rent_adjustment.new_amount, price_list.p1, date"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "The value exactly as printed"
+          },
+          "box": {
+            "items": {
+              "type": "number"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "minItems": 4,
+            "title": "Box",
+            "description": "[x0, y0, x1, y1] in PDF points, origin top-left of the page"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ref",
+          "page",
+          "text",
+          "box"
+        ],
+        "title": "DocumentHighlight"
+      },
+      "DocumentLine": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "quantity": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,9}(\\.[0-9]{1,6})?$",
+            "title": "Quantity",
+            "description": "A decimal number as a string, never a float: unit prices and quantities, e.g. \"0.1234\" or \"2.5\"",
+            "examples": [
+              "9.40"
+            ]
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "unit_price": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,9}(\\.[0-9]{1,6})?$",
+            "title": "Unit Price",
+            "description": "A decimal number as a string, never a float: unit prices and quantities, e.g. \"0.1234\" or \"2.5\"",
+            "examples": [
+              "9.40"
+            ]
+          },
+          "vat_rate": {
+            "type": "integer",
+            "title": "Vat Rate",
+            "description": "Basis points"
+          },
+          "net": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Net",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "gross": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gross"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "quantity",
+          "unit",
+          "unit_price",
+          "vat_rate",
+          "net",
+          "gross"
+        ],
+        "title": "DocumentLine"
+      },
+      "DocumentPage": {
+        "properties": {
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "width": {
+            "type": "number",
+            "title": "Width",
+            "description": "PDF points"
+          },
+          "height": {
+            "type": "number",
+            "title": "Height",
+            "description": "PDF points"
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentTextBlock"
+            },
+            "type": "array",
+            "title": "Blocks"
+          }
+        },
+        "type": "object",
+        "required": [
+          "page",
+          "width",
+          "height",
+          "blocks"
+        ],
+        "title": "DocumentPage"
+      },
+      "DocumentPriceList": {
+        "properties": {
+          "valid_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentPriceListItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "valid_from",
+          "valid_to",
+          "items"
+        ],
+        "title": "DocumentPriceList"
+      },
+      "DocumentPriceListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "unit_price": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,9}(\\.[0-9]{1,6})?$",
+            "title": "Unit Price",
+            "description": "A decimal number as a string, never a float: unit prices and quantities, e.g. \"0.1234\" or \"2.5\"",
+            "examples": [
+              "9.40"
+            ]
+          },
+          "vat_rate": {
+            "type": "integer",
+            "title": "Vat Rate"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "unit",
+          "unit_price",
+          "vat_rate"
+        ],
+        "title": "DocumentPriceListItem"
+      },
+      "DocumentRentAdjustment": {
+        "properties": {
+          "old_amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Old Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "new_amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "New Amount",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "effective_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Effective From"
+          },
+          "frequency": {
+            "type": "string",
+            "const": "MONTHLY",
+            "title": "Frequency"
+          }
+        },
+        "type": "object",
+        "required": [
+          "old_amount",
+          "new_amount",
+          "effective_from",
+          "frequency"
+        ],
+        "title": "DocumentRentAdjustment"
+      },
+      "DocumentSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "LEASE",
+              "CONTRACT",
+              "INVOICE",
+              "RENT_ADJUSTMENT",
+              "NOTICE",
+              "PRICE_LIST",
+              "PAYMENT_PLAN"
+            ],
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "title_en": {
+            "type": "string",
+            "title": "Title En"
+          },
+          "counterparty": {
+            "$ref": "#/components/schemas/CounterpartyRef"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "de",
+              "en",
+              "it"
+            ],
+            "title": "Language"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "EUR",
+              "CHF"
+            ],
+            "title": "Currency"
+          },
+          "document_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Number"
+          },
+          "cost_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Ref"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "DOCUMENTS",
+              "MAILBOX",
+              "UPLOAD"
+            ],
+            "title": "Source",
+            "description": "DOCUMENTS (the owner's documents), MAILBOX (an email attachment, listed once a finding cites it) or UPLOAD"
+          },
+          "page_count": {
+            "type": "integer",
+            "title": "Page Count"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "file_url": {
+            "type": "string",
+            "title": "File Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "title",
+          "title_en",
+          "counterparty",
+          "date",
+          "language",
+          "currency",
+          "document_number",
+          "cost_ref",
+          "source",
+          "page_count",
+          "sha256",
+          "file_url"
+        ],
+        "title": "DocumentSummary"
+      },
+      "DocumentTextBlock": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "text_en": {
+            "type": "string",
+            "title": "Text En"
+          },
+          "box": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4,
+                "description": "[x0, y0, x1, y1] in PDF points, origin top-left of the page"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Box"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "text",
+          "text_en",
+          "box"
+        ],
+        "title": "DocumentTextBlock"
+      },
+      "DocumentTotals": {
+        "properties": {
+          "net": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Net",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "vat": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Vat",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "gross": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Gross",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "net",
+          "vat",
+          "gross"
+        ],
+        "title": "DocumentTotals"
+      },
       "Driver": {
         "properties": {
           "kind": {
@@ -2454,6 +3628,70 @@
           "executed_at"
         ],
         "title": "Execution"
+      },
+      "ExpectedPrice": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "unit": {
+            "type": "string",
+            "title": "Unit"
+          },
+          "unit_price": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,9}(\\.[0-9]{1,6})?$",
+            "title": "Unit Price",
+            "description": "Net price per unit in euros",
+            "examples": [
+              "9.40"
+            ]
+          },
+          "vat_rate": {
+            "type": "integer",
+            "title": "Vat Rate",
+            "description": "Basis points: 1900 = 19 %"
+          },
+          "valid_from": {
+            "type": "string",
+            "format": "date",
+            "title": "Valid From"
+          },
+          "valid_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Valid To"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id",
+            "description": "The price list"
+          },
+          "item_id": {
+            "type": "string",
+            "title": "Item Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "description",
+          "unit",
+          "unit_price",
+          "vat_rate",
+          "valid_from",
+          "valid_to",
+          "document_id",
+          "item_id"
+        ],
+        "title": "ExpectedPrice"
       },
       "Explanation": {
         "properties": {

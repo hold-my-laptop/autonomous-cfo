@@ -90,7 +90,7 @@ The CSV itself shows no change in any recurring amount during 2025 (rent 3 800, 
 
 ### 4.2 Documents
 
-All synthetic, in German with an English translation, generated from one fixture file (P02) into PDFs with a real text layer (P03). Boxes are stored in PDF points with the origin top-left.
+All synthetic, in German with an English translation, generated from one fixture file (P02) into PDFs with a real text layer (P03). Boxes are stored in PDF points with the origin top-left. Each document says where it lives: the owner's documents (listed from the start), the mailbox (the landlord's letter, found only by searching the inbox) or the upload (the rent adjustment).
 
 | Document | ID | Content |
 |---|---|---|

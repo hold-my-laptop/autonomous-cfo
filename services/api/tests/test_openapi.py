@@ -20,8 +20,11 @@ def test_every_operation_returns_a_typed_body() -> None:
     for path, method, op in OPERATIONS:
         success = [code for code in op["responses"] if code.startswith("2")]
         assert len(success) == 1, (method, path)
-        content = op["responses"][success[0]]["content"]["application/json"]
-        assert content["schema"], (method, path)
+        body = op["responses"][success[0]]["content"]
+        if "application/pdf" in body:
+            assert body == {"application/pdf": {"schema": {"type": "string", "format": "binary"}}}
+            continue
+        assert body["application/json"]["schema"], (method, path)
 
 
 def test_operation_ids_are_the_handler_names() -> None:
