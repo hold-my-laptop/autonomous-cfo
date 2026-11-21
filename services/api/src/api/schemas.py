@@ -670,7 +670,11 @@ class LetterSubject(BaseModel):
     counterparty_id: str | None
     letter_subject: str
     language: Literal["de"]
-    draft: str | None = Field(description="The letter's text, when written (P16)")
+    draft: str = Field(description="The letter's text, in German")
+    draft_source: Literal["MODEL", "TEMPLATE"] = Field(
+        default="TEMPLATE",
+        description="MODEL: the agent's draft, checked by the backend; TEMPLATE: the backend's",
+    )
 
 
 Subject = Annotated[

@@ -29,11 +29,11 @@ from api.domain.models import (
 from api.domain.policy import Lane, evaluate_proof_action
 from api.domain.proof.findings import (
     Classification,
-    EvidenceKind,
     FindingStatus,
     PaymentDecision,
     ProofFinding,
 )
+from api.letters import cited_clause, contract_word, write_letter
 from api.money import format_eur
 from api.state import DemoState
 
@@ -49,14 +49,8 @@ def _payments(state: DemoState, finding: ProofFinding) -> list[Outflow]:
 
 def _clause(state: DemoState, finding: ProofFinding) -> tuple[str, str] | None:
     """The section and contract word of the first clause the finding cites."""
-    for ref in finding.evidence_refs:
-        if ref.kind is EvidenceKind.CLAUSE and ref.document_id and ref.item_id:
-            document = state.proof.document(ref.document_id)
-            clause = document.clause(ref.item_id) if document else None
-            if clause:
-                word = "Mietvertrag" if document.type.value == "LEASE" else "Vertrag"
-                return clause.section, word
-    return None
+    cited = cited_clause(state, finding)
+    return (cited[1].section, contract_word(cited[0])) if cited else None
 
 
 def letter_subject(state: DemoState, finding: ProofFinding, category: Category | None) -> str:
@@ -207,6 +201,9 @@ def propose_actions(
     if conflict:
         clause = _clause(state, finding)
         basis = f"what {clause[0]} allows" if clause else "what was agreed"
+        letter = write_letter(state, finding, category, letter_draft)
+        if letter.rejected:
+            trace.add("GROUND", f"The agent's letter is not used: {letter.rejected}", now)
         created.append(
             _new(
                 state,
@@ -219,7 +216,8 @@ def propose_actions(
                     "counterparty_id": finding.counterparty_id,
                     "letter_subject": letter_subject(state, finding, category),
                     "language": "de",
-                    "draft": letter_draft,
+                    "draft": letter.text,
+                    "draft_source": letter.source,
                 },
                 f"Ask {finding.counterparty} in writing for the basis of the change: "
                 f"{format_eur(p.disputed)} above {basis}.",
