@@ -17,7 +17,7 @@ direct model database access is involved; it works with the CSV and the PostgreS
 POST /api/v1/assistant/ask
 Content-Type: application/json
 
-{"question":"Kira ödemeleri ne zaman?"}
+{"question":"When we will pay invoices?"}
 ```
 
 The API and AI service share `INTERNAL_TOKEN`; `AI_URL` points to the AI service. For local
