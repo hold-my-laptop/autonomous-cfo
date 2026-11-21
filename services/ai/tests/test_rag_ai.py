@@ -49,14 +49,15 @@ def test_grounded_answer_requires_existing_source():
 
 def test_model_sees_formatted_amounts_and_dates():
     m = Model({"answer": "ok", "source_ids": ["record-1"]})
-    ask(m, question="Kira ne zaman ödendi?")
+    ask(m, question="When was the rent paid?")
     records = json.loads(m.seen[0][1]["content"])["records"]
-    assert records[0]["amount"] == "-3.800 €" and records[0]["date"] == "1 Nisan 2025"
+    assert records[0]["amount"] == "-3,800 €" and records[0]["date"] == "1 April 2025"
+    assert "in English" in m.seen[0][0]["content"]
 
 
 def test_natural_spellings_of_cited_numbers_pass():
     """These were rejected before (only the raw '2025-04-01' / '3800.00' passed)."""
-    for text, q in [("Kira 1 Nisan 2025'te ödendi: 3.800,00 €.", "Kira ne zaman ödendi?"),
+    for text, q in [("Rent of 3.800,00 € was paid on 1 April 2025.", "When was the rent paid?"),
                     ("Rent was paid on 1 April 2025: 3,800.00 EUR.", "When was the rent?"),
                     ("Rent of 3,800 € was paid on 01.04.2025.", "When was the rent?")]:
         r = ask(Model({"answer": text, "source_ids": ["record-1"]}), question=q)
@@ -97,16 +98,16 @@ def test_model_error_and_bad_json_fall_back():
 
 
 def test_numbers_from_question_are_allowed():
-    allowed = allowed_numbers([Source(**SOURCE)], "Did I pay rent in the last 3 months?", "en")
+    allowed = allowed_numbers([Source(**SOURCE)], "Did I pay rent in the last 3 months?")
     assert {"3", "380000", "3800", "1", "4", "2025"} <= allowed
 
 
 def test_no_sources_and_stub_mode():
     r = ask(Model(), sources=())
     assert r.answer_source == "TEMPLATE" and r.sources == []
-    r = asyncio.run(answer(AskRequest(question="Kira ne zaman?", sources=[SOURCE]), StubLLM(),
+    r = asyncio.run(answer(AskRequest(question="When is the rent paid?", sources=[SOURCE]), StubLLM(),
                            Settings(llm_mode="stub")))
-    assert r.answer_source == "TEMPLATE" and "Sorunuzla eşleşen kayıtlar" in r.answer
+    assert r.answer_source == "TEMPLATE" and r.answer.startswith("Records matching your question (1):")
 
 
 def test_route_needs_token():
@@ -116,13 +117,6 @@ def test_route_needs_token():
         assert c.post("/v1/rag/answer", json=body).status_code == 401
         r = c.post("/v1/rag/answer", json=body, headers={"Authorization": "Bearer secret"})
         assert r.status_code == 200 and r.json()["answer_source"] == "TEMPLATE"
-
-
-def test_language_detection_does_not_treat_i_as_turkish():
-    from ai.rag import language
-    assert language("How much did I pay City Energy?") == "en"
-    assert language("Kira ödemeleri ne zaman?") == "tr"
-    assert language("Kira ne zaman") == "tr"
 
 
 def test_template_keeps_backend_relevance_order():

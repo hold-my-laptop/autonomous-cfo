@@ -1,5 +1,7 @@
 # services/ai — agent runtime
 
+Code: `services/ai`. Commands below run from that folder.
+
 Thin AI service from `docs/contracts/DATA_CONTRACTS.md` section 3. The backend owns all data
 and logic; this service only runs the tool-calling loop against our model (Qwen3-8B served
 by vLLM on OpenShift AI) and writes plain-language texts.

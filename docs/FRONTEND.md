@@ -1,5 +1,7 @@
 # Vero – Frontend (Autonomous CFO challenge)
 
+Code: `apps/web`.
+
 React + TypeScript + Vite. Plain-language UI for business owners of every generation.
 
 ## Run
@@ -14,12 +16,12 @@ npm run dev                # real backend: start it first with `make up-app` (ap
 # chat needs services/ai too (default localhost:8001): AI_URL=http://localhost:8001 npm run dev
 ```
 
-The client calls `/api/v1/...` on its own origin, the same as [`nginx.conf`](nginx.conf) does in the cluster, so no
+The client calls `/api/v1/...` on its own origin, the same as [`nginx.conf`](../apps/web/nginx.conf) does in the cluster, so no
 CORS is needed. The dev server forwards `/api/v1/chat` and `/api/v1/documents/extract` to `$AI_URL` (as `/v1/...`)
 and everything else under `/api/v1/*` to `$BACKEND_URL` unchanged.
 
 In live mode the backend's shapes (cents as strings, snake_case) are mapped onto the UI types in
-[`src/api/adapters.ts`](src/api/adapters.ts); the mapping is listed at the bottom of [`src/api/types.ts`](src/api/types.ts).
+[`src/api/adapters.ts`](../apps/web/src/api/adapters.ts); the mapping is listed at the bottom of [`src/api/types.ts`](../apps/web/src/api/types.ts).
 The backend has no event stream, so live updates come from polling the latest run (`GET /runs?limit=1`).
 
 ## Screens
@@ -40,7 +42,7 @@ reduced motion respected.
 
 ## Data
 
-Frontend shapes: `src/api/types.ts`. Backend contract: [`docs/contracts/openapi.json`](../../docs/contracts/openapi.json).
+Frontend shapes: `src/api/types.ts`. Backend contract: [`docs/contracts/openapi.json`](contracts/openapi.json).
 
 Mock mode replays **Pizzeria Amalfi's 2025 bank statement** (`data/pizzeria-amalfi-bank-statement-2025-v6.csv` at the repo root, gitignored, imported via the `@samples` alias).
 The demo replays 2025 from Monday 14 April; agents only see transactions before that date.
@@ -57,7 +59,7 @@ Real-backend builds do not include the mock (it is loaded with a dynamic import 
 
 ## Build and deploy
 
-[`Dockerfile`](Dockerfile) (Red Hat UBI Node 22 build → UBI nginx 1.24, non-root, port 8080) and [`nginx.conf`](nginx.conf)
+[`Dockerfile`](../apps/web/Dockerfile) (Red Hat UBI Node 22 build → UBI nginx 1.24, non-root, port 8080) and [`nginx.conf`](../apps/web/nginx.conf)
 (`/api/v1/*` → `api:8080`, `/health`, SPA fallback) are owned by DevOps. The image is a real-backend build:
 `VITE_MOCK` is not set, so the mock and the sample CSV are not part of the bundle.
 

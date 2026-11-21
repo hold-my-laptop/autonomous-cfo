@@ -43,6 +43,7 @@ Every arrow is a connection that a NetworkPolicy allows. Anything not drawn is b
 | api | Deployment, 1 replica | built from `services/api` on UBI 9 Python 3.12 | 250m / 1 | 512Mi / 1Gi | `/api/v1/health/ready`, `/api/v1/health/live` |
 | ai | Deployment, 1 replica | built from `services/ai` | 100m / 500m | 256Mi / 512Mi | `/health/live` |
 | db | Deployment + PersistentVolumeClaim (gp3-csi, 5Gi) | `registry.redhat.io/rhel9/postgresql-16` | 250m / 1 | 512Mi / 1Gi | `pg_isready` |
+| mlflow | Deployment + PersistentVolumeClaim (gp3-csi, 2Gi), no Route | built in the cluster: UBI 9 Python 3.12 + MLflow 3.18 | 100m / 1 | 1Gi / 2Gi | `/health` |
 | cfo-notebook | OpenShift AI workbench | Standard Data Science notebook 3.5 | 2 / 2 | 4Gi / 4Gi | OpenShift AI |
 
 The GPU is only used by the model. The web, api, ai and db pods together ask for less than one CPU.
@@ -120,6 +121,7 @@ make oc-api-build oc-api-deploy
 make oc-web-build oc-web-deploy
 make oc-network
 make oc-monitoring
+make oc-mlflow
 make oc-pipeline
 make oc-check
 ```
@@ -198,6 +200,12 @@ for example:
 - `vllm:num_requests_running` (requests in flight)
 - `vllm:kv_cache_usage_perc` (KV cache use on the GPU)
 
+Tracing: `make oc-mlflow` builds and runs an MLflow tracking server in the project (SQLite and artifacts on its own volume).
+The ai service sends one trace per agent run and chat answer to the experiment `vero-agent` (`MLFLOW_TRACKING_URI=http://mlflow:8080`
+in its Deployment). Only the ai service and the workbench may connect, and there is no Route because the MLflow UI has
+no login. To open the UI: `oc port-forward svc/mlflow 5000:8080 -n autonomous-cfo`, then http://localhost:5000.
+MLflow needs about 850Mi of memory at start, so its limit is 2Gi.
+
 Everyday commands:
 
 ```bash
@@ -211,5 +219,5 @@ oc port-forward svc/api 8000:8080 -n autonomous-cfo
 ## 6. Notebooks
 
 The workbench `cfo-notebook` runs next to the app and talks to the same model and api.
-See [notebooks/README.md](../notebooks/README.md): a model benchmark, a cash flow analysis of the bank statement,
+See [NOTEBOOKS.md](NOTEBOOKS.md): a model benchmark, a cash flow analysis of the bank statement,
 and a check of the forecast against the real year plus five agent runs on the same event.

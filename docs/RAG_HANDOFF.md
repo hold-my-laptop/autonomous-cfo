@@ -30,7 +30,7 @@ or the PostgreSQL statement table; retrieval itself never makes a database query
 | Concern | File |
 |---|---|
 | Public request and response | `services/api/src/api/routers/rag.py` |
-| Record construction, Turkish aliases, ranking | `services/api/src/api/rag.py` |
+| Record construction, synonyms, ranking | `services/api/src/api/rag.py` |
 | API → AI HTTP call and timeout | `services/api/src/api/agent.py`, `services/api/src/api/config.py` |
 | Grounding prompt, response validation | `services/ai/src/ai/rag.py` |
 | LLM transport | `services/ai/src/ai/llm.py` |
@@ -45,7 +45,7 @@ Public request:
 POST /api/v1/assistant/ask
 Content-Type: application/json
 
-{"question":"Kira ödemeleri ne zaman?"}
+{"question":"When is the rent paid?"}
 ```
 
 Successful response:
@@ -80,9 +80,8 @@ The UI can show `MODEL` answers as text and `TEMPLATE` answers as a record list.
 The internal AI endpoint is `POST /v1/rag/answer`. Its request adds `sources` to the
 public question and requires the shared `INTERNAL_TOKEN` when configured. The model is
 asked for JSON with `answer` and `source_ids`. Only source IDs present in the request
-are accepted and returned. The model receives amounts and dates already formatted in
-the question's language (Turkish or English), e.g. `-3.800 €` and `1 Nisan 2025`, and is
-told to copy them. Every number in the answer must match a cited record's amount or date
+are accepted and returned. The model answers in English only. It receives amounts and dates
+already formatted, e.g. `-3,800 €` and `1 April 2025`, and is told to copy them. Every number in the answer must match a cited record's amount or date
 in a common spelling (`3.800,00 €`, `3,800.00 EUR`, `01.04.2025`, `1 April 2025`) or a
 number from the question; a self-computed total (e.g. two rents added up) is rejected.
 A rejected answer gets one correction round. This is a guardrail, not a proof that
@@ -90,8 +89,8 @@ every sentence is true.
 
 ## Retrieval and current limits
 
-Retrieval is deterministic lexical ranking, with aliases such as Turkish `kira` →
-`rent`. It looks for overlapping terms in category, counterparty, description, date,
+Retrieval is deterministic lexical ranking, with a few English synonyms (e.g. `salary` →
+`payroll`). It looks for overlapping terms in category, counterparty, description, date,
 and exact euro or cent amount. It returns at most 12 records. It does **not** use
 embeddings or a vector index. It is suitable for questions about specific payments,
 dates and counterparties; it does not provide complete totals across a large period.
@@ -120,10 +119,10 @@ actual bank statement and deployed vLLM service.
 ## Changes after review (21 November)
 
 - The number check only accepted the raw ISO date and `3800.00`; natural answers such as
-  "1 Nisan 2025, 3.800,00 €" were rejected, so a real model would mostly get 503. Records
+  "1 April 2025, 3,800.00 EUR" were rejected, so a real model would mostly get 503. Records
   now go to the model pre-formatted and the check normalises spellings.
 - 503 replaced by the record-list fallback (AI side and API side).
-- Language detection no longer treats every `i` as Turkish (`re.I` made `ı` match `i`).
+- Questions and answers are English only.
 - The fallback keeps the backend's relevance order; English filler words (did, pay, much…)
   are stop words, so "How much did I pay City Energy?" no longer matches payroll.
 - `apps/web/Dockerfile` and `apps/web/index.html` were left out: the web app is the
