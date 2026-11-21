@@ -46,6 +46,8 @@ class AgentClient(Protocol):
 
     def model_health(self) -> ModelHealth: ...
 
+    def ask(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
 
 class HttpAgentClient:
     """Calls the AI service; any failure raises AgentUnavailableError."""
@@ -81,6 +83,15 @@ class HttpAgentClient:
             return ExplainResult.model_validate_json(response.content)
         except ValueError as exc:
             raise AgentUnavailableError(f"unusable explain result: {exc}") from exc
+
+    def ask(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = self._post("/v1/rag/answer", payload, self._settings.rag_timeout_s)
+        if response.status_code != 200:
+            raise AgentUnavailableError(f"AI service answered {response.status_code}")
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise AgentUnavailableError("unusable RAG answer") from exc
 
     def model_health(self) -> ModelHealth:
         """The AI service's own model check, passed through. When the AI service itself

@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     agent_deadline_s: float = 60.0
     agent_start_timeout_s: float = 5.0
     explain_timeout_s: float = 10.0
+    rag_timeout_s: float = 35.0
     model_health_timeout_s: float = 20.0
     state_load_retry_s: float = 5.0
 

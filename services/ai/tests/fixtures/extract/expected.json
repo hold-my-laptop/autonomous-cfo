@@ -1,0 +1,403 @@
+[
+ {
+  "file": "invoice_rossi.pdf",
+  "known_counterparties": [
+   {
+    "id": "cp-rossi",
+    "name": "Metzgerei Rossi",
+    "aliases": [
+     "Rossi GmbH"
+    ]
+   },
+   {
+    "id": "cp-landlord",
+    "name": "Main Street Real Estate GmbH",
+    "aliases": []
+   }
+  ],
+  "expected": {
+   "doc_type": "INVOICE",
+   "counterparty": {
+    "value": "Metzgerei Rossi GmbH",
+    "matched_id": "cp-rossi"
+   },
+   "document_number": {
+    "value": "RE-2025-0142",
+    "text": "RE-2025-0142",
+    "page": 1,
+    "box": [
+     450.84,
+     185.07,
+     511.31,
+     192.06
+    ]
+   },
+   "date": {
+    "value": "2025-06-02",
+    "text": "02.06.2025",
+    "page": 1,
+    "box": [
+     450.36,
+     200.21,
+     497.14,
+     207.06
+    ]
+   },
+   "currency": {
+    "value": "EUR",
+    "text": "930,89 €",
+    "page": 1
+   },
+   "period": {
+    "from": {
+     "value": "2025-05-01",
+     "text": "01.05.2025",
+     "page": 1,
+     "box": [
+      450.36,
+      215.21,
+      497.14,
+      222.06
+     ]
+    },
+    "to": {
+     "value": "2025-05-31",
+     "text": "31.05.2025",
+     "page": 1,
+     "box": [
+      510.32,
+      215.21,
+      557.14,
+      222.06
+     ]
+    }
+   },
+   "lines": [
+    {
+     "description": {
+      "value": "Mozzarella di Bufala",
+      "text": "Mozzarella di Bufala",
+      "page": 1,
+      "box": [
+       80.69,
+       274.97,
+       165.28,
+       282.02
+      ]
+     },
+     "quantity": {
+      "value": "40",
+      "text": "40",
+      "page": 1,
+      "box": [
+       260.24,
+       275.21,
+       270.2,
+       282.06
+      ]
+     },
+     "unit": {
+      "value": "kg",
+      "text": "kg",
+      "page": 1,
+      "box": [
+       305.64,
+       275.07,
+       314.49,
+       283.97
+      ]
+     },
+     "unit_price": {
+      "value": "12.5",
+      "text": "12,50 €",
+      "page": 1,
+      "box": [
+       350.96,
+       275.07,
+       382.62,
+       283.28
+      ]
+     },
+     "vat_rate": {
+      "value": 700,
+      "text": "7 %",
+      "page": 1,
+      "box": [
+       420.35,
+       275.21,
+       436.0,
+       282.06
+      ]
+     },
+     "net": {
+      "value": "50000",
+      "text": "500,00 €",
+      "page": 1,
+      "box": [
+       470.3,
+       275.07,
+       507.9,
+       283.28
+      ]
+     }
+    },
+    {
+     "description": {
+      "value": "Prosciutto di Parma",
+      "text": "Prosciutto di Parma",
+      "page": 1,
+      "box": [
+       80.82,
+       293.07,
+       162.64,
+       300.02
+      ]
+     },
+     "quantity": {
+      "value": "12.5",
+      "text": "12,5",
+      "page": 1,
+      "box": [
+       260.96,
+       293.21,
+       278.09,
+       301.28
+      ]
+     },
+     "unit": {
+      "value": "kg",
+      "text": "kg",
+      "page": 1,
+      "box": [
+       305.64,
+       293.07,
+       314.49,
+       301.97
+      ]
+     },
+     "unit_price": {
+      "value": "24.8",
+      "text": "24,80 €",
+      "page": 1,
+      "box": [
+       350.25,
+       293.07,
+       382.62,
+       301.28
+      ]
+     },
+     "vat_rate": {
+      "value": 700,
+      "text": "7 %",
+      "page": 1,
+      "box": [
+       420.35,
+       293.21,
+       436.0,
+       300.06
+      ]
+     },
+     "net": {
+      "value": "31000",
+      "text": "310,00 €",
+      "page": 1,
+      "box": [
+       470.32,
+       293.07,
+       507.9,
+       301.28
+      ]
+     }
+    },
+    {
+     "description": {
+      "value": "Reinigungsmittel",
+      "text": "Reinigungsmittel",
+      "page": 1,
+      "box": [
+       80.84,
+       311.07,
+       149.58,
+       319.97
+      ]
+     },
+     "quantity": {
+      "value": "6",
+      "text": "6",
+      "page": 1,
+      "box": [
+       260.36,
+       311.21,
+       264.92,
+       318.06
+      ]
+     },
+     "unit": {
+      "value": "Stk",
+      "text": "Stk",
+      "page": 1,
+      "box": [
+       305.47,
+       310.89,
+       318.74,
+       318.06
+      ]
+     },
+     "unit_price": {
+      "value": "8.99",
+      "text": "8,99 €",
+      "page": 1,
+      "box": [
+       350.36,
+       311.07,
+       377.34,
+       319.28
+      ]
+     },
+     "vat_rate": {
+      "value": 1900,
+      "text": "19 %",
+      "page": 1,
+      "box": [
+       420.96,
+       311.21,
+       441.28,
+       318.06
+      ]
+     },
+     "net": {
+      "value": "5394",
+      "text": "53,94 €",
+      "page": 1,
+      "box": [
+       470.3,
+       311.07,
+       502.62,
+       319.28
+      ]
+     }
+    }
+   ],
+   "totals": {
+    "net": {
+     "value": "86394",
+     "text": "863,94 €",
+     "page": 1,
+     "box": [
+      470.36,
+      355.07,
+      507.9,
+      363.28
+     ]
+    },
+    "vat": {
+     "value": "6695",
+     "text": "66,95 €",
+     "page": 1,
+     "box": [
+      470.36,
+      400.07,
+      502.62,
+      408.28
+     ]
+    },
+    "gross": {
+     "value": "93089",
+     "text": "930,89 €",
+     "page": 1,
+     "box": [
+      470.4,
+      420.07,
+      507.9,
+      428.28
+     ]
+    }
+   }
+  }
+ },
+ {
+  "file": "rent_adjustment.pdf",
+  "known_counterparties": [
+   {
+    "id": "cp-rossi",
+    "name": "Metzgerei Rossi",
+    "aliases": [
+     "Rossi GmbH"
+    ]
+   },
+   {
+    "id": "cp-landlord",
+    "name": "Main Street Real Estate GmbH",
+    "aliases": []
+   }
+  ],
+  "expected": {
+   "doc_type": "RENT_ADJUSTMENT",
+   "counterparty": {
+    "value": "Main Street Real Estate GmbH",
+    "matched_id": "cp-landlord"
+   },
+   "date": {
+    "value": "2025-02-15",
+    "text": "15.02.2025",
+    "page": 1,
+    "box": [
+     430.96,
+     135.21,
+     477.14,
+     142.06
+    ]
+   },
+   "effective_from": {
+    "value": "2025-06-01",
+    "text": "01.06.2025",
+    "page": 1,
+    "box": [
+     180.36,
+     290.21,
+     227.14,
+     297.06
+    ]
+   },
+   "currency": {
+    "value": "EUR",
+    "text": "3.500,00 €",
+    "page": 1
+   },
+   "old_amount": {
+    "value": "350000",
+    "text": "3.500,00 €",
+    "page": 1,
+    "box": [
+     180.32,
+     260.07,
+     225.83,
+     268.28
+    ]
+   },
+   "new_amount": {
+    "value": "380000",
+    "text": "3.800,00 €",
+    "page": 1,
+    "box": [
+     180.32,
+     275.07,
+     225.83,
+     283.28
+    ]
+   },
+   "frequency": {
+    "value": "MONTHLY",
+    "text": "monatlich",
+    "page": 1,
+    "box": [
+     250.62,
+     275.07,
+     290.03,
+     282.02
+    ]
+   },
+   "lines": []
+  }
+ }
+]

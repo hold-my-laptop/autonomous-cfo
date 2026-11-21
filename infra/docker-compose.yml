@@ -20,6 +20,7 @@ services:
     env_file: .env
     environment:
       STATEMENT_PATH: /opt/app-root/data/pizzeria-amalfi-bank-statement-2025-v6.csv
+      AI_URL: http://ai:8080
     volumes:
       - ../data:/opt/app-root/data:ro
     ports:
@@ -29,6 +30,21 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/api/v1/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  ai:
+    profiles: ["app"]
+    build: ../services/ai
+    env_file: .env
+    environment:
+      API_INTERNAL_URL: http://api:8080/internal/v1
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:8080/health/live"]
       interval: 5s
       timeout: 3s
       retries: 20

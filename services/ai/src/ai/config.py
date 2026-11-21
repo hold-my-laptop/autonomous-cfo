@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     llm_api_key: SecretStr = SecretStr("not-needed")
     llm_timeout_s: float = 30.0
     llm_max_tokens: int = 600
+    # Qwen3 "thinking": None leaves the server default; false makes answers much faster
+    # (sent as chat_template_kwargs.enable_thinking; recommended for document extraction).
+    llm_enable_thinking: bool | None = None
 
     # Backend tools (contract section 3)
     api_internal_url: str = "http://api:8080/internal/v1"
@@ -28,6 +31,8 @@ class Settings(BaseSettings):
     default_max_tool_calls: int = 8
     default_deadline_s: int = 60
     explain_timeout_s: float = 9.0  # backend gives up at 10 s
+    rag_timeout_s: float = 30.0  # backend gives up at 35 s
+    extract_timeout_s: float = 27.0  # backend waits 30 s for /v1/documents/extract
 
     prompt_version: str = "agent-prompt-1.0.0"
 

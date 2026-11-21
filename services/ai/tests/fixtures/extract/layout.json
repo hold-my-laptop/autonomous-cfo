@@ -1,0 +1,266 @@
+{
+ "invoice_rossi.pdf": {
+  "counterparty": [
+   50,
+   760
+  ],
+  "title": [
+   50,
+   650
+  ],
+  "document_number": [
+   450,
+   650
+  ],
+  "date": [
+   450,
+   635
+  ],
+  "period_from": [
+   450,
+   620
+  ],
+  "period_to": [
+   510,
+   620
+  ],
+  "l0.description": [
+   80,
+   560
+  ],
+  "l0.quantity": [
+   260,
+   560
+  ],
+  "l0.unit": [
+   305,
+   560
+  ],
+  "l0.unit_price": [
+   350,
+   560
+  ],
+  "l0.vat_rate": [
+   420,
+   560
+  ],
+  "l0.net": [
+   470,
+   560
+  ],
+  "l1.description": [
+   80,
+   542
+  ],
+  "l1.quantity": [
+   260,
+   542
+  ],
+  "l1.unit": [
+   305,
+   542
+  ],
+  "l1.unit_price": [
+   350,
+   542
+  ],
+  "l1.vat_rate": [
+   420,
+   542
+  ],
+  "l1.net": [
+   470,
+   542
+  ],
+  "l2.description": [
+   80,
+   524
+  ],
+  "l2.quantity": [
+   260,
+   524
+  ],
+  "l2.unit": [
+   305,
+   524
+  ],
+  "l2.unit_price": [
+   350,
+   524
+  ],
+  "l2.vat_rate": [
+   420,
+   524
+  ],
+  "l2.net": [
+   470,
+   524
+  ],
+  "totals.net": [
+   470,
+   480
+  ],
+  "totals.vat": [
+   470,
+   435
+  ],
+  "totals.gross": [
+   470,
+   415
+  ]
+ },
+ "invoice_injection.pdf": {
+  "counterparty": [
+   50,
+   760
+  ],
+  "title": [
+   50,
+   650
+  ],
+  "document_number": [
+   450,
+   650
+  ],
+  "date": [
+   450,
+   635
+  ],
+  "period_from": [
+   450,
+   620
+  ],
+  "period_to": [
+   510,
+   620
+  ],
+  "l0.description": [
+   80,
+   560
+  ],
+  "l0.quantity": [
+   260,
+   560
+  ],
+  "l0.unit": [
+   305,
+   560
+  ],
+  "l0.unit_price": [
+   350,
+   560
+  ],
+  "l0.vat_rate": [
+   420,
+   560
+  ],
+  "l0.net": [
+   470,
+   560
+  ],
+  "l1.description": [
+   80,
+   542
+  ],
+  "l1.quantity": [
+   260,
+   542
+  ],
+  "l1.unit": [
+   305,
+   542
+  ],
+  "l1.unit_price": [
+   350,
+   542
+  ],
+  "l1.vat_rate": [
+   420,
+   542
+  ],
+  "l1.net": [
+   470,
+   542
+  ],
+  "l2.description": [
+   80,
+   524
+  ],
+  "l2.quantity": [
+   260,
+   524
+  ],
+  "l2.unit": [
+   305,
+   524
+  ],
+  "l2.unit_price": [
+   350,
+   524
+  ],
+  "l2.vat_rate": [
+   420,
+   524
+  ],
+  "l2.net": [
+   470,
+   524
+  ],
+  "totals.net": [
+   470,
+   480
+  ],
+  "totals.vat": [
+   470,
+   435
+  ],
+  "totals.gross": [
+   470,
+   415
+  ]
+ },
+ "rent_adjustment.pdf": {
+  "counterparty": [
+   50,
+   760
+  ],
+  "date": [
+   430,
+   700
+  ],
+  "title": [
+   50,
+   650
+  ],
+  "old_amount": [
+   180,
+   575
+  ],
+  "new_amount": [
+   180,
+   560
+  ],
+  "frequency": [
+   250,
+   560
+  ],
+  "effective_from": [
+   180,
+   545
+  ]
+ },
+ "notice_energy.pdf": {
+  "counterparty": [
+   50,
+   760
+  ],
+  "date": [
+   400,
+   700
+  ],
+  "title": [
+   50,
+   650
+  ]
+ }
+}
