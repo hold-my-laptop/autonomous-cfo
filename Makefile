@@ -5,7 +5,7 @@ COMPOSE_APP := $(COMPOSE) --profile app
 OC_NS := autonomous-cfo
 STATEMENT := data/pizzeria-amalfi-bank-statement-2025-v6.csv
 
-.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy oc-ai-secret oc-ai-build oc-ai-deploy oc-network oc-monitoring oc-check
+.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy oc-ai-secret oc-ai-build oc-ai-deploy oc-web-build oc-web-deploy oc-network oc-monitoring oc-check
 
 up:
 > test -f infra/.env || cp infra/.env.example infra/.env
@@ -70,6 +70,15 @@ oc-ai-build:
 oc-ai-deploy: oc-ai-secret
 > oc apply -n $(OC_NS) -f deploy/openshift/ai/03-deployment.yaml -f deploy/openshift/ai/04-service.yaml
 > oc rollout status deployment/ai -n $(OC_NS) --timeout=180s
+
+oc-web-build:
+> oc apply -n $(OC_NS) -f deploy/openshift/web/01-imagestream.yaml -f deploy/openshift/web/02-buildconfig.yaml
+> oc start-build web -n $(OC_NS) --follow
+
+oc-web-deploy:
+> oc apply -n $(OC_NS) -f deploy/openshift/web/03-deployment.yaml -f deploy/openshift/web/04-service.yaml -f deploy/openshift/web/05-route.yaml
+> oc rollout status deployment/web -n $(OC_NS) --timeout=180s
+> @echo "web: https://$$(oc get route web -n $(OC_NS) -o jsonpath='{.spec.host}')"
 
 oc-network:
 > oc apply -n $(OC_NS) -f deploy/openshift/network/
