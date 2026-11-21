@@ -329,6 +329,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | 25 | *(Vero Proof)* One finding | `GET /findings/{id}` | **ProofFinding** |
 | 26 | *(Vero Proof)* Owner's tap on a quiet change | `POST /findings/{id}/acknowledge` (`Idempotency-Key`) | **ProofFinding** (`RESOLVED`, out of the digest). `409 NOT_PENDING` unless `quiet` and not yet acknowledged |
 | 27 | *(Vero Proof)* Upload a document | `POST /documents` (multipart `file`, a PDF of at most 5 MB, `Idempotency-Key`) | **202** `{ document_id, run_id, status }`. Poll `GET /runs/{run_id}` (kind `PROOF`): `RECEIVE` → `EXTRACT` (or `FALLBACK`) → `CHECK` → `SUMMARY`; the finding is in `finding_ids`. Errors: `409 RUN_IN_PROGRESS` and `409 DOCUMENT_ALREADY_PROCESSED` before anything is stored, `413 FILE_TOO_LARGE`, `422 VALIDATION_ERROR` (not a PDF, empty). A run that cannot read an unknown document ends `FAILED` with no finding; a demo document falls back to its stored values (`mode: FALLBACK`, reason in the trace) |
+| 28 | *(Vero Proof)* The weekly digest | `GET /digest` | **Digest**: every finding still `in_digest` (no date window) and the latest routine check per fixed cost |
 
 ### 2.2 Data types
 
@@ -359,7 +360,8 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | `lanes.NEEDS_APPROVAL` | Recommendation[] | Waiting for the owner |
 | `lanes.NOT_ALLOWED` | Recommendation[] | Refused by the rules |
 | `pending_count` | int | |
-| `latest_run` | `{ run_id, status }?` | |
+| `latest_run` | `{ run_id, status }?` | The latest **Cash** run (the headline comes from it too) |
+| `proof` | ProofOverview | Vero Proof: `{ open_findings: { VERIFIED, UNEXPLAINED, CONFLICT }, needs_owner, latest_run: { run_id, status }? }`. Open = still in the digest; `needs_owner` = open and not `quiet`; `latest_run` = the latest Proof run |
 
 **Finding**: `{ kind: "DRIVER" | "RECURRING" | "FX_EXPOSURE" | "BACKTEST", text: string }`, e.g. "4 CHF tranches so far cost 4 325,00–4 354,17 € (rate 1,038–1,045)".
 
@@ -553,6 +555,22 @@ One difference Vero Proof found and everything it did about it, from `GET /findi
 | `history` | `{ at, status, classification?, label }[]` | Every transition, oldest first, in plain words |
 | `quiet` | bool | Computed: `VERIFIED`, `CLASSIFIED`, no actions; can be acknowledged |
 | `in_digest` | bool | Computed: not acknowledged and not `RESOLVED` |
+
+#### Digest
+`GET /digest`: the weekly digest (PROOF §6, §7.4). A finding leaves it when the owner acknowledges it (quiet) or decides all its actions (`RESOLVED`). "Weekly" is only the label: the demo clock is fixed, so there is no date window.
+
+| Field | Type | Description |
+|---|---|---|
+| `as_of` | Date | |
+| `counts` | `{ changes, handled_quietly, needs_owner, routine_checks }` | `changes` = rows in `changes`; `handled_quietly` = `quiet` ones; `needs_owner` = the others (waiting for a decision, or escalated `UNEXPLAINED`); `routine_checks` = routine checks below that matched. After reset 3 / 3 / 0 / 3; after the hero upload 4 / 3 / 1 / 3 |
+| `changes` | DigestChange[] | By the date they concern, oldest first |
+| `routine_checks` | RoutineCheck[] | The latest statement payment of each fixed cost with a contract, in Cost Memory order (RENT, UTIL, XFER) |
+
+**DigestChange**: `{ finding_id, title, counterparty, cost_ref, classification, escalated, status, quiet, investigation_mode: AGENT | FALLBACK | null, reason, actions: DigestAction[] }`. `investigation_mode` is set when the label came after investigating (the Asimex surcharge: `FALLBACK`, "after investigating"). `reason` is the label's line from the finding's history, e.g. "Every difference matches the Price list 2025", "Conflict: 4 104,00 € billed, 3 800,00 € allowed".
+
+**DigestAction**: `{ recommendation_id, kind, lane, text }`, the finding's actions still `PENDING`, e.g. `KEEP_PAYMENT` "Keep paying 3 800,00 € for RENT". Approve or reject with `POST /recommendations/{recommendation_id}/approve|reject`.
+
+**RoutineCheck**: `{ cost_ref, counterparty, transaction_id, date, paid, expected, currency, eur_amount?, fx_rate?, document_id, clause_id?, matches }`. `paid` and `expected` in `currency` (the CHF tranche in CHF, with `eur_amount` and `fx_rate`); `document_id`/`clause_id` = the contract.
 
 #### AuditEntry
 One line of the append-only activity log, from `GET /audit`. Entries are sealed as a hash chain: verify them by recomputing each `hash` in `seq` order.

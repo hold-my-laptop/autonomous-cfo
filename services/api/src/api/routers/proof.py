@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from api.audit import AuditActor, AuditAgent, record
 from api.deps import ProofDep, RepositoryDep, SettingsDep
+from api.digest import build_digest, by_period
 from api.domain.models import RunStatus
 from api.domain.proof.dataset import Document as FixtureDocument
 from api.domain.proof.findings import Classification, FindingStatus, ProofFinding
@@ -22,7 +23,7 @@ from api.proof_runs import (
     apply_extraction,
     conclude_investigation,
 )
-from api.proof_schemas import CostItem, Document, DocumentSummary, UploadAccepted
+from api.proof_schemas import CostItem, Digest, Document, DocumentSummary, UploadAccepted
 from api.state import DemoState
 
 router = APIRouter(tags=["proof"])
@@ -140,7 +141,7 @@ def list_findings(
                 if (classification is None or f.classification is classification)
                 and (status is None or f.status is status)
             ),
-            key=lambda f: (f.period_from or f.created_at.date(), f.created_at, str(f.id)),
+            key=by_period,
         )
 
 
@@ -182,6 +183,15 @@ def acknowledge_finding(
             return done
 
         return run_idempotent(state, key, request_hash("POST", request.url.path, None), apply)
+
+
+@router.get("/digest")
+def get_digest(repository: RepositoryDep) -> Digest:
+    """The weekly digest: changes handled quietly, changes needing the owner (with the actions
+    Vero staged) and the latest routine checks. A finding leaves it once acknowledged or once
+    its actions are decided; there is no date window."""
+    with repository.read() as state:
+        return build_digest(state)
 
 
 class _UploadFingerprint(BaseModel):

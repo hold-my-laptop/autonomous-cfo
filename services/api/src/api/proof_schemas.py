@@ -1,4 +1,4 @@
-"""Public shapes of Vero Proof (DATA_CONTRACTS §2.2): Cost Memory and documents."""
+"""Public shapes of Vero Proof (DATA_CONTRACTS §2.2): Cost Memory, documents and the digest."""
 
 import datetime as dt
 from typing import Annotated, Any, Literal, Self
@@ -6,9 +6,15 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-from api.domain.models import Category
+from api.domain.models import Category, RecommendationKind
 from api.domain.proof import cost_memory as cm
 from api.domain.proof import dataset as ds
+from api.domain.proof.check import RoutineCheck
+from api.domain.proof.findings import (
+    Classification,
+    FindingStatus,
+    InvestigationMode,
+)
 from api.money import DecimalStr, Money
 
 Box = Annotated[
@@ -270,3 +276,45 @@ class Document(DocumentSummary):
             rent_adjustment=data["rent_adjustment"],
             highlights=data["highlights"],
         )
+
+
+class DigestCounts(BaseModel):
+    changes: int = Field(description="Findings in the digest")
+    handled_quietly: int = Field(description="Verified, nothing to decide")
+    needs_owner: int = Field(description="Waiting for a decision or for evidence")
+    routine_checks: int = Field(description="Latest routine checks that matched the contract")
+
+
+class DigestAction(BaseModel):
+    """An action Vero prepared for the finding, waiting for the owner."""
+
+    recommendation_id: UUID
+    kind: RecommendationKind
+    lane: Literal["DONE_WITHIN_MANDATE", "NEEDS_APPROVAL", "NOT_ALLOWED"]
+    text: str = Field(description="e.g. 'Keep paying 3 800,00 € for RENT'")
+
+
+class DigestChange(BaseModel):
+    finding_id: UUID
+    title: str
+    counterparty: str
+    cost_ref: str
+    classification: Classification
+    escalated: bool
+    status: FindingStatus
+    quiet: bool = Field(description="Handled quietly; acknowledge it to clear it")
+    investigation_mode: InvestigationMode | None = Field(
+        description="Set when the label came after investigating (AGENT or FALLBACK)"
+    )
+    reason: str = Field(description="Why it has its label, in one line")
+    actions: list[DigestAction] = Field(description="Staged actions waiting for the owner")
+
+
+class Digest(BaseModel):
+    """The weekly digest: every finding the owner hasn't acknowledged or decided yet and the
+    latest routine check of each fixed cost with a contract. No date window."""
+
+    as_of: dt.date
+    counts: DigestCounts
+    changes: list[DigestChange] = Field(description="By the date of what they concern")
+    routine_checks: list[RoutineCheck] = Field(description="The latest per cost item")

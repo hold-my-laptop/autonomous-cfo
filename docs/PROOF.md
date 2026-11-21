@@ -255,11 +255,13 @@ Expected trace (4 tool calls): `search_inbox` → the landlord's letter in the g
 
 ### 7.3 Routine checks (digest, not changes)
 
-| Payment (Apr 2025) | Contract | Result |
+The digest shows the latest payment of each item before `as_of`.
+
+| Payment | Contract | Result |
 |---|---|---|
-| Rent 380000 | lease | matches |
-| Utilities 65000 | payment plan | matches |
-| CHF tranche 416667 CHF (433334 EUR @ 1.040; Mar 432500 @ 1.038) | partnership agreement | matches (compared in CHF) |
+| Rent 380000 (1 May) | lease | matches |
+| Utilities 65000 (10 Apr) | payment plan | matches |
+| CHF tranche 416667 CHF (15 Apr; 433334 EUR @ 1.040; Mar 432500 @ 1.038) | partnership agreement | matches (compared in CHF) |
 
 ### 7.4 Digest counts
 
