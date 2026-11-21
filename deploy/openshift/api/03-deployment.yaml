@@ -27,6 +27,8 @@ spec:
             - containerPort: 8080
               protocol: TCP
           env:
+            - name: STATEMENT_SOURCE
+              value: db
             - name: STATEMENT_PATH
               value: /opt/app-root/data/pizzeria-amalfi-bank-statement-2025-v6.csv
             - name: DATABASE_URL
