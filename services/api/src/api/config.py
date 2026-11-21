@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     demo_as_of_date: date = date(2025, 5, 5)
     statement_source: Literal["csv", "db"] = "csv"
     statement_path: Path = REPO_ROOT / "data" / "pizzeria-amalfi-bank-statement-2025-v6.csv"
+    proof_dataset_path: Path = Path(__file__).resolve().parent / "fixtures/proof/dataset.json"
     opening_balance: int = 250_000
     forecast_horizon_days: int = 91
     revenue_model_weeks: int = 8

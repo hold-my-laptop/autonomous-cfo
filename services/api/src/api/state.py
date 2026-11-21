@@ -36,6 +36,7 @@ from api.domain.models import (
     Transaction,
 )
 from api.domain.planner import PlanResult, apply_moves, plan_moves
+from api.domain.proof.dataset import ProofDataset, load_dataset
 from api.domain.recurring import detect_recurring, project_outflows
 from api.domain.revenue import RevenueModel, build_revenue_model
 from api.domain.schedule import project_scheduled, sort_outflows
@@ -68,6 +69,7 @@ class BaseData:
     recurring: tuple[RecurringPayment, ...]
     outflows: tuple[Outflow, ...]
     inflows: tuple[Inflow, ...] = ()
+    proof: ProofDataset | None = None
 
 
 @dataclass
@@ -183,9 +185,10 @@ class DemoState:
 
 def build_base(settings: Settings, statement: StatementImport | None = None) -> BaseData:
     """Derive everything Vero knows on `demo_as_of_date` from the statement (by default the CSV
-    file at `statement_path`)."""
+    file at `statement_path`) and the Proof dataset, which must agree with it."""
     statement = statement or load_statement(settings.statement_path)
     as_of = settings.demo_as_of_date
+    proof = load_dataset(settings.proof_dataset_path, statement, as_of)
     history = [t for t in statement.transactions if t.booking_date < as_of]
     end = window_end(as_of, settings.forecast_horizon_days)
     recurring = detect_recurring(history, as_of)
@@ -204,6 +207,7 @@ def build_base(settings: Settings, statement: StatementImport | None = None) -> 
         revenue_model=build_revenue_model(history, as_of, settings.revenue_model_weeks),
         recurring=tuple(recurring),
         outflows=tuple(sort_outflows(outflows)),
+        proof=proof,
     )
 
 

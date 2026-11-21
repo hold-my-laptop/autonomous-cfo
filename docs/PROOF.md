@@ -83,7 +83,7 @@ Option B as in Phase 1: the backend owns data, tools and math; the AI service ru
 
 ### 4.1 The rule
 **The organizer's CSV is never edited.** Phase 1's verified numbers and the organizer's published balances depend on it. Every synthetic document must agree with it:
-- every invoice total equals a real payment (same counterparty, date, amount, invoice number in the payment reference);
+- every invoice total equals a real payment (same counterparty, date, amount, invoice number in the payment reference); an invoice is dated on the day it was paid;
 - every outcome matches what the statement shows afterwards. The hero case recommends keeping the rent at 3 800,00 €, and the statement shows 3 800,00 € all year.
 
 The CSV itself shows no change in any recurring amount during 2025 (rent 3 800, utilities 650, CHF tranche 4 166,67 CHF, social security 2 650, wage tax 880). Only the CHF tranche's euro amount moves, with the rate written in each row.
@@ -94,7 +94,7 @@ All synthetic, in German with an English translation, generated from one fixture
 
 | Document | ID | Content |
 |---|---|---|
-| Commercial lease | `lease_main_street_2021` | Main Street Real Estate GmbH, Frankfurt. Fixed term 10 years from 1 Feb 2021. Rent 3 800,00 €/month, due on the 1st, since the last adjustment on 1 Feb 2024 (reference index Jan 2024). **§4.2** (§4.3) |
+| Commercial lease | `lease_main_street_2021` | Main Street Real Estate GmbH, Frankfurt. Signed 15 Jan 2021, fixed term 10 years from 1 Feb 2021. A consolidated version (*Lesefassung*) including addendum no. 1 of 25 Jan 2024, so it states the current rent without an original 2021 rent: 3 800,00 €/month (§4.1), due on the 1st, since the last adjustment on 1 Feb 2024 (reference index Jan 2024). **§4.2** index clause; §4.3: the rent includes all operating costs except electricity and gas (gross rent), so higher operating costs can raise it only under §4.2 |
 | Landlord's letter | `ntc_main_street_2025_04` | PDF attached to an email of 3 Apr 2025 in a thread about the **courtyard grease trap maintenance**: "Erhöhung der Miete um 8 % ab 01.06.2025 aufgrund gestiegener Bewirtschaftungskosten." No reference to §4.2 or the index. Found only by `search_inbox` |
 | Rent adjustment (**the live upload**) | `doc_rent_adjustment_2025_06` | Dated 30 Apr 2025. Prints "bisher 3.800,00 €" and "neu 4.104,00 €" monthly from 1 Jun 2025. No reasoning |
 | Silent partnership agreement | `ctr_luigi_2024` | Luigi Amalfi (Luigi's Ristorante Zurich): 50 000 CHF in 12 monthly tranches of 4 166,67 CHF on the 15th, converted by the bank at the day's rate |
@@ -120,7 +120,7 @@ Every clause carries its terms as parameters next to its text, so the backend ca
 
 | ID | Values |
 |---|---|
-| `ref_vpi_demo` | Jan 2024: 117.6 (`1176`); Mar 2025: 121.2 (`1212`). To check against the official Destatis series before the pitch |
+| `ref_vpi_demo` | Jan 2024: 117.6 (`1176`); Mar 2025: 121.2 (`1212`). Only these two months, the ones the demo needs; no values in between are invented. To check against the official Destatis series before the pitch |
 | `ref_eurchf_demo` | The rates in the statement rows: Jan 1.042, Feb 1.045, Mar 1.038, Apr 1.040 |
 
 ### 4.5 Invoice totals (all VAT rounded on the totals, per rate)
@@ -282,7 +282,7 @@ Expected trace (4 tool calls): `search_inbox` → the landlord's letter in the g
 Our understanding, **not legal advice**; to be checked by someone who knows German commercial leases (e.g. a Commerzbank mentor) before the dataset is locked.
 
 - Commercial leases often contain an index clause (*Wertsicherungsklausel*) tied to the Destatis VPI. The Price Clause Act (*Preisklauselgesetz*) allows them under conditions such as a long fixed term; our lease has 10 years.
-- Many clauses allow an adjustment only after a threshold move and on written request. "Rising operating costs" is not a basis under such a clause; operating costs are settled separately (*Nebenkostenabrechnung*).
+- Many clauses allow an adjustment only after a threshold move and on written request. "Rising operating costs" is not a basis under such a clause. Operating costs are either settled separately (advance payments and a yearly *Nebenkostenabrechnung*) or included in a gross rent (*Bruttomiete*). Our lease uses a gross rent (§4.3), because the statement shows no operating-cost payments to the landlord: higher operating costs are the landlord's risk unless §4.2 allows an adjustment.
 - Utilities are paid as monthly advances (*Abschlag*) with a yearly settlement (*Jahresabrechnung*).
 - Supplier invoices carry 7 % (food) or 19 % (wine, beverages) VAT, usually rounded per rate on the totals.
 

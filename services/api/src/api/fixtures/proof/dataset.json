@@ -1,0 +1,2023 @@
+{
+  "version": 1,
+  "description": "Vero Proof demo documents for Pizzeria Amalfi. Synthetic; every amount agrees with the organizer's 2025 bank statement (docs/PROOF.md §4).",
+  "counterparties": [
+    {
+      "id": "cp_main_street",
+      "name": "Main Street Real Estate GmbH",
+      "aliases": [
+        "Main Street Immobilien",
+        "Hausverwaltung Main Street"
+      ]
+    },
+    {
+      "id": "cp_fattoria",
+      "name": "Fattoria La Vino GmbH",
+      "aliases": [
+        "Fattoria La Vino"
+      ]
+    },
+    {
+      "id": "cp_asimex",
+      "name": "Asimex Wholesale Ltd",
+      "aliases": [
+        "Asimex"
+      ]
+    },
+    {
+      "id": "cp_city_energy",
+      "name": "City Energy & Utilities AG",
+      "aliases": [
+        "City Energy"
+      ]
+    },
+    {
+      "id": "cp_luigi",
+      "name": "Luigi Amalfi (Luigi's Ristorante Zurich)",
+      "aliases": [
+        "Luigi Amalfi",
+        "Luigi's Ristorante"
+      ]
+    },
+    {
+      "id": "cp_tk",
+      "name": "Techniker Krankenkasse Social Health Fund",
+      "aliases": [
+        "Techniker Krankenkasse",
+        "TK"
+      ]
+    },
+    {
+      "id": "cp_tax_office",
+      "name": "Tax Office Frankfurt am Main",
+      "aliases": [
+        "Finanzamt Frankfurt am Main"
+      ]
+    }
+  ],
+  "documents": [
+    {
+      "id": "lease_main_street_2021",
+      "type": "LEASE",
+      "counterparty_id": "cp_main_street",
+      "title": "Gewerbemietvertrag",
+      "title_en": "Commercial lease",
+      "date": "2021-01-15",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": null,
+      "cost_ref": "RENT",
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Main Street Real Estate GmbH · Hausverwaltung · Mainufer 18 · 60311 Frankfurt am Main",
+              "text_en": "Main Street Real Estate GmbH · Property management · Mainufer 18 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "parties",
+              "text": "zwischen der Main Street Real Estate GmbH, Mainufer 18, 60311 Frankfurt am Main (Vermieterin), und Herrn Vincenzo Amalfi, Inhaber der Pizzeria Amalfi, Hauptstraße 12, 60311 Frankfurt am Main (Mieter)",
+              "text_en": "between Main Street Real Estate GmbH, Mainufer 18, 60311 Frankfurt am Main (landlord), and Mr Vincenzo Amalfi, owner of Pizzeria Amalfi, Hauptstraße 12, 60311 Frankfurt am Main (tenant)",
+              "box": null
+            },
+            {
+              "id": "version",
+              "text": "Lesefassung unter Berücksichtigung des Nachtrags Nr. 1 vom 25.01.2024",
+              "text_en": "Consolidated version including addendum no. 1 of 25 Jan 2024",
+              "box": null
+            }
+          ]
+        },
+        {
+          "page": 2,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "signatures",
+              "text": "Frankfurt am Main, 15.01.2021 · Main Street Real Estate GmbH · Vincenzo Amalfi",
+              "text_en": "Frankfurt am Main, 15 Jan 2021 · Main Street Real Estate GmbH · Vincenzo Amalfi",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [],
+      "totals": null,
+      "clauses": [
+        {
+          "id": "s1",
+          "section": "§1",
+          "title": "Mietgegenstand",
+          "text": "Vermietet werden die Gewerberäume im Erdgeschoss des Hauses Hauptstraße 12, 60311 Frankfurt am Main, mit ca. 140 m² zum Betrieb einer Pizzeria, einschließlich der Mitbenutzung des Innenhofs.",
+          "text_en": "The landlord lets the commercial premises on the ground floor of Hauptstraße 12, 60311 Frankfurt am Main, about 140 m², for running a pizzeria, including shared use of the courtyard.",
+          "page": 1,
+          "box": null,
+          "parameters": {}
+        },
+        {
+          "id": "s2",
+          "section": "§2",
+          "title": "Mietzeit",
+          "text": "Das Mietverhältnis beginnt am 01.02.2021 und ist fest auf 10 Jahre bis zum 31.01.2031 abgeschlossen.",
+          "text_en": "The lease starts on 1 Feb 2021 and runs for a fixed term of 10 years until 31 Jan 2031.",
+          "page": 1,
+          "box": null,
+          "parameters": {
+            "start": "2021-02-01",
+            "end": "2031-01-31",
+            "fixed_term_months": 120
+          }
+        },
+        {
+          "id": "s4_1",
+          "section": "§4.1",
+          "title": "Miete",
+          "text": "Die Monatsmiete beträgt seit der letzten Anpassung zum 01.02.2024 3.800,00 €. Sie ist monatlich im Voraus bis zum 1. eines Monats zu zahlen.",
+          "text_en": "Since the last adjustment on 1 Feb 2024 the monthly rent is 3,800.00 €. It is payable monthly in advance by the 1st of each month.",
+          "page": 1,
+          "box": null,
+          "parameters": {
+            "amount": "380000",
+            "currency": "EUR",
+            "frequency": "MONTHLY",
+            "due_day": 1,
+            "valid_from": "2024-02-01"
+          }
+        },
+        {
+          "id": "s4_2",
+          "section": "§4.2",
+          "title": "Wertsicherung",
+          "text": "Die Miete ist an den vom Statistischen Bundesamt ermittelten Verbraucherpreisindex für Deutschland (VPI, 2020 = 100) gebunden. Hat sich der Index gegenüber seinem Stand bei der letzten Anpassung (Januar 2024) um mindestens 5 % verändert, kann jede Partei durch schriftliche Erklärung eine Anpassung der Miete im gleichen prozentualen Verhältnis verlangen. Die geänderte Miete ist ab dem Monat zu zahlen, der auf den Zugang der Erklärung folgt. Eine Anpassung kann höchstens einmal innerhalb von 12 Monaten verlangt werden.",
+          "text_en": "The rent is linked to the consumer price index for Germany published by the Federal Statistical Office (VPI, 2020 = 100). If the index has changed by at least 5 % since its level at the last adjustment (January 2024), either party may request in writing an adjustment of the rent in the same proportion. The adjusted rent is payable from the month after the request is received. An adjustment may be requested at most once in 12 months.",
+          "page": 1,
+          "box": null,
+          "parameters": {
+            "index": "DESTATIS_VPI",
+            "base_period": "2024-01",
+            "threshold_bps": 500,
+            "last_adjustment": "2024-02-01",
+            "min_months_between": 12,
+            "written_request": true
+          }
+        },
+        {
+          "id": "s4_3",
+          "section": "§4.3",
+          "title": "Betriebskosten",
+          "text": "Mit der Miete nach §4.1 sind sämtliche Betriebskosten mit Ausnahme von Strom und Gas abgegolten; Strom und Gas bezieht der Mieter direkt vom Versorger. Eine Erhöhung der Miete wegen gestiegener Betriebs- oder Bewirtschaftungskosten ist nur nach §4.2 möglich.",
+          "text_en": "The rent under §4.1 covers all operating costs except electricity and gas, which the tenant buys directly from the utility. The rent can be increased because of higher operating or management costs only under §4.2.",
+          "page": 2,
+          "box": null,
+          "parameters": {
+            "operating_costs_included": true,
+            "excluded": [
+              "ELECTRICITY",
+              "GAS"
+            ]
+          }
+        },
+        {
+          "id": "addendum_1",
+          "section": "Nachtrag Nr. 1",
+          "title": "Mietanpassung zum 01.02.2024",
+          "text": "Die Parteien vereinbaren nach §4.2 eine Anpassung der Monatsmiete mit Wirkung zum 01.02.2024 auf 3.800,00 €. Maßgeblicher Indexstand für künftige Anpassungen ist der VPI für Januar 2024. Frankfurt am Main, 25.01.2024.",
+          "text_en": "Under §4.2 the parties agree to adjust the monthly rent to 3,800.00 € from 1 Feb 2024. The index level for future adjustments is the VPI for January 2024. Frankfurt am Main, 25 Jan 2024.",
+          "page": 2,
+          "box": null,
+          "parameters": {
+            "signed": "2024-01-25",
+            "effective_from": "2024-02-01",
+            "amount": "380000",
+            "base_period": "2024-01"
+          }
+        }
+      ],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "ntc_main_street_2025_04",
+      "type": "NOTICE",
+      "counterparty_id": "cp_main_street",
+      "title": "Mitteilung zum Mietverhältnis",
+      "title_en": "Notice about the lease",
+      "date": "2025-04-03",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": null,
+      "cost_ref": "RENT",
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Main Street Real Estate GmbH · Hausverwaltung · Mainufer 18 · 60311 Frankfurt am Main",
+              "text_en": "Main Street Real Estate GmbH · Property management · Mainufer 18 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "recipient",
+              "text": "Pizzeria Amalfi · Herrn Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "text_en": "Pizzeria Amalfi · Mr Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "place_date",
+              "text": "Frankfurt am Main, 03.04.2025",
+              "text_en": "Frankfurt am Main, 3 Apr 2025",
+              "box": null
+            },
+            {
+              "id": "subject",
+              "text": "Mietobjekt Hauptstraße 12, Erdgeschoss",
+              "text_en": "Premises Hauptstraße 12, ground floor",
+              "box": null
+            },
+            {
+              "id": "salutation",
+              "text": "Sehr geehrter Herr Amalfi, hiermit teilen wir Ihnen Folgendes mit:",
+              "text_en": "Dear Mr Amalfi, we hereby inform you as follows:",
+              "box": null
+            },
+            {
+              "id": "increase",
+              "text": "Erhöhung der Miete um 8 % ab 01.06.2025 aufgrund gestiegener Bewirtschaftungskosten.",
+              "text_en": "Increase of the rent by 8 % from 1 Jun 2025 due to higher management costs.",
+              "box": null
+            },
+            {
+              "id": "follow_up",
+              "text": "Die neue Monatsmiete teilen wir Ihnen mit gesondertem Schreiben mit.",
+              "text_en": "We will tell you the new monthly rent in a separate letter.",
+              "box": null
+            },
+            {
+              "id": "closing",
+              "text": "Mit freundlichen Grüßen · Main Street Real Estate GmbH · Hausverwaltung",
+              "text_en": "Kind regards · Main Street Real Estate GmbH · Property management",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [],
+      "totals": null,
+      "clauses": [],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "doc_rent_adjustment_2025_06",
+      "type": "RENT_ADJUSTMENT",
+      "counterparty_id": "cp_main_street",
+      "title": "Mietanpassung ab 01.06.2025",
+      "title_en": "Rent adjustment from 1 Jun 2025",
+      "date": "2025-04-30",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": null,
+      "cost_ref": "RENT",
+      "preloaded": false,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Main Street Real Estate GmbH · Hausverwaltung · Mainufer 18 · 60311 Frankfurt am Main",
+              "text_en": "Main Street Real Estate GmbH · Property management · Mainufer 18 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "recipient",
+              "text": "Pizzeria Amalfi · Herrn Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "text_en": "Pizzeria Amalfi · Mr Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "place_date",
+              "text": "Frankfurt am Main, 30.04.2025",
+              "text_en": "Frankfurt am Main, 30 Apr 2025",
+              "box": null
+            },
+            {
+              "id": "subject",
+              "text": "Mietanpassung ab 01.06.2025 – Hauptstraße 12, Erdgeschoss",
+              "text_en": "Rent adjustment from 1 Jun 2025 – Hauptstraße 12, ground floor",
+              "box": null
+            },
+            {
+              "id": "salutation",
+              "text": "Sehr geehrter Herr Amalfi, wie angekündigt passen wir Ihre monatliche Miete wie folgt an:",
+              "text_en": "Dear Mr Amalfi, as announced we adjust your monthly rent as follows:",
+              "box": null
+            },
+            {
+              "id": "old_amount",
+              "text": "Miete bisher: 3.800,00 € monatlich",
+              "text_en": "Rent until now: 3,800.00 € monthly",
+              "box": null
+            },
+            {
+              "id": "new_amount",
+              "text": "Miete neu ab 01.06.2025: 4.104,00 € monatlich",
+              "text_en": "New rent from 1 Jun 2025: 4,104.00 € monthly",
+              "box": null
+            },
+            {
+              "id": "instruction",
+              "text": "Bitte passen Sie Ihren Dauerauftrag zum 01.06.2025 entsprechend an.",
+              "text_en": "Please change your standing order accordingly from 1 Jun 2025.",
+              "box": null
+            },
+            {
+              "id": "closing",
+              "text": "Mit freundlichen Grüßen · Main Street Real Estate GmbH · Hausverwaltung",
+              "text_en": "Kind regards · Main Street Real Estate GmbH · Property management",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [],
+      "totals": null,
+      "clauses": [],
+      "price_list": null,
+      "rent_adjustment": {
+        "old_amount": "380000",
+        "new_amount": "410400",
+        "effective_from": "2025-06-01",
+        "frequency": "MONTHLY"
+      },
+      "highlights": []
+    },
+    {
+      "id": "ctr_luigi_2024",
+      "type": "CONTRACT",
+      "counterparty_id": "cp_luigi",
+      "title": "Vertrag über eine stille Beteiligung",
+      "title_en": "Silent partnership agreement",
+      "date": "2024-12-10",
+      "language": "de",
+      "currency": "CHF",
+      "document_number": null,
+      "cost_ref": "XFER",
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "parties",
+              "text": "zwischen Herrn Luigi Amalfi, Luigi's Ristorante, Zürich (Geschäftsinhaber), und Herrn Vincenzo Amalfi, Pizzeria Amalfi, Frankfurt am Main (stiller Gesellschafter)",
+              "text_en": "between Mr Luigi Amalfi, Luigi's Ristorante, Zurich (business owner), and Mr Vincenzo Amalfi, Pizzeria Amalfi, Frankfurt am Main (silent partner)",
+              "box": null
+            },
+            {
+              "id": "signatures",
+              "text": "Zürich und Frankfurt am Main, 10.12.2024 · Luigi Amalfi · Vincenzo Amalfi",
+              "text_en": "Zurich and Frankfurt am Main, 10 Dec 2024 · Luigi Amalfi · Vincenzo Amalfi",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [],
+      "totals": null,
+      "clauses": [
+        {
+          "id": "s1",
+          "section": "§1",
+          "title": "Einlage",
+          "text": "Vincenzo Amalfi beteiligt sich als stiller Gesellschafter an Luigi's Ristorante, Zürich, mit einer Einlage von 50.000,00 CHF.",
+          "text_en": "Vincenzo Amalfi takes a silent partnership in Luigi's Ristorante, Zurich, with a contribution of 50,000.00 CHF.",
+          "page": 1,
+          "box": null,
+          "parameters": {
+            "contribution": "5000000",
+            "currency": "CHF"
+          }
+        },
+        {
+          "id": "s2",
+          "section": "§2",
+          "title": "Zahlung der Einlage",
+          "text": "Die Einlage wird in 12 monatlichen Raten zu je 4.166,67 CHF jeweils am 15. eines Monats überwiesen, erstmals am 15.01.2025. Die Überweisung erfolgt in CHF vom Euro-Konto der Pizzeria Amalfi; die Bank rechnet zum Tageskurs um.",
+          "text_en": "The contribution is transferred in 12 monthly instalments of 4,166.67 CHF on the 15th of each month, first on 15 Jan 2025. The transfer is made in CHF from Pizzeria Amalfi's euro account; the bank converts at the day's rate.",
+          "page": 1,
+          "box": null,
+          "parameters": {
+            "amount": "416667",
+            "currency": "CHF",
+            "frequency": "MONTHLY",
+            "due_day": 15,
+            "instalments": 12,
+            "first_due": "2025-01-15"
+          }
+        }
+      ],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "ctr_city_energy_2025",
+      "type": "PAYMENT_PLAN",
+      "counterparty_id": "cp_city_energy",
+      "title": "Abschlagsplan 2025",
+      "title_en": "Payment plan 2025",
+      "date": "2024-12-12",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": null,
+      "cost_ref": "UTIL",
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "City Energy & Utilities AG · Kundenservice · Energiestraße 1 · 60327 Frankfurt am Main",
+              "text_en": "City Energy & Utilities AG · Customer service · Energiestraße 1 · 60327 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "recipient",
+              "text": "Pizzeria Amalfi · Herrn Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "text_en": "Pizzeria Amalfi · Mr Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "intro",
+              "text": "Strom und Gas, Hauptstraße 12, Erdgeschoss. Ihre Abschläge für 2025 im Überblick:",
+              "text_en": "Electricity and gas, Hauptstraße 12, ground floor. Your advance payments for 2025:",
+              "box": null
+            },
+            {
+              "id": "settlement",
+              "text": "Die Abschläge werden mit der Jahresabrechnung 2025 verrechnet.",
+              "text_en": "The advance payments are set off in the annual statement for 2025.",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [],
+      "totals": null,
+      "clauses": [
+        {
+          "id": "advance",
+          "section": "Abschlag",
+          "title": "Monatlicher Abschlag",
+          "text": "Der monatliche Abschlag für Strom und Gas beträgt 650,00 € und wird jeweils am 10. eines Monats von Januar bis Dezember 2025 per Lastschrift eingezogen.",
+          "text_en": "The monthly advance payment for electricity and gas is 650.00 € and is collected by direct debit on the 10th of each month from January to December 2025.",
+          "page": 1,
+          "box": null,
+          "parameters": {
+            "amount": "65000",
+            "currency": "EUR",
+            "frequency": "MONTHLY",
+            "due_day": 10,
+            "valid_from": "2025-01-01",
+            "valid_to": "2025-12-31"
+          }
+        }
+      ],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "pl_fattoria_2025",
+      "type": "PRICE_LIST",
+      "counterparty_id": "cp_fattoria",
+      "title": "Preisliste 2025",
+      "title_en": "Price list 2025",
+      "date": "2025-03-18",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": null,
+      "cost_ref": null,
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Fattoria La Vino GmbH · Italienische Weine & feine Getränke · Weinbergstraße 4 · 65183 Wiesbaden",
+              "text_en": "Fattoria La Vino GmbH · Italian wines & fine beverages · Weinbergstraße 4 · 65183 Wiesbaden",
+              "box": null
+            },
+            {
+              "id": "note",
+              "text": "Preise netto je Einheit zuzüglich Umsatzsteuer, gültig ab 01.04.2025.",
+              "text_en": "Net prices per unit plus VAT, valid from 1 Apr 2025.",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [],
+      "totals": null,
+      "clauses": [],
+      "price_list": {
+        "valid_from": "2025-04-01",
+        "valid_to": null,
+        "items": [
+          {
+            "id": "p1",
+            "description": "Chianti Classico DOCG 2021, 0,75 l",
+            "unit": "Fl.",
+            "unit_price": "9.40",
+            "vat_rate": 1900
+          },
+          {
+            "id": "p2",
+            "description": "Montepulciano d'Abruzzo DOC 2022, 0,75 l",
+            "unit": "Fl.",
+            "unit_price": "6.45",
+            "vat_rate": 1900
+          },
+          {
+            "id": "p3",
+            "description": "Pinot Grigio delle Venezie DOC 2023, 0,75 l",
+            "unit": "Fl.",
+            "unit_price": "6.60",
+            "vat_rate": 1900
+          },
+          {
+            "id": "p4",
+            "description": "Prosecco DOC Extra Dry, 0,75 l",
+            "unit": "Fl.",
+            "unit_price": "7.35",
+            "vat_rate": 1900
+          },
+          {
+            "id": "p5",
+            "description": "Primitivo di Manduria DOC 2021, 0,75 l",
+            "unit": "Fl.",
+            "unit_price": "10.45",
+            "vat_rate": 1900
+          },
+          {
+            "id": "p6",
+            "description": "Lambrusco Grasparossa di Castelvetro DOC, 0,75 l",
+            "unit": "Fl.",
+            "unit_price": "5.85",
+            "vat_rate": 1900
+          },
+          {
+            "id": "p7",
+            "description": "Limoncello di Amalfi IGP, 0,5 l",
+            "unit": "Fl.",
+            "unit_price": "11.90",
+            "vat_rate": 1900
+          },
+          {
+            "id": "p8",
+            "description": "Campari Bitter, 1 l",
+            "unit": "Fl.",
+            "unit_price": "13.67",
+            "vat_rate": 1900
+          },
+          {
+            "id": "p9",
+            "description": "Acqua San Pellegrino, 0,75 l",
+            "unit": "Fl.",
+            "unit_price": "0.95",
+            "vat_rate": 1900
+          },
+          {
+            "id": "p10",
+            "description": "Olio Extra Vergine di Oliva, 5 l",
+            "unit": "Kan.",
+            "unit_price": "31.50",
+            "vat_rate": 700
+          }
+        ]
+      },
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "inv_FLV-16261",
+      "type": "INVOICE",
+      "counterparty_id": "cp_fattoria",
+      "title": "Rechnung",
+      "title_en": "Invoice",
+      "date": "2025-03-07",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": "FLV-16261",
+      "cost_ref": null,
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Fattoria La Vino GmbH · Italienische Weine & feine Getränke · Weinbergstraße 4 · 65183 Wiesbaden",
+              "text_en": "Fattoria La Vino GmbH · Italian wines & fine beverages · Weinbergstraße 4 · 65183 Wiesbaden",
+              "box": null
+            },
+            {
+              "id": "recipient",
+              "text": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "text_en": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "delivery",
+              "text": "Lieferung vom 07.03.2025",
+              "text_en": "Delivery of 7 Mar 2025",
+              "box": null
+            },
+            {
+              "id": "payment_terms",
+              "text": "Zahlbar sofort ohne Abzug. IBAN DE66 5001 0517 0099 8811 22",
+              "text_en": "Payable immediately without deduction. IBAN DE66 5001 0517 0099 8811 22",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [
+        {
+          "id": "l1",
+          "description": "Chianti Classico DOCG 2021, 0,75 l",
+          "quantity": "30",
+          "unit": "Fl.",
+          "unit_price": "8.90",
+          "vat_rate": 1900,
+          "net": "26700",
+          "gross": null
+        },
+        {
+          "id": "l2",
+          "description": "Montepulciano d'Abruzzo DOC 2022, 0,75 l",
+          "quantity": "24",
+          "unit": "Fl.",
+          "unit_price": "6.45",
+          "vat_rate": 1900,
+          "net": "15480",
+          "gross": null
+        },
+        {
+          "id": "l3",
+          "description": "Pinot Grigio delle Venezie DOC 2023, 0,75 l",
+          "quantity": "24",
+          "unit": "Fl.",
+          "unit_price": "6.20",
+          "vat_rate": 1900,
+          "net": "14880",
+          "gross": null
+        },
+        {
+          "id": "l4",
+          "description": "Prosecco DOC Extra Dry, 0,75 l",
+          "quantity": "18",
+          "unit": "Fl.",
+          "unit_price": "7.35",
+          "vat_rate": 1900,
+          "net": "13230",
+          "gross": null
+        },
+        {
+          "id": "l5",
+          "description": "Primitivo di Manduria DOC 2021, 0,75 l",
+          "quantity": "6",
+          "unit": "Fl.",
+          "unit_price": "9.85",
+          "vat_rate": 1900,
+          "net": "5910",
+          "gross": null
+        },
+        {
+          "id": "l6",
+          "description": "Limoncello di Amalfi IGP, 0,5 l",
+          "quantity": "4",
+          "unit": "Fl.",
+          "unit_price": "11.90",
+          "vat_rate": 1900,
+          "net": "4760",
+          "gross": null
+        },
+        {
+          "id": "l7",
+          "description": "Campari Bitter, 1 l",
+          "quantity": "1",
+          "unit": "Fl.",
+          "unit_price": "13.67",
+          "vat_rate": 1900,
+          "net": "1367",
+          "gross": null
+        },
+        {
+          "id": "l8",
+          "description": "Acqua San Pellegrino, 0,75 l",
+          "quantity": "24",
+          "unit": "Fl.",
+          "unit_price": "0.89",
+          "vat_rate": 1900,
+          "net": "2136",
+          "gross": null
+        },
+        {
+          "id": "l9",
+          "description": "Olio Extra Vergine di Oliva, 5 l",
+          "quantity": "1",
+          "unit": "Kan.",
+          "unit_price": "30.00",
+          "vat_rate": 700,
+          "net": "3000",
+          "gross": null
+        }
+      ],
+      "totals": {
+        "net": "87463",
+        "vat": "16258",
+        "gross": "103721"
+      },
+      "clauses": [],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "inv_FLV-94818",
+      "type": "INVOICE",
+      "counterparty_id": "cp_fattoria",
+      "title": "Rechnung",
+      "title_en": "Invoice",
+      "date": "2025-04-28",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": "FLV-94818",
+      "cost_ref": null,
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Fattoria La Vino GmbH · Italienische Weine & feine Getränke · Weinbergstraße 4 · 65183 Wiesbaden",
+              "text_en": "Fattoria La Vino GmbH · Italian wines & fine beverages · Weinbergstraße 4 · 65183 Wiesbaden",
+              "box": null
+            },
+            {
+              "id": "recipient",
+              "text": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "text_en": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "delivery",
+              "text": "Lieferung vom 28.04.2025",
+              "text_en": "Delivery of 28 Apr 2025",
+              "box": null
+            },
+            {
+              "id": "payment_terms",
+              "text": "Zahlbar sofort ohne Abzug. IBAN DE66 5001 0517 0099 8811 22",
+              "text_en": "Payable immediately without deduction. IBAN DE66 5001 0517 0099 8811 22",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [
+        {
+          "id": "l1",
+          "description": "Chianti Classico DOCG 2021, 0,75 l",
+          "quantity": "30",
+          "unit": "Fl.",
+          "unit_price": "9.40",
+          "vat_rate": 1900,
+          "net": "28200",
+          "gross": null
+        },
+        {
+          "id": "l2",
+          "description": "Montepulciano d'Abruzzo DOC 2022, 0,75 l",
+          "quantity": "12",
+          "unit": "Fl.",
+          "unit_price": "6.45",
+          "vat_rate": 1900,
+          "net": "7740",
+          "gross": null
+        },
+        {
+          "id": "l3",
+          "description": "Pinot Grigio delle Venezie DOC 2023, 0,75 l",
+          "quantity": "12",
+          "unit": "Fl.",
+          "unit_price": "6.60",
+          "vat_rate": 1900,
+          "net": "7920",
+          "gross": null
+        },
+        {
+          "id": "l4",
+          "description": "Prosecco DOC Extra Dry, 0,75 l",
+          "quantity": "6",
+          "unit": "Fl.",
+          "unit_price": "7.35",
+          "vat_rate": 1900,
+          "net": "4410",
+          "gross": null
+        },
+        {
+          "id": "l5",
+          "description": "Primitivo di Manduria DOC 2021, 0,75 l",
+          "quantity": "6",
+          "unit": "Fl.",
+          "unit_price": "10.45",
+          "vat_rate": 1900,
+          "net": "6270",
+          "gross": null
+        },
+        {
+          "id": "l6",
+          "description": "Lambrusco Grasparossa di Castelvetro DOC, 0,75 l",
+          "quantity": "12",
+          "unit": "Fl.",
+          "unit_price": "5.85",
+          "vat_rate": 1900,
+          "net": "7020",
+          "gross": null
+        },
+        {
+          "id": "l7",
+          "description": "Limoncello di Amalfi IGP, 0,5 l",
+          "quantity": "3",
+          "unit": "Fl.",
+          "unit_price": "11.90",
+          "vat_rate": 1900,
+          "net": "3570",
+          "gross": null
+        },
+        {
+          "id": "l8",
+          "description": "Campari Bitter, 1 l",
+          "quantity": "5",
+          "unit": "Fl.",
+          "unit_price": "13.67",
+          "vat_rate": 1900,
+          "net": "6835",
+          "gross": null
+        },
+        {
+          "id": "l9",
+          "description": "Acqua San Pellegrino, 0,75 l",
+          "quantity": "36",
+          "unit": "Fl.",
+          "unit_price": "0.95",
+          "vat_rate": 1900,
+          "net": "3420",
+          "gross": null
+        }
+      ],
+      "totals": {
+        "net": "75385",
+        "vat": "14323",
+        "gross": "89708"
+      },
+      "clauses": [],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "pl_asimex_2025_q2",
+      "type": "PRICE_LIST",
+      "counterparty_id": "cp_asimex",
+      "title": "Preisliste Q2 2025",
+      "title_en": "Price list Q2 2025",
+      "date": "2025-03-20",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": null,
+      "cost_ref": null,
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Asimex Wholesale Ltd · Niederlassung Frankfurt · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "text_en": "Asimex Wholesale Ltd · Frankfurt branch · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "note",
+              "text": "Preise netto je Einheit zuzüglich Umsatzsteuer, gültig vom 01.04.2025 bis 30.06.2025.",
+              "text_en": "Net prices per unit plus VAT, valid from 1 Apr 2025 to 30 Jun 2025.",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [],
+      "totals": null,
+      "clauses": [],
+      "price_list": {
+        "valid_from": "2025-04-01",
+        "valid_to": "2025-06-30",
+        "items": [
+          {
+            "id": "p1",
+            "description": "Mozzarella di Bufala Campana DOP",
+            "unit": "kg",
+            "unit_price": "12.90",
+            "vat_rate": 700
+          },
+          {
+            "id": "p2",
+            "description": "Fior di Latte",
+            "unit": "kg",
+            "unit_price": "7.95",
+            "vat_rate": 700
+          },
+          {
+            "id": "p3",
+            "description": "Ricotta di Bufala",
+            "unit": "kg",
+            "unit_price": "9.60",
+            "vat_rate": 700
+          },
+          {
+            "id": "p4",
+            "description": "Parmigiano Reggiano DOP, 24 Monate",
+            "unit": "kg",
+            "unit_price": "19.80",
+            "vat_rate": 700
+          },
+          {
+            "id": "p5",
+            "description": "Prosciutto di Parma DOP",
+            "unit": "kg",
+            "unit_price": "23.40",
+            "vat_rate": 700
+          },
+          {
+            "id": "p6",
+            "description": "Salame Napoli",
+            "unit": "kg",
+            "unit_price": "15.20",
+            "vat_rate": 700
+          },
+          {
+            "id": "p7",
+            "description": "'Nduja di Spilinga",
+            "unit": "kg",
+            "unit_price": "18.90",
+            "vat_rate": 700
+          },
+          {
+            "id": "p8",
+            "description": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+            "unit": "Dose",
+            "unit_price": "7.20",
+            "vat_rate": 700
+          },
+          {
+            "id": "p9",
+            "description": "Mehl Tipo 00, 25 kg",
+            "unit": "Sack",
+            "unit_price": "18.50",
+            "vat_rate": 700
+          },
+          {
+            "id": "p10",
+            "description": "Oliven Taggiasca, 950 g",
+            "unit": "Glas",
+            "unit_price": "9.87",
+            "vat_rate": 700
+          },
+          {
+            "id": "p11",
+            "description": "Basilikum frisch",
+            "unit": "Bund",
+            "unit_price": "1.35",
+            "vat_rate": 700
+          }
+        ]
+      },
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "terms_asimex_2025",
+      "type": "CONTRACT",
+      "counterparty_id": "cp_asimex",
+      "title": "Allgemeine Liefer- und Zahlungsbedingungen, gültig ab 01.05.2025",
+      "title_en": "General terms of delivery and payment, valid from 1 May 2025",
+      "date": "2025-04-14",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": null,
+      "cost_ref": null,
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Asimex Wholesale Ltd · Niederlassung Frankfurt · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "text_en": "Asimex Wholesale Ltd · Frankfurt branch · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [],
+      "totals": null,
+      "clauses": [
+        {
+          "id": "s3",
+          "section": "§3",
+          "title": "Preise",
+          "text": "Es gelten die Preise der am Liefertag gültigen Preisliste zuzüglich der gesetzlichen Umsatzsteuer.",
+          "text_en": "Prices are those of the price list valid on the day of delivery plus statutory VAT.",
+          "page": 1,
+          "box": null,
+          "parameters": {}
+        },
+        {
+          "id": "s5",
+          "section": "§5",
+          "title": "Logistikzuschlag",
+          "text": "Für Lieferungen mit einem Netto-Warenwert unter 600,00 € berechnen wir ab dem 01.05.2025 einen Logistikzuschlag von 24,50 € netto je Lieferung.",
+          "text_en": "From 1 May 2025 we charge a logistics surcharge of 24.50 € net per delivery for deliveries with a net goods value below 600.00 €.",
+          "page": 1,
+          "box": null,
+          "parameters": {
+            "surcharge": "2450",
+            "below_net_goods": "60000",
+            "valid_from": "2025-05-01"
+          }
+        },
+        {
+          "id": "s7",
+          "section": "§7",
+          "title": "Zahlung",
+          "text": "Rechnungen sind sofort ohne Abzug zahlbar.",
+          "text_en": "Invoices are payable immediately without deduction.",
+          "page": 1,
+          "box": null,
+          "parameters": {}
+        }
+      ],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "inv_AS-80497",
+      "type": "INVOICE",
+      "counterparty_id": "cp_asimex",
+      "title": "Rechnung",
+      "title_en": "Invoice",
+      "date": "2025-03-08",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": "AS-80497",
+      "cost_ref": null,
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Asimex Wholesale Ltd · Niederlassung Frankfurt · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "text_en": "Asimex Wholesale Ltd · Frankfurt branch · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "recipient",
+              "text": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "text_en": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "delivery",
+              "text": "Lieferung vom 08.03.2025",
+              "text_en": "Delivery of 8 Mar 2025",
+              "box": null
+            },
+            {
+              "id": "payment_terms",
+              "text": "Zahlbar sofort ohne Abzug. IBAN DE33 5001 0517 0011 2233 44",
+              "text_en": "Payable immediately without deduction. IBAN DE33 5001 0517 0011 2233 44",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [
+        {
+          "id": "l1",
+          "description": "Mozzarella di Bufala Campana DOP",
+          "quantity": "12",
+          "unit": "kg",
+          "unit_price": "12.40",
+          "vat_rate": 700,
+          "net": "14880",
+          "gross": null
+        },
+        {
+          "id": "l2",
+          "description": "Fior di Latte",
+          "quantity": "6",
+          "unit": "kg",
+          "unit_price": "7.95",
+          "vat_rate": 700,
+          "net": "4770",
+          "gross": null
+        },
+        {
+          "id": "l3",
+          "description": "Parmigiano Reggiano DOP, 24 Monate",
+          "quantity": "3",
+          "unit": "kg",
+          "unit_price": "19.80",
+          "vat_rate": 700,
+          "net": "5940",
+          "gross": null
+        },
+        {
+          "id": "l4",
+          "description": "Prosciutto di Parma DOP",
+          "quantity": "2.506",
+          "unit": "kg",
+          "unit_price": "21.90",
+          "vat_rate": 700,
+          "net": "5488",
+          "gross": null
+        },
+        {
+          "id": "l5",
+          "description": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+          "quantity": "12",
+          "unit": "Dose",
+          "unit_price": "6.80",
+          "vat_rate": 700,
+          "net": "8160",
+          "gross": null
+        },
+        {
+          "id": "l6",
+          "description": "Mehl Tipo 00, 25 kg",
+          "quantity": "6",
+          "unit": "Sack",
+          "unit_price": "18.50",
+          "vat_rate": 700,
+          "net": "11100",
+          "gross": null
+        },
+        {
+          "id": "l7",
+          "description": "Oliven Taggiasca, 950 g",
+          "quantity": "3",
+          "unit": "Glas",
+          "unit_price": "9.87",
+          "vat_rate": 700,
+          "net": "2961",
+          "gross": null
+        },
+        {
+          "id": "l8",
+          "description": "Basilikum frisch",
+          "quantity": "10",
+          "unit": "Bund",
+          "unit_price": "1.35",
+          "vat_rate": 700,
+          "net": "1350",
+          "gross": null
+        }
+      ],
+      "totals": {
+        "net": "54649",
+        "vat": "3825",
+        "gross": "58474"
+      },
+      "clauses": [],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "inv_AS-72217",
+      "type": "INVOICE",
+      "counterparty_id": "cp_asimex",
+      "title": "Rechnung",
+      "title_en": "Invoice",
+      "date": "2025-04-26",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": "AS-72217",
+      "cost_ref": null,
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Asimex Wholesale Ltd · Niederlassung Frankfurt · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "text_en": "Asimex Wholesale Ltd · Frankfurt branch · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "recipient",
+              "text": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "text_en": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "delivery",
+              "text": "Lieferung vom 26.04.2025",
+              "text_en": "Delivery of 26 Apr 2025",
+              "box": null
+            },
+            {
+              "id": "payment_terms",
+              "text": "Zahlbar sofort ohne Abzug. IBAN DE33 5001 0517 0011 2233 44",
+              "text_en": "Payable immediately without deduction. IBAN DE33 5001 0517 0011 2233 44",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [
+        {
+          "id": "l1",
+          "description": "Mozzarella di Bufala Campana DOP",
+          "quantity": "14",
+          "unit": "kg",
+          "unit_price": "12.90",
+          "vat_rate": 700,
+          "net": "18060",
+          "gross": null
+        },
+        {
+          "id": "l2",
+          "description": "Fior di Latte",
+          "quantity": "10",
+          "unit": "kg",
+          "unit_price": "7.95",
+          "vat_rate": 700,
+          "net": "7950",
+          "gross": null
+        },
+        {
+          "id": "l3",
+          "description": "Parmigiano Reggiano DOP, 24 Monate",
+          "quantity": "3",
+          "unit": "kg",
+          "unit_price": "19.80",
+          "vat_rate": 700,
+          "net": "5940",
+          "gross": null
+        },
+        {
+          "id": "l4",
+          "description": "Prosciutto di Parma DOP",
+          "quantity": "2.198",
+          "unit": "kg",
+          "unit_price": "23.40",
+          "vat_rate": 700,
+          "net": "5143",
+          "gross": null
+        },
+        {
+          "id": "l5",
+          "description": "Salame Napoli",
+          "quantity": "2.5",
+          "unit": "kg",
+          "unit_price": "15.20",
+          "vat_rate": 700,
+          "net": "3800",
+          "gross": null
+        },
+        {
+          "id": "l6",
+          "description": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+          "quantity": "12",
+          "unit": "Dose",
+          "unit_price": "7.20",
+          "vat_rate": 700,
+          "net": "8640",
+          "gross": null
+        },
+        {
+          "id": "l7",
+          "description": "Mehl Tipo 00, 25 kg",
+          "quantity": "6",
+          "unit": "Sack",
+          "unit_price": "18.50",
+          "vat_rate": 700,
+          "net": "11100",
+          "gross": null
+        },
+        {
+          "id": "l8",
+          "description": "Oliven Taggiasca, 950 g",
+          "quantity": "2",
+          "unit": "Glas",
+          "unit_price": "9.87",
+          "vat_rate": 700,
+          "net": "1974",
+          "gross": null
+        },
+        {
+          "id": "l9",
+          "description": "Basilikum frisch",
+          "quantity": "12",
+          "unit": "Bund",
+          "unit_price": "1.35",
+          "vat_rate": 700,
+          "net": "1620",
+          "gross": null
+        }
+      ],
+      "totals": {
+        "net": "64227",
+        "vat": "4496",
+        "gross": "68723"
+      },
+      "clauses": [],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    },
+    {
+      "id": "inv_AS-11607",
+      "type": "INVOICE",
+      "counterparty_id": "cp_asimex",
+      "title": "Rechnung",
+      "title_en": "Invoice",
+      "date": "2025-05-03",
+      "language": "de",
+      "currency": "EUR",
+      "document_number": "AS-11607",
+      "cost_ref": null,
+      "preloaded": true,
+      "sha256": null,
+      "pages": [
+        {
+          "page": 1,
+          "width": 595.28,
+          "height": 841.89,
+          "blocks": [
+            {
+              "id": "letterhead",
+              "text": "Asimex Wholesale Ltd · Niederlassung Frankfurt · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "text_en": "Asimex Wholesale Ltd · Frankfurt branch · Lindleystraße 9 · 60314 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "recipient",
+              "text": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "text_en": "Pizzeria Amalfi · Inh. Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main",
+              "box": null
+            },
+            {
+              "id": "delivery",
+              "text": "Lieferung vom 03.05.2025",
+              "text_en": "Delivery of 3 May 2025",
+              "box": null
+            },
+            {
+              "id": "payment_terms",
+              "text": "Zahlbar sofort ohne Abzug. IBAN DE33 5001 0517 0011 2233 44",
+              "text_en": "Payable immediately without deduction. IBAN DE33 5001 0517 0011 2233 44",
+              "box": null
+            }
+          ]
+        }
+      ],
+      "lines": [
+        {
+          "id": "l1",
+          "description": "Mozzarella di Bufala Campana DOP",
+          "quantity": "12",
+          "unit": "kg",
+          "unit_price": "12.90",
+          "vat_rate": 700,
+          "net": "15480",
+          "gross": null
+        },
+        {
+          "id": "l2",
+          "description": "Fior di Latte",
+          "quantity": "8",
+          "unit": "kg",
+          "unit_price": "7.95",
+          "vat_rate": 700,
+          "net": "6360",
+          "gross": null
+        },
+        {
+          "id": "l3",
+          "description": "Parmigiano Reggiano DOP, 24 Monate",
+          "quantity": "2",
+          "unit": "kg",
+          "unit_price": "19.80",
+          "vat_rate": 700,
+          "net": "3960",
+          "gross": null
+        },
+        {
+          "id": "l4",
+          "description": "Prosciutto di Parma DOP",
+          "quantity": "2.486",
+          "unit": "kg",
+          "unit_price": "23.40",
+          "vat_rate": 700,
+          "net": "5817",
+          "gross": null
+        },
+        {
+          "id": "l5",
+          "description": "Salame Napoli",
+          "quantity": "2",
+          "unit": "kg",
+          "unit_price": "15.20",
+          "vat_rate": 700,
+          "net": "3040",
+          "gross": null
+        },
+        {
+          "id": "l6",
+          "description": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+          "quantity": "12",
+          "unit": "Dose",
+          "unit_price": "7.20",
+          "vat_rate": 700,
+          "net": "8640",
+          "gross": null
+        },
+        {
+          "id": "l7",
+          "description": "Mehl Tipo 00, 25 kg",
+          "quantity": "5",
+          "unit": "Sack",
+          "unit_price": "18.50",
+          "vat_rate": 700,
+          "net": "9250",
+          "gross": null
+        },
+        {
+          "id": "l8",
+          "description": "Oliven Taggiasca, 950 g",
+          "quantity": "2",
+          "unit": "Glas",
+          "unit_price": "9.87",
+          "vat_rate": 700,
+          "net": "1974",
+          "gross": null
+        },
+        {
+          "id": "l9",
+          "description": "Basilikum frisch",
+          "quantity": "10",
+          "unit": "Bund",
+          "unit_price": "1.35",
+          "vat_rate": 700,
+          "net": "1350",
+          "gross": null
+        },
+        {
+          "id": "l10",
+          "description": "Logistikzuschlag",
+          "quantity": "1",
+          "unit": "Lfg.",
+          "unit_price": "24.50",
+          "vat_rate": 700,
+          "net": "2450",
+          "gross": null
+        }
+      ],
+      "totals": {
+        "net": "58321",
+        "vat": "4082",
+        "gross": "62403"
+      },
+      "clauses": [],
+      "price_list": null,
+      "rent_adjustment": null,
+      "highlights": []
+    }
+  ],
+  "mailbox": [
+    {
+      "id": "mail_main_street_2025_01_08",
+      "thread_id": "thr_rent_certificate",
+      "in_reply_to": null,
+      "date": "2025-01-08",
+      "from": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "to": {
+        "name": "Sabine Krüger (Main Street Real Estate GmbH)",
+        "address": "verwaltung@mainstreet-re.example"
+      },
+      "subject": "Mietbescheinigung 2024 für den Steuerberater",
+      "body": "Guten Tag Frau Krüger,\nfür meinen Steuerberater bräuchte ich eine Bescheinigung über die 2024 gezahlte Miete.\nViele Grüße\nVincenzo Amalfi",
+      "language": "de",
+      "counterparty_id": "cp_main_street",
+      "attachments": []
+    },
+    {
+      "id": "mail_main_street_2025_01_10",
+      "thread_id": "thr_rent_certificate",
+      "in_reply_to": "mail_main_street_2025_01_08",
+      "date": "2025-01-10",
+      "from": {
+        "name": "Sabine Krüger (Main Street Real Estate GmbH)",
+        "address": "verwaltung@mainstreet-re.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Re: Mietbescheinigung 2024 für den Steuerberater",
+      "body": "Sehr geehrter Herr Amalfi,\ndie Bescheinigung über die 2024 gezahlte Miete senden wir Ihnen per Post zu.\nMit freundlichen Grüßen\nSabine Krüger\nHausverwaltung",
+      "language": "de",
+      "counterparty_id": "cp_main_street",
+      "attachments": []
+    },
+    {
+      "id": "mail_main_street_2025_02_10",
+      "thread_id": "thr_smoke_detectors",
+      "in_reply_to": null,
+      "date": "2025-02-10",
+      "from": {
+        "name": "Sabine Krüger (Main Street Real Estate GmbH)",
+        "address": "verwaltung@mainstreet-re.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Mietobjekt Hauptstraße 12: Prüfung der Rauchwarnmelder",
+      "body": "Sehr geehrter Herr Amalfi,\nam Dienstag, 18.02.2025, zwischen 8 und 12 Uhr prüft ein Techniker die Rauchwarnmelder im Haus. Bitte ermöglichen Sie den Zugang zu Ihren Räumen.\nMit freundlichen Grüßen\nSabine Krüger\nHausverwaltung",
+      "language": "de",
+      "counterparty_id": "cp_main_street",
+      "attachments": []
+    },
+    {
+      "id": "mail_main_street_2025_03_12",
+      "thread_id": "thr_grease_trap",
+      "in_reply_to": null,
+      "date": "2025-03-12",
+      "from": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "to": {
+        "name": "Sabine Krüger (Main Street Real Estate GmbH)",
+        "address": "verwaltung@mainstreet-re.example"
+      },
+      "subject": "Fettabscheider im Innenhof",
+      "body": "Guten Tag Frau Krüger,\nder Fettabscheider im Innenhof riecht seit einigen Tagen stark und das Wasser läuft nur langsam ab. Können Sie bitte kurzfristig eine Wartung beauftragen?\nViele Grüße\nVincenzo Amalfi\nPizzeria Amalfi",
+      "language": "de",
+      "counterparty_id": "cp_main_street",
+      "attachments": []
+    },
+    {
+      "id": "mail_main_street_2025_03_14",
+      "thread_id": "thr_grease_trap",
+      "in_reply_to": "mail_main_street_2025_03_12",
+      "date": "2025-03-14",
+      "from": {
+        "name": "Sabine Krüger (Main Street Real Estate GmbH)",
+        "address": "verwaltung@mainstreet-re.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Re: Fettabscheider im Innenhof",
+      "body": "Sehr geehrter Herr Amalfi,\nwir haben einen Fachbetrieb mit der Wartung und Leerung des Fettabscheiders beauftragt. Termin ist Montag, 24.03.2025, ab 7 Uhr. Bitte halten Sie die Hofeinfahrt frei.\nMit freundlichen Grüßen\nSabine Krüger\nHausverwaltung",
+      "language": "de",
+      "counterparty_id": "cp_main_street",
+      "attachments": []
+    },
+    {
+      "id": "mail_main_street_2025_03_25",
+      "thread_id": "thr_grease_trap",
+      "in_reply_to": "mail_main_street_2025_03_14",
+      "date": "2025-03-25",
+      "from": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "to": {
+        "name": "Sabine Krüger (Main Street Real Estate GmbH)",
+        "address": "verwaltung@mainstreet-re.example"
+      },
+      "subject": "Re: Fettabscheider im Innenhof",
+      "body": "Hallo Frau Krüger,\ndie Wartung wurde gestern durchgeführt, alles läuft wieder. Wer übernimmt die Kosten?\nViele Grüße\nVincenzo Amalfi",
+      "language": "de",
+      "counterparty_id": "cp_main_street",
+      "attachments": []
+    },
+    {
+      "id": "mail_main_street_2025_04_03",
+      "thread_id": "thr_grease_trap",
+      "in_reply_to": "mail_main_street_2025_03_25",
+      "date": "2025-04-03",
+      "from": {
+        "name": "Sabine Krüger (Main Street Real Estate GmbH)",
+        "address": "verwaltung@mainstreet-re.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Re: Fettabscheider im Innenhof",
+      "body": "Sehr geehrter Herr Amalfi,\ndie Kosten der Wartung trägt die Vermieterin. Anbei erhalten Sie außerdem ein Schreiben der Verwaltung zu Ihrem Mietverhältnis.\nMit freundlichen Grüßen\nSabine Krüger\nHausverwaltung",
+      "language": "de",
+      "counterparty_id": "cp_main_street",
+      "attachments": [
+        "ntc_main_street_2025_04"
+      ]
+    },
+    {
+      "id": "mail_asimex_2025_03_20",
+      "thread_id": "thr_asimex_prices",
+      "in_reply_to": null,
+      "date": "2025-03-20",
+      "from": {
+        "name": "Marco Ferri (Asimex Wholesale Ltd)",
+        "address": "kundenservice@asimex-wholesale.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Preisliste Q2 2025",
+      "body": "Sehr geehrte Kundin, sehr geehrter Kunde,\nanbei unsere Preisliste für das 2. Quartal 2025, gültig vom 01.04. bis 30.06.2025. Wegen gestiegener Erzeugerpreise sind einige Artikel teurer geworden, unter anderem Mozzarella di Bufala, Pomodori Pelati San Marzano, Prosciutto di Parma und Salame Napoli.\nIhr Asimex-Team",
+      "language": "de",
+      "counterparty_id": "cp_asimex",
+      "attachments": [
+        "pl_asimex_2025_q2"
+      ]
+    },
+    {
+      "id": "mail_asimex_2025_04_14",
+      "thread_id": "thr_asimex_terms",
+      "in_reply_to": null,
+      "date": "2025-04-14",
+      "from": {
+        "name": "Marco Ferri (Asimex Wholesale Ltd)",
+        "address": "kundenservice@asimex-wholesale.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Neue Lieferbedingungen ab 01.05.2025 – Logistikzuschlag",
+      "body": "Sehr geehrter Herr Amalfi,\nwegen gestiegener Transport- und Personalkosten berechnen wir ab dem 01.05.2025 für Lieferungen mit einem Netto-Warenwert unter 600,00 € einen Logistikzuschlag von 24,50 € netto je Lieferung. Lieferungen ab 600,00 € Netto-Warenwert bleiben zuschlagsfrei. Unsere neuen Liefer- und Zahlungsbedingungen finden Sie im Anhang.\nMit freundlichen Grüßen\nMarco Ferri\nKundenbetreuung",
+      "language": "de",
+      "counterparty_id": "cp_asimex",
+      "attachments": [
+        "terms_asimex_2025"
+      ]
+    },
+    {
+      "id": "mail_asimex_2025_04_29",
+      "thread_id": "thr_asimex_holiday",
+      "in_reply_to": null,
+      "date": "2025-04-29",
+      "from": {
+        "name": "Marco Ferri (Asimex Wholesale Ltd)",
+        "address": "kundenservice@asimex-wholesale.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Lieferungen am Feiertag 01.05.2025",
+      "body": "Sehr geehrte Kundin, sehr geehrter Kunde,\nam Donnerstag, 01.05.2025, liefern wir nicht. Bestellungen für diesen Tag stellen wir am Samstag, 03.05.2025, zu.\nIhr Asimex-Team",
+      "language": "de",
+      "counterparty_id": "cp_asimex",
+      "attachments": []
+    },
+    {
+      "id": "mail_fattoria_2025_03_18",
+      "thread_id": "thr_fattoria_prices",
+      "in_reply_to": null,
+      "date": "2025-03-18",
+      "from": {
+        "name": "Giulia Bianchi (Fattoria La Vino GmbH)",
+        "address": "ordini@fattoria-lavino.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Preisliste 2025",
+      "body": "Caro Vincenzo,\nanbei unsere Preisliste 2025, gültig ab 01.04.2025. Einige Weine sind teurer geworden; neu im Sortiment ist der Lambrusco Grasparossa.\nSaluti\nGiulia Bianchi",
+      "language": "de",
+      "counterparty_id": "cp_fattoria",
+      "attachments": [
+        "pl_fattoria_2025"
+      ]
+    },
+    {
+      "id": "mail_fattoria_2025_04_22",
+      "thread_id": "thr_fattoria_tasting",
+      "in_reply_to": null,
+      "date": "2025-04-22",
+      "from": {
+        "name": "Giulia Bianchi (Fattoria La Vino GmbH)",
+        "address": "ordini@fattoria-lavino.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Einladung zur Weinprobe",
+      "body": "Caro Vincenzo,\nam 15.05.2025 stellen wir in Wiesbaden die neuen Weine aus Kampanien vor. Wir würden uns freuen, wenn du kommst.\nSaluti\nGiulia Bianchi",
+      "language": "de",
+      "counterparty_id": "cp_fattoria",
+      "attachments": []
+    },
+    {
+      "id": "mail_city_energy_2024_12_12",
+      "thread_id": "thr_energy_plan",
+      "in_reply_to": null,
+      "date": "2024-12-12",
+      "from": {
+        "name": "City Energy & Utilities AG",
+        "address": "service@city-energy.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Ihr Abschlagsplan 2025",
+      "body": "Sehr geehrter Herr Amalfi,\nim Anhang finden Sie Ihren Abschlagsplan für Strom und Gas 2025. Der monatliche Abschlag bleibt unverändert.\nIhr Kundenservice",
+      "language": "de",
+      "counterparty_id": "cp_city_energy",
+      "attachments": [
+        "ctr_city_energy_2025"
+      ]
+    },
+    {
+      "id": "mail_tk_2025_01_15",
+      "thread_id": "thr_tk_2025",
+      "in_reply_to": null,
+      "date": "2025-01-15",
+      "from": {
+        "name": "Techniker Krankenkasse",
+        "address": "arbeitgeber@tk.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Beitragsnachweise 2025",
+      "body": "Sehr geehrter Arbeitgeber,\nbitte übermitteln Sie Ihre Beitragsnachweise wie gewohnt elektronisch. Die Beiträge ziehen wir weiterhin per Lastschrift ein.\nIhre Techniker Krankenkasse",
+      "language": "de",
+      "counterparty_id": "cp_tk",
+      "attachments": []
+    },
+    {
+      "id": "mail_tax_office_2025_02_20",
+      "thread_id": "thr_tax_2025",
+      "in_reply_to": null,
+      "date": "2025-02-20",
+      "from": {
+        "name": "Finanzamt Frankfurt am Main",
+        "address": "noreply@elster.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Neue Nachricht in Ihrem ELSTER-Postfach",
+      "body": "Guten Tag,\nin Ihrem ELSTER-Postfach liegt eine neue Nachricht zu Ihren Einkommensteuer-Vorauszahlungen 2025. Bitte melden Sie sich an, um sie zu lesen.\nIhr Finanzamt",
+      "language": "de",
+      "counterparty_id": "cp_tax_office",
+      "attachments": []
+    },
+    {
+      "id": "mail_luigi_2024_12_10",
+      "thread_id": "thr_luigi",
+      "in_reply_to": null,
+      "date": "2024-12-10",
+      "from": {
+        "name": "Luigi Amalfi",
+        "address": "luigi@luigis-ristorante.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Vertrag stille Beteiligung",
+      "body": "Ciao Vincenzo,\nanbei der unterschriebene Vertrag. Die erste Rate kommt am 15. Januar, dann jeden Monat am 15.\nGrazie mille!\nLuigi",
+      "language": "de",
+      "counterparty_id": "cp_luigi",
+      "attachments": [
+        "ctr_luigi_2024"
+      ]
+    },
+    {
+      "id": "mail_luigi_2025_04_16",
+      "thread_id": "thr_luigi",
+      "in_reply_to": "mail_luigi_2024_12_10",
+      "date": "2025-04-16",
+      "from": {
+        "name": "Luigi Amalfi",
+        "address": "luigi@luigis-ristorante.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Rate April angekommen",
+      "body": "Ciao Vincenzo,\ndie Rate für April ist angekommen, danke! Die Küche ist fast fertig, wir wollen im Juli eröffnen.\nLuigi",
+      "language": "de",
+      "counterparty_id": "cp_luigi",
+      "attachments": []
+    },
+    {
+      "id": "mail_rota_2025_03_28",
+      "thread_id": "thr_rota",
+      "in_reply_to": null,
+      "date": "2025-03-28",
+      "from": {
+        "name": "Rosa Pavese",
+        "address": "rosa.pavese@pizzeria-amalfi.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Dienstplan Ostern",
+      "body": "Hallo Vincenzo,\nhier der Plan für Ostern: Karfreitag und Ostermontag sind Yusuf und ich in der Küche, Vanessa im Service.\nRosa",
+      "language": "de",
+      "counterparty_id": null,
+      "attachments": []
+    },
+    {
+      "id": "mail_rota_2025_04_28",
+      "thread_id": "thr_rota",
+      "in_reply_to": "mail_rota_2025_03_28",
+      "date": "2025-04-28",
+      "from": {
+        "name": "Rosa Pavese",
+        "address": "rosa.pavese@pizzeria-amalfi.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Dienstplan Mai",
+      "body": "Hallo Vincenzo,\nVanessa hat am 10. und 11. Mai frei, Yusuf übernimmt dafür den Samstagabend. Der Plan hängt in der Küche.\nRosa",
+      "language": "de",
+      "counterparty_id": null,
+      "attachments": []
+    },
+    {
+      "id": "mail_commerzbank_2025_04_02",
+      "thread_id": "thr_global_pay",
+      "in_reply_to": null,
+      "date": "2025-04-02",
+      "from": {
+        "name": "Commerzbank Global Pay",
+        "address": "service@globalpay.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Ihre Kartenabrechnungen im März",
+      "body": "Sehr geehrter Herr Amalfi,\nIhre Kreditkartenumsätze werden weiterhin zweimal wöchentlich auf Ihr Geschäftskonto ausgezahlt. Die Monatsübersicht für März finden Sie im Händlerportal.\nIhr Global Pay Team",
+      "language": "de",
+      "counterparty_id": null,
+      "attachments": []
+    },
+    {
+      "id": "mail_wholesale_2025_04_10",
+      "thread_id": "thr_wholesale",
+      "in_reply_to": null,
+      "date": "2025-04-10",
+      "from": {
+        "name": "Central Wholesale Market",
+        "address": "info@central-wholesale.example"
+      },
+      "to": {
+        "name": "Vincenzo Amalfi",
+        "address": "info@pizzeria-amalfi.example"
+      },
+      "subject": "Öffnungszeiten an Ostern",
+      "body": "Liebe Kundinnen und Kunden,\nam Karfreitag und Ostermontag ist der Großmarkt geschlossen. Am Karsamstag öffnen wir bereits um 4 Uhr.\nIhr Großmarkt-Team",
+      "language": "de",
+      "counterparty_id": null,
+      "attachments": []
+    }
+  ],
+  "reference_values": [
+    {
+      "id": "ref_vpi_demo",
+      "name": "DESTATIS_VPI",
+      "description": "Verbraucherpreisindex für Deutschland (VPI), 2020 = 100, in tenths of a point. Demo values.",
+      "unit": "INDEX_TENTHS",
+      "demo": true,
+      "values": [
+        {
+          "period": "2024-01",
+          "value": "1176"
+        },
+        {
+          "period": "2025-03",
+          "value": "1212"
+        }
+      ]
+    },
+    {
+      "id": "ref_eurchf_demo",
+      "name": "EUR_CHF",
+      "description": "Euro per Swiss franc, the rate printed in each month's statement row for the CHF tranche.",
+      "unit": "EUR_PER_CHF",
+      "demo": true,
+      "values": [
+        {
+          "period": "2025-01",
+          "value": "1.042"
+        },
+        {
+          "period": "2025-02",
+          "value": "1.045"
+        },
+        {
+          "period": "2025-03",
+          "value": "1.038"
+        },
+        {
+          "period": "2025-04",
+          "value": "1.040"
+        }
+      ]
+    }
+  ]
+}
