@@ -438,7 +438,7 @@ Statement imports (`POST /imports/bank-statement`) create a `STATEMENT_IMPORTED`
 
 **UpdateAmountSubject**: `kind: "UPDATE_RECURRING_AMOUNT"`, `finding_id`, `cost_ref`, `counterparty`, `category?`, `from_amount`, `to_amount`, `effective_from`, `payments: { outflow_id, ref, date }[]`.
 
-**LetterSubject**: `kind: "SEND_LETTER"`, `finding_id`, `counterparty`, `counterparty_id?`, `letter_subject` (German, e.g. "Ihre Mietanpassung ab 01.06.2025 – Bitte um Erläuterung gemäß §4.2 Mietvertrag"), `language: "de"`, `draft?` (the agent's draft until P16 writes the letter).
+**LetterSubject**: `kind: "SEND_LETTER"`, `finding_id`, `counterparty`, `counterparty_id?`, `letter_subject` (German, e.g. "Ihre Mietanpassung ab 01.06.2025 – Bitte um Erläuterung gemäß §4.2 Mietvertrag"), `language: "de"`, `draft` (the letter's German text, always set) and `draft_source: MODEL | TEMPLATE` (P16). `MODEL`: the agent's `letter_draft`, used only when the agent proposed `CONFLICT` itself and the draft passes the backend's checks; otherwise the backend's template from the engine's numbers (the change, what the clause allows and why, a request for the basis and the calculation). The text never refuses to pay. Receipts keep the text from proposal time.
 
 **Check**: `{ rule: "R1".."R7" | "VALIDITY" | "PAUSE", result: "PASS" | "FAIL" | "INFO", effect: "NEEDS_APPROVAL" | "NOT_ALLOWED" | null, text: string }` (`effect` only on FAIL), e.g. "4 333,34 € is within your 5 000 € limit for acting alone".
 
@@ -734,6 +734,7 @@ Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHE
 - `compute_call_id` is the `call_id` of this run's `compute` call that the label rests on.
 - `evidence_refs` are ids from this run's tool results (`evidence_ids`); others are dropped (P11).
 - `explanation` is shown as "Vero's note", never as a fact.
+- `letter_draft` (for `CONFLICT`): used as the letter only if every euro amount in it is one the engine computed for the finding (billed, justified, disputed, …), it states the justified amount, it cites the clause (`§4.2`), and it reads neither as a refusal to pay nor as a threat. Otherwise the backend's template is used and the run's trace says why (`GROUND`: "The agent's letter is not used: …").
 
 **The grounding check (P11) sets the label.** Citations no tool returned in this run are dropped. The `compute` call named by `compute_call_id` must be a successful `compute` call of this run with a formula that decides a label: `vpi_threshold_indexation` (a recurring amount: billed = the new amount, justified = `justified`) or `surcharge_rule` (a new charge on an invoice: billed = the charge, justified = `surcharge`). Each input needs a source:
 

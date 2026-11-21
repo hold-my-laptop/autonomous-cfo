@@ -5574,16 +5574,19 @@
             "title": "Language"
           },
           "draft": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
+            "type": "string",
             "title": "Draft",
-            "description": "The letter's text, when written (P16)"
+            "description": "The letter's text, in German"
+          },
+          "draft_source": {
+            "type": "string",
+            "enum": [
+              "MODEL",
+              "TEMPLATE"
+            ],
+            "title": "Draft Source",
+            "description": "MODEL: the agent's draft, checked by the backend; TEMPLATE: the backend's",
+            "default": "TEMPLATE"
           }
         },
         "type": "object",
