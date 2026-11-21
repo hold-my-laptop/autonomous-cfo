@@ -235,7 +235,7 @@ export function TodayPage() {
       {/* Headline */}
       <section aria-labelledby="page-h">
         <p className="text-[14px] text-ink-soft">
-          {company ? `${weekday(company.asOf)} · ${company.name}, ${company.city}` : " "}
+          {company ? `${weekday(company.asOf)} · ${company.name}${company.city ? `, ${company.city}` : ""}` : " "}
         </p>
         {head ? (
           <>
@@ -265,7 +265,7 @@ export function TodayPage() {
                 {company ? formatEurWhole(company.cashTodayEur) : "—"}
               </p>
             </div>
-            <ForecastLegend bufferEur={company?.safetyBufferEur} />
+            <ForecastLegend bufferEur={company?.safetyBufferEur} range={!f || f.days.some((d) => d.lowEur !== undefined)} />
           </div>
           <div className="-mx-1 mt-2">
             {forecast.isError && (

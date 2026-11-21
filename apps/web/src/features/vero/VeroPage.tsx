@@ -45,7 +45,7 @@ export function VeroPage() {
       <section aria-labelledby="vero-h">
         <p className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
           <span className="rounded-full bg-sunk px-2 py-0.5 font-semibold text-ink">Vero · Cost check</span>
-          {company ? `${company.name}, ${company.city}` : " "}
+          {company ? `${company.name}${company.city ? `, ${company.city}` : ""}` : " "}
         </p>
         <h1 id="vero-h" className="mt-2 max-w-[30ch] text-[32px] font-semibold leading-[1.1] tracking-[-0.025em] sm:text-[44px] lg:text-[48px]">
           {findings.data ? headline(all) : "Checking your costs…"}

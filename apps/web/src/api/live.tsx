@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { API_URL, USE_MOCK } from "./client";
+import { createContext, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { api, USE_MOCK } from "./client";
 import { mockBus } from "./mockBus";
 import { keys } from "./queries";
 import type { AgentId, AuditEntry, Decision, Finding, KnownDocument, ServerEvent } from "./types";
@@ -25,6 +25,63 @@ const initial: LiveState = {
 
 const LiveContext = createContext<LiveState>(initial);
 export const useLive = () => useContext(LiveContext);
+
+const POLL_BUSY_MS = 1500;
+const POLL_IDLE_MS = 4000;
+
+/**
+ * Real backend: it has no event stream, so poll the latest run (GET /runs?limit=1).
+ * While a run works, its newest trace line is the status text. When a run finishes,
+ * refresh decisions, forecast and company, and highlight the recommendations it made.
+ */
+function pollRuns(qc: QueryClient, setState: Dispatch<SetStateAction<LiveState>>): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let seen: string | null = null; // run_id + status from the last poll
+  let first = true;
+
+  const tick = async () => {
+    let busy = false;
+    try {
+      const run = await api.latestRun();
+      if (stopped) return;
+      setState((s) => (s.connection === "live" ? s : { ...s, connection: "live" }));
+      if (run) {
+        busy = run.status === "QUEUED" || run.status === "RUNNING";
+        const message = busy
+          ? (run.trace.at(-1)?.label ?? run.trigger.label)
+          : run.status === "FAILED"
+            ? `Couldn't finish: ${run.trigger.label}`
+            : `Last check: ${run.trigger.label}`;
+        setState((s) => ({
+          ...s,
+          latest: { agent: "liquidity", message, busy },
+          agents: { ...s.agents, liquidity: { message, busy } },
+        }));
+
+        const key = `${run.run_id}:${run.status}`;
+        if (!first && key !== seen && !busy) {
+          const ids = run.result?.recommendation_ids ?? [];
+          setState((s) => ({ ...s, arrived: new Set([...s.arrived, ...ids]) }));
+          qc.invalidateQueries({ queryKey: keys.decisions });
+          qc.invalidateQueries({ queryKey: keys.forecast });
+          qc.invalidateQueries({ queryKey: keys.company });
+        }
+        seen = key;
+      }
+      first = false;
+    } catch {
+      if (!stopped) setState((s) => ({ ...s, connection: "offline" }));
+    }
+    if (!stopped) timer = setTimeout(tick, busy ? POLL_BUSY_MS : POLL_IDLE_MS);
+  };
+
+  tick();
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
+}
 
 /**
  * Subscribes to live updates (SSE in real mode, mockBus in mock mode)
@@ -98,18 +155,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
       setState((s) => ({ ...s, connection: "live" }));
       return mockBus.subscribe(handle);
     }
-
-    const es = new EventSource(`${API_URL}/events`);
-    es.onopen = () => setState((s) => ({ ...s, connection: "live" }));
-    es.onerror = () => setState((s) => ({ ...s, connection: "offline" })); // browser retries
-    es.onmessage = (msg) => {
-      try {
-        handle(JSON.parse(msg.data) as ServerEvent);
-      } catch (err) {
-        console.warn("Bad SSE message", msg.data, err);
-      }
-    };
-    return () => es.close();
+    return pollRuns(qc, setState);
   }, [qc]);
 
   return <LiveContext.Provider value={state}>{children}</LiveContext.Provider>;

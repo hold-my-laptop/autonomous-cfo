@@ -11,10 +11,16 @@ VITE_MOCK=1 npm run dev    # in-browser mock backend, http://localhost:5173 (Pow
 npm run dev                # real backend: start it first with `make up-app` (api on localhost:8000)
 # presenter controls: http://localhost:5173/?demo=1
 # api somewhere else: BACKEND_URL=http://10.0.0.5:8000 npm run dev
+# chat needs services/ai too (default localhost:8001): AI_URL=http://localhost:8001 npm run dev
 ```
 
-The client calls `/api/v1/...` on its own origin. The dev server forwards `/api/v1/*` to `$BACKEND_URL` unchanged,
-the same as [`nginx.conf`](nginx.conf) does in the cluster, so no CORS is needed.
+The client calls `/api/v1/...` on its own origin, the same as [`nginx.conf`](nginx.conf) does in the cluster, so no
+CORS is needed. The dev server forwards `/api/v1/chat` and `/api/v1/documents/extract` to `$AI_URL` (as `/v1/...`)
+and everything else under `/api/v1/*` to `$BACKEND_URL` unchanged.
+
+In live mode the backend's shapes (cents as strings, snake_case) are mapped onto the UI types in
+[`src/api/adapters.ts`](src/api/adapters.ts); the mapping is listed at the bottom of [`src/api/types.ts`](src/api/types.ts).
+The backend has no event stream, so live updates come from polling the latest run (`GET /runs?limit=1`).
 
 ## Screens
 
