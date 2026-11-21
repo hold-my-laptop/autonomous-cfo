@@ -6,6 +6,7 @@ import time
 
 from api.agent import AgentOrchestrator
 from api.domain.importer import StatementImportError
+from api.domain.proof.dataset import ProofDatasetError
 from api.state import StateNotLoadedError, StateRepository
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ class StateLoader:
             self._next_attempt = time.monotonic() + self._retry_s
             try:
                 self._repository.start()
-            except (StatementImportError, StateNotLoadedError) as exc:
+            except (StatementImportError, ProofDatasetError, StateNotLoadedError) as exc:
                 logger.error("demo state not loaded, retrying in %.0f s: %s", self._retry_s, exc)
                 return False
             self._loaded = True

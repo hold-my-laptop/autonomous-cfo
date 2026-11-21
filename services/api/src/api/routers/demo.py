@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from api.deps import RepositoryDep, SettingsDep
 from api.domain.importer import StatementImportError
+from api.domain.proof.dataset import ProofDatasetError
 from api.errors import ApiError, ErrorCode
 
 router = APIRouter(prefix="/demo", tags=["demo"])
@@ -24,7 +25,7 @@ def reset_demo(repository: RepositoryDep, settings: SettingsDep) -> ResetResult:
         raise ApiError(status.HTTP_403_FORBIDDEN, ErrorCode.DEMO_DISABLED)
     try:
         state = repository.reset()
-    except StatementImportError as exc:
+    except (StatementImportError, ProofDatasetError) as exc:
         raise ApiError(
             status.HTTP_503_SERVICE_UNAVAILABLE, ErrorCode.STATE_NOT_LOADED, str(exc)
         ) from exc
