@@ -273,7 +273,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 - **Uploaded documents are read by the model.** The AI service extracts the line items from the PDF with the LLM; the backend validates every extracted value before using it.
 - **Detection is deterministic backend code.** Only a difference with no known reason starts an investigation: **one agent per finding**, at most 6 read-only tool calls, 60 s. The agent proposes a label and a formula; the backend checks the citations, recomputes every number and sets the final label.
 - **Reuse Phase 1:** repository boundary, runs and trace, tool registry, orchestrator and fallback, policy lanes, recommendations and receipts, executor, problem details, idempotency.
-- **Money** in cents as strings, **percentages** in basis points (8 % = `800`), **index values** in tenths of a point (121.2 = `1212`).
+- **Money** in cents as strings, **percentages** in basis points (8 % = `800`, VAT 19 % = `1900`), **index values** in tenths of a point (121.2 = `1212`). **Unit prices and quantities** are the new `Decimal` type (P17): a decimal string such as `"0.1234"` (euros) or `"2.5"`, never a float.
 
 **Demo numbers (cents)**
 
@@ -298,21 +298,23 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 ### P02 · Dataset fixture — MUST
 - One file, `services/api/src/api/fixtures/proof/dataset.json` (synthetic, safe for the public repo, ships in the image):
   - **documents:** id, type (`LEASE`, `CONTRACT`, `INVOICE`, `RENT_ADJUSTMENT`, `NOTICE`, `PRICE_LIST`, `PAYMENT_PLAN`), counterparty, date, language, pages with text blocks and highlight boxes;
-  - **line items** (description, quantity, unit price, VAT rate, net, gross), **clauses** (section, text, page, box), **price lists**;
+  - **line items** (description, quantity and unit price as `Decimal`, VAT rate in bps, net, gross optional), **clauses** (section, text, page, box), **price lists** (unit prices as `Decimal`);
+  - the **rent adjustment** as fields, not a line: `old_amount`, `new_amount`, `effective_from`, `frequency: MONTHLY` (its PDF prints both "bisher 3.800,00 €" and "neu 4.104,00 €");
+  - **boxes** in the AI service's convention: PDF points, origin top-left (`[x0, y0, x1, y1]`), so the model evaluation compares them directly;
   - **mailbox:** ~20 emails with thread, sender, date, body and attachment ids (the landlord's letter is an attachment in the grease-trap thread; Asimex's surcharge announcement of 14 Apr);
   - **reference values:** Destatis VPI and EUR/CHF, each flagged `demo: true`;
   - every **clause** also carries its terms as structured parameters next to the text, so the backend can check what the agent cites (lease §4.2: `{index: "DESTATIS_VPI", base_period: "2024-01", threshold_bps: 500, last_adjustment: "2024-02-01", min_months_between: 12, written_request: true}`; Asimex terms: `{surcharge: 2450, below_net_goods: 60000, valid_from: "2025-05-01"}`);
   - the line items of every document are also the **expected extraction**: the oracle for P08's model evaluation.
 - **Load-time validation** (a broken fixture fails the state load like a broken statement):
   - every invoice total equals a statement payment with the same counterparty, date, amount and invoice number in the reference;
-  - net + VAT (7 % / 19 %, half-up) adds up per line and per invoice;
+  - the P08 arithmetic holds: net per line = quantity × unit price (half-up), VAT per rate on the totals, gross = net + VAT on the totals;
   - every document is dated before `as_of`; every reference (attachment, clause, price list item) exists.
 - **Done when:** a test cross-checks every invoice against the statement (FLV-16261 = 103721, FLV-94818 = 89708, AS-80497 = 58474, AS-72217 = 68723, AS-11607 = 62403) and a broken total fails the load.
 
 ### P03 · PDF generator — MUST
-- `services/api/scripts/make_proof_pdfs.py`, run with `uv run --with reportlab` (not a runtime dependency): renders every document from P02 into `fixtures/proof/pdf/<doc_id>.pdf` and writes the box of every rendered number and clause back as highlight boxes, so they are exact by construction.
+- `services/api/scripts/make_proof_pdfs.py`, run with `uv run --with reportlab` (not a runtime dependency): renders every document from P02 into `fixtures/proof/pdf/<doc_id>.pdf` and writes the box of every rendered number and clause back as highlight boxes, so they are exact by construction. reportlab measures from the bottom-left: boxes are converted to the top-left origin before they are stored.
 - PDFs have a real text layer (the model reads text, not images). Fixed metadata (creation date, ids) so a re-run gives identical files; the SHA-256 of each PDF is stored in the fixture for P08's fallback.
-- **Done when:** a re-run changes no file, and the box for "4.104,00 €" on the rent adjustment matches its rendered position.
+- **Done when:** a re-run changes no file, and the stored box for "4.104,00 €" on the rent adjustment equals the box `pypdfium2` reports for that text (top-left origin).
 
 ### P04 · Cost Memory — MUST
 - **CostItem:** counterparty, `cost_ref` (`RENT`, `UTIL`, `XFER`, or the supplier), expected amount and currency, unit, sources (`STATEMENT`, `CONTRACT`, `PRICE_LIST`, `INVOICE`) with evidence refs.
@@ -348,17 +350,22 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 ### P08 · Document upload and LLM extraction — MUST
 - `POST /api/v1/documents` (multipart PDF, size and page limits, `Idempotency-Key`; `fastapi[standard]` already brings multipart support). The backend stores the file and starts a **Proof run** (P10): extracting → checking → investigating (only if needed) → done, each phase a trace step, so the UI can show progress.
 - Returns `202 {document_id, run_id}`; the findings appear on the run and the document. The same file (SHA-256) or the same counterparty and document number again → `DOCUMENT_ALREADY_PROCESSED` (409).
-- **Extraction by the AI service:** `POST ai/v1/documents/extract {document_id, filename, content_base64}` (30 s timeout, like `/v1/explain`). The AI service reads the PDF's text layer and has the LLM return: document type, counterparty, document number, date, period, effective date, currency, line items (description, quantity, unit, unit price, VAT rate, net, gross), totals, and for every value its source on the page (page, text as printed, box from the text layer).
-- **The backend validates every value** (an extraction is untrusted, like any model answer):
-  - each value's source text parses (German amounts and dates, existing parsers) to the same value;
-  - quantity × unit price = net, net + VAT (half-up) = gross per line, lines add up to the totals;
-  - the counterparty is a known Cost Memory party (otherwise the document is stored with no check and the trace says so);
+- **Extraction by the AI service** (agreed with the AI team; full shapes in DATA_CONTRACTS §3): `POST ai/v1/documents/extract {document_id, filename, content_base64, known_counterparties: [{id, name, aliases[]}]}`, `INTERNAL_TOKEN`, answered within 30 s.
+  - The AI service reads the text layer with `pypdfium2` (already a dependency). The model never writes numbers or boxes: it returns, per field, the printed text and the line it is on; code finds that text, takes its box from the PDF and parses the value (`1.234,56` → `"123456"`, `01.06.2025` → `"2025-06-01"`). Schema-constrained JSON, no tools, document text passed as data.
+  - The AI service runs the arithmetic checks itself and gives the model one correction round, inside the 30 s.
+  - **Response:** `{document_id, status: OK | FAILED, errors[], pages[{page, width, height}], doc_type, counterparty, document_number, date, period{from, to}, effective_from, currency, lines[], totals{net, vat, gross}}`; a rent adjustment adds `old_amount`, `new_amount`, `frequency`. Every value is `{value, source: {page, text, box}}`; absent fields are null. The counterparty also carries `matched_id` (one of the `known_counterparties`, or null).
+  - **Unreadable input** (no text layer, encrypted, more than 20 pages) → 422 with a code (`NO_TEXT_LAYER`, …). **Model trouble or failed checks** → 200 with `status: FAILED` and `errors`.
+- **The backend validates every value anyway** (its checks are the authority):
+  - each value's `source.text` parses (existing German parsers) to the same value;
+  - net per line = quantity × unit price, rounded half-up to the cent;
+  - VAT per rate on the totals = the rate × that rate's net, ±1 cent per rate (German invoices round VAT on the totals); gross = net + VAT exactly on the totals; gross per line is optional;
+  - `matched_id` is accepted only if the printed counterparty contains that party's name or an alias after normalising; no match → the document is stored with no check and the trace says so;
   - the document date is not after `as_of`.
-- **When extraction fails** (AI unreachable, timeout, invalid shape, a failed validation): a document whose SHA-256 is in the fixture gets its stored line items and the run is marked `FALLBACK` with the reason; any other document ends `EXTRACTION_FAILED` with what failed, and no finding. The stage demo must use the live extraction (hard criterion); the fallback is a visible safety net.
-- **Preloaded documents** (load and reset) use their fixture line items, with no model call: reset stays fast and deterministic.
-- **Model evaluation** (AI team, skipped without the model, like `test_llm_live.py`): live extraction of every fixture PDF equals its fixture line items.
-- **AI service side:** needs a PDF text library with word positions (a new dependency in `services/ai`, the AI team's decision; scanned PDFs are P20).
-- **Done when**, with a fake AI service: a correct extraction of `doc_rent_adjustment_2025_06` creates the rent finding and starts the investigation; an extraction whose number isn't in its source text, or whose lines don't add up, is rejected → stored line items and `FALLBACK` for the rent adjustment, `EXTRACTION_FAILED` for an unknown PDF; the same upload twice → 409.
+- **When extraction fails** (AI unreachable, timeout, a 422, `status: FAILED`, invalid shape, a failed backend check): a document whose SHA-256 is in the fixture gets its stored values and the run is marked `FALLBACK` with the reason; any other document ends `EXTRACTION_FAILED` with what failed, and no finding. The stage demo must use the live extraction (hard criterion); the fallback is a visible safety net.
+- **Rent adjustments:** CHECK takes `new_amount` from `effective_from` as the billed amount for `RENT`.
+- **Preloaded documents** (load and reset) use their fixture values, with no model call: reset stays fast and deterministic.
+- **Model evaluation** (AI team's `test_extract_live.py`, skipped unless `LLM_BASE_URL` is set, plus offline tests with a scripted model): live extraction of every fixture PDF equals its fixture fields, lines, totals and boxes.
+- **Done when**, with a fake AI service: a correct extraction of `doc_rent_adjustment_2025_06` (`new_amount` 410400 from 2025-06-01) creates the rent finding and starts the investigation; a value whose source text parses differently, VAT off by 2 cents on one rate, or a `matched_id` the printed name doesn't support is rejected → stored values and `FALLBACK` for the rent adjustment, `EXTRACTION_FAILED` for an unknown PDF; a 422 `NO_TEXT_LAYER` → `EXTRACTION_FAILED`; the same upload twice → 409.
 
 ## Milestone H: investigation
 
@@ -429,7 +436,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 ## Milestone J: delivery
 
 ### P17 · Contracts and OpenAPI — MUST
-- DATA_CONTRACTS: Finding, CostItem, Document (with highlight boxes), Digest, the new recommendation kinds, the extraction request/response and the investigation start/complete payloads (§3), and the new error codes. ARCHITECTURE: the investigation sequence. `make schema`.
+- DATA_CONTRACTS: the new **`Decimal`** type in §0 (a string matching `^-?[0-9]{1,9}(\.[0-9]{1,6})?$`, no floats, no thousands separators; used for unit prices and quantities); Finding, CostItem, Document (with highlight boxes), Digest, the new recommendation kinds, the extraction request/response with its 422 codes (agreed with the AI team, see P08) and the investigation start/complete payloads (§3), and the new error codes. ARCHITECTURE: the investigation sequence. `make schema`.
 - **RAG assistant contract** (AI team's `POST /api/v1/assistant/ask`), aligned with §0 before it merges: money fields named without a `_cents` suffix (the `Money` type already means cents), `UPPER_SNAKE` enum values (`TRANSACTION`, `OUTFLOW`, `INFLOW`), and the AI being unavailable returned as problem+json with its own code (e.g. `AI_UNAVAILABLE`, 503). The RAG branch touches `agent.py`, `config.py` and `openapi.json`: review and merge it **before P10**.
 - **Done when:** `test_openapi.py` passes and the AI team has agreed the §3 payloads (extraction included) and the RAG fixes.
 
@@ -443,7 +450,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 - Must pass in FALLBACK and AGENT (fake AI) modes.
 
 ### P20 · Scanned PDFs — MIGHT
-- PDFs without a text layer (photos, scans) need OCR or a vision model; Qwen3-8B reads text only. Until then they end `EXTRACTION_FAILED` with that reason.
+- PDFs without a text layer (photos, scans) end `EXTRACTION_FAILED` (`NO_TEXT_LAYER`). The AI service already has OCR (RapidOCR, `/v1/documents/text`), so supporting them means extracting from OCR lines and their boxes instead of the text layer; the same backend checks apply.
 
 ### P21 · Re-check on contract upload — MIGHT
 - Uploading a lease or contract updates Cost Memory and re-runs CHECK on the payments it covers.
