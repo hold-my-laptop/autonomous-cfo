@@ -318,7 +318,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | 14 | Owner asks to move a payment | `POST /outflows/{id}/reschedule-requests` with `{ to_date, note? }` | **202** `{ run_id, status }`. The same rules apply with the owner's approval implied: payroll → `BLOCKED` (NOT_ALLOWED), a movable payment is moved (`APPROVED_EXECUTED`) |
 | 15 | Evidence | `GET /receipts/{id}` | **Receipt** |
 | 16 | Health / model check | `GET /health/live`, `/health/ready`, `/health/model` | live: `{ status: "ok" }` · ready: `{ status: "ok" \| "unavailable", state_loaded: bool }` (503 when not loaded) · model: **ModelHealth** |
-| 17 | Demo reset | `POST /demo/reset` | `{ reset: true, as_of_date, financial_version }` |
+| 17 | Demo reset (both phases) | `POST /demo/reset` | `{ reset: true, as_of_date, financial_version }`. Rebuilds the statement, forecast, mandate v1, Cost Memory and the preloaded findings (no model call); deletes runs (Cash and Proof), recommendations, receipts, uploads and their files, idempotency keys and the activity log. Every reset gives the same state; a run still in progress ends (its late callbacks get `RUN_CLOSED`). `403 DEMO_DISABLED` without `DEMO_MODE` |
 | 18 | *(SHOULD)* Rules from a sentence | `POST /mandate/draft-from-text` with `{ text }` | **MandateDraft** |
 | 19 | Activity page | `GET /audit?after_seq=` (`after_seq` ≥ 0, default 0) | **AuditEntry[]**, oldest first |
 | 20 | *(Vero Proof)* What each recurring cost should be | `GET /cost-memory` | **CostItem[]**: fixed costs `RENT`, `UTIL`, `XFER`, `PAY`, `SOC`, `WTAX`, then suppliers by `cost_ref` |
