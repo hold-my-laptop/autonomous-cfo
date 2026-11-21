@@ -85,6 +85,41 @@ def tool(client: TestClient, run_id: str, name: str, arguments: dict) -> dict:
     return response.json()
 
 
+HERO_CALLS = (
+    ("c1", "search_inbox", {"query": "rent increase", "counterparty": "Main Street"}),
+    ("c2", "read_clause", {"doc_id": "lease_main_street_2021", "section": "§4.2"}),
+    ("c3", "get_reference_index", {"name": "DESTATIS_VPI", "periods": ["2024-01", "2025-03"]}),
+    (
+        "c4",
+        "compute",
+        {
+            "formula_id": "vpi_threshold_indexation",
+            "inputs": {
+                "base_amount": "380000",
+                "base_index": 1176,
+                "current_index": 1212,
+                "threshold_bps": 500,
+            },
+        },
+    ),
+)
+
+
+def call(client: TestClient, run_id: str, call_id: str, name: str, arguments: dict) -> dict:
+    response = client.post(
+        f"/internal/v1/tools/{name}",
+        json={"run_id": run_id, "arguments": arguments, "call_id": call_id},
+        headers=AUTH,
+    )
+    return response.json()
+
+
+def hero(client: TestClient, run_id: str, calls=HERO_CALLS) -> None:
+    """The hero's four tool calls, as the agent makes them (PROOF.md §7.1)."""
+    for call_id, name, arguments in calls:
+        assert call(client, run_id, call_id, name, arguments)["ok"]
+
+
 def wait_until_finished(client: TestClient, run_id: str) -> dict:
     deadline = time.monotonic() + 5
     while run(client, run_id)["status"] == "RUNNING" and time.monotonic() < deadline:
@@ -108,9 +143,10 @@ def test_agent_path() -> None:
         assert (payload["run_id"], payload["kind"]) == (run_id, "PROOF")
         assert payload["event"]["type"] == "DOCUMENT_UPLOADED"
         assert payload["limits"] == {"max_tool_calls": 6, "deadline_s": 60}
+        assert payload["finding"]["id"] == running["finding_ids"][0]
+        assert payload["finding"]["impact"]["billed"] == "410400"
+        assert payload["finding"]["status"] == "INVESTIGATING"
         investigation = payload["investigation"]
-        assert investigation["finding"]["id"] == running["finding_ids"][0]
-        assert investigation["finding"]["impact"]["billed"] == "410400"
         assert investigation["cost_item"]["cost_ref"] == "RENT"
         assert investigation["cost_item"]["expected_amount"] == "380000"
         assert investigation["hypotheses"] == [
@@ -122,13 +158,17 @@ def test_agent_path() -> None:
 
         tools = client.get(f"/internal/v1/tools?run_id={run_id}", headers=AUTH).json()
         assert tools[0]["name"] == "search_inbox"
-        assert tool(client, run_id, "search_inbox", {"query": "rent increase"})["ok"]
+        hero(client, run_id)
         assert post(client, run_id, "notes", {"text": "Checking the lease"}).status_code == 204
 
         assert post(client, run_id, "complete", ANSWER).status_code == 204
 
         done = run(client, run_id)
         assert (done["status"], done["mode"]) == ("SUCCEEDED", "AGENT")
+        assert done["result"]["headline"]["text"] == (
+            "Main Street Real Estate GmbH: rent 3 800,00 € → 4 104,00 € from 1 Jun 2025: "
+            "304,00 € more than allowed"
+        )
         steps = [(s["kind"], s["source"], s["label"]) for s in done["trace"]]
         assert ("THINK", "AGENT", "Checking the lease") in steps
         assert steps[-3:] == [
@@ -137,19 +177,19 @@ def test_agent_path() -> None:
                 "AGENT",
                 "Vero's note: The index moved 3.06 %, below the 5 % threshold of §4.2.",
             ),
-            ("INVESTIGATE", "BACKEND", "The answer is not confirmed yet: still needs evidence"),
+            ("GROUND", "BACKEND", "Recomputed: 3 800,00 € allowed, 4 104,00 € billed"),
             ("SUMMARY", "BACKEND", done["result"]["headline"]["text"]),
         ]
         result = finding(client, run_id)
         assert (result["classification"], result["status"], result["escalated"]) == (
-            "UNEXPLAINED",
+            "CONFLICT",
             "CLASSIFIED",
             False,
         )
         with client.app.state.repository.read() as state:
             stored = state.runs[UUID(run_id)].tool_log
         assert stored["completion"] == ANSWER
-        assert len(stored["calls"]) == 1
+        assert [c["seq"] for c in stored["calls"].values()] == [1, 2, 3, 4]
         log = client.get("/api/v1/audit").json()
         actions = [e["action"] for e in log if e["run_id"] == run_id]
         assert actions[-1] == done["result"]["headline"]["text"]
@@ -229,7 +269,7 @@ def test_unreachable_ai_falls_back_at_once() -> None:
         assert labels(client, run_id)[-2] == "The AI service is unavailable: no reason found"
 
 
-def test_investigation_agent_switch_is_off_by_default() -> None:
+def test_investigation_agent_switch_turns_the_agent_off() -> None:
     ai = InvestigatingAI()
     with make_client(ai, investigation_agent_enabled=False) as client:
         run_id = start(client)
@@ -237,7 +277,7 @@ def test_investigation_agent_switch_is_off_by_default() -> None:
         assert ai.started == []
         assert run(client, run_id)["status"] == "SUCCEEDED"
         assert labels(client, run_id)[-2] == "The investigation agent is off: no reason found"
-    assert Settings().investigation_agent_enabled is False
+    assert Settings().investigation_agent_enabled is True
 
 
 def test_without_internal_token_the_upload_finishes_at_once() -> None:

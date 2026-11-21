@@ -94,7 +94,10 @@ class FakeAI:
 
 
 def agent_settings() -> Settings:
-    return Settings(**(base.model_dump() | {"internal_token": TOKEN}))
+    """Extraction with the model; the investigation is tested in test_investigations.py."""
+    return Settings(
+        **(base.model_dump() | {"internal_token": TOKEN, "investigation_agent_enabled": False})
+    )
 
 
 def make_client(ai: FakeAI) -> TestClient:

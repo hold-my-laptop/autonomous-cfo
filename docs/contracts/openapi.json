@@ -3895,7 +3895,8 @@
           "CLAUSE",
           "TRANSACTION",
           "EMAIL",
-          "COST_ITEM"
+          "COST_ITEM",
+          "REFERENCE_VALUE"
         ],
         "title": "EvidenceKind"
       },
@@ -3949,6 +3950,18 @@
               }
             ],
             "title": "Cost Ref"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref",
+            "description": "The evidence id an investigation tool returned: an email, a reference series, or `document#clause`"
           }
         },
         "additionalProperties": false,
@@ -4353,6 +4366,167 @@
           "bps"
         ],
         "title": "FindingImpact"
+      },
+      "FindingInvestigation": {
+        "properties": {
+          "mode": {
+            "$ref": "#/components/schemas/InvestigationMode"
+          },
+          "formula_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula Id"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "inputs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputs"
+          },
+          "outputs": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outputs"
+          },
+          "billed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billed",
+            "description": "What was billed for the change"
+          },
+          "justified": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Justified",
+            "description": "What the evidence allows"
+          },
+          "disputed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disputed",
+            "description": "billed − justified, when above"
+          },
+          "searched": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Searched",
+            "description": "Every look-up, in order",
+            "default": []
+          },
+          "dropped_refs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Dropped Refs",
+            "description": "Citations no tool returned in this run",
+            "default": []
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Problems",
+            "description": "Why no label could be set",
+            "default": []
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note",
+            "description": "The agent's explanation (not a fact)"
+          },
+          "proposed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Classification"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The agent's label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "FindingInvestigation",
+        "description": "What the investigation established, as the backend checked it: the formula of the\n`compute` call the label rests on, recomputed from inputs that each have a source."
       },
       "FindingKind": {
         "type": "string",
@@ -4818,6 +4992,14 @@
           "original_expected_date"
         ],
         "title": "Inflow"
+      },
+      "InvestigationMode": {
+        "type": "string",
+        "enum": [
+          "AGENT",
+          "FALLBACK"
+        ],
+        "title": "InvestigationMode"
       },
       "Lanes": {
         "properties": {
@@ -5572,6 +5754,16 @@
             "type": "array",
             "title": "Evidence Refs",
             "default": []
+          },
+          "investigation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FindingInvestigation"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "propagation": {
             "anyOf": [
