@@ -122,6 +122,49 @@ class FindingInvestigation(_Frozen):
     proposed: Classification | None = Field(default=None, description="The agent's label")
 
 
+class PaymentDecision(StrEnum):
+    KEEP = "KEEP"
+    UPDATE = "UPDATE"
+    PAID = "PAID"
+
+
+class _Frozen(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+
+class ForecastEffect(_Frozen):
+    """The proposal's effect on the 91-day forecast: the item's payments in the window at the
+    proposed instead of the current amount."""
+
+    payments: tuple[str, ...] = Field(description="Refs of the payments it changes, by date")
+    outflow_difference: Money = Field(description="Proposed − current, inside the window")
+    lowest_before: Money = Field(description="Lowest balance with the current amount")
+    lowest_after: Money = Field(description="Lowest balance with the proposed amount")
+
+
+class FindingPropagation(_Frozen):
+    """`KEEP`: keep paying the current amount; `UPDATE`: pay `proposed_amount` from
+    `effective_from` (needs approval, P14); `PAID`: an invoice already paid on its date."""
+
+    decision: PaymentDecision
+    cost_ref: str
+    effective_from: date | None = None
+    current_amount: Money | None = Field(default=None, description="Per payment, scheduled now")
+    billed_amount: Money | None = None
+    proposed_amount: Money | None = Field(default=None, description="Per payment, from now on")
+    disputed: Money | None = Field(
+        default=None, description="Billed above what is allowed, per payment or invoice"
+    )
+    disputed_annual: Money | None = Field(
+        default=None, description="`disputed` over 12 months, for a monthly cost"
+    )
+    disputed_in_window: Money | None = Field(
+        default=None, description="Billed above what is allowed, inside the 91-day window"
+    )
+    forecast: ForecastEffect | None = None
+    engine_version: str = Field(description="The engine that computed these numbers")
+
+
 class FindingHistoryEntry(_Frozen):
     at: datetime
     status: FindingStatus
@@ -151,7 +194,7 @@ class ProofFinding(_Frozen):
     impact: FindingImpact
     evidence_refs: tuple[EvidenceRef, ...] = ()
     investigation: FindingInvestigation | None = None
-    propagation: dict[str, Any] | None = None
+    propagation: FindingPropagation | None = None
     recommendation_ids: tuple[UUID, ...] = ()
     run_id: UUID | None = None
     acknowledged_at: datetime | None = None

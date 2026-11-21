@@ -41,6 +41,7 @@ from api.domain.proof.check import RoutineCheck, preloaded_findings
 from api.domain.proof.cost_memory import CostItem, build_cost_memory
 from api.domain.proof.dataset import ProofDataset, load_dataset
 from api.domain.proof.findings import ProofFinding
+from api.domain.proof.propagation import propagate
 from api.domain.proof.uploads import Upload
 from api.domain.recurring import detect_recurring, project_outflows
 from api.domain.revenue import RevenueModel, build_revenue_model
@@ -236,7 +237,13 @@ def build_base(settings: Settings, statement: StatementImport | None = None) -> 
     )
     state = DemoState.from_base(base, initial_mandates(as_of), findings={f.id: f for f in findings})
     investigated = investigate_preloaded(state, demo_load_time(as_of))
-    return replace(base, preloaded_findings=tuple(investigated.values()))
+    forecast = state.forecast_input()
+    items = {c.cost_ref: c for c in cost_memory}
+    propagated = tuple(
+        f.model_copy(update={"propagation": propagate(f, items.get(f.cost_ref), forecast)})
+        for f in investigated.values()
+    )
+    return replace(base, preloaded_findings=propagated)
 
 
 def demo_load_time(as_of: date) -> datetime:

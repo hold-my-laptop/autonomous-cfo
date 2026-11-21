@@ -38,6 +38,7 @@ from api.domain.proof.findings import (
     ProofFinding,
 )
 from api.domain.proof.grounding import base_sources, calls_of, ground
+from api.domain.proof.propagation import describe, propagate
 from api.domain.proof.uploads import MAX_UPLOAD_BYTES, Upload, UploadStatus, ValuesSource
 from api.errors import ApiError, ErrorCode
 from api.money import format_eur
@@ -394,6 +395,7 @@ def apply_extraction(state: DemoState, run_id: UUID, extraction: Extraction, now
     if source is ValuesSource.FIXTURE:
         read_label = "Values from the stored demo document"
     finding = _upload_history(finding, upload, read_label).model_copy(update={"run_id": run.id})
+    finding = with_propagation(state, finding)
     state.findings[finding.id] = finding
     upload = upload.model_copy(update={"finding_ids": (finding.id,)})
     trace.add("CHECK", finding.history[-1].label, now, {"finding_id": str(finding.id)})
@@ -480,6 +482,13 @@ def _headline(finding: ProofFinding) -> str:
     return f"{finding.title}: needs your review"
 
 
+def with_propagation(state: DemoState, finding: ProofFinding) -> ProofFinding:
+    """The finding with its payment decision and forecast effect (P13)."""
+    item = next((c for c in state.cost_memory if c.cost_ref == finding.cost_ref), None)
+    propagation = propagate(finding, item, state.forecast_input())
+    return finding.model_copy(update={"propagation": propagation})
+
+
 def conclude_investigation(
     state: DemoState,
     run_id: UUID,
@@ -535,6 +544,9 @@ def conclude_investigation(
             trace.add(kind, step, now)
         finding = result.grounding.apply(finding, now)
         mode = RunMode.FALLBACK
+    finding = with_propagation(state, finding)
+    if finding.propagation:
+        trace.add("PROPAGATE", describe(finding.propagation), now)
     state.findings[finding.id] = finding
     _finish(state, run, trace, upload, now, _headline(finding), mode=mode, findings=(finding.id,))
 

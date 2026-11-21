@@ -88,7 +88,7 @@ def test_a_claimed_verified_rent_ends_as_conflict() -> None:
     assert result["classification"] == "CONFLICT"
     assert result["investigation"]["proposed"] == "VERIFIED"
     assert result["investigation"]["justified"] == "380000"
-    assert steps[-2] == "Vero's agent proposed verified; the backend's check says conflict"
+    assert steps[-3] == "Vero's agent proposed verified; the backend's check says conflict"
 
 
 def test_a_citation_no_tool_returned_is_dropped() -> None:
@@ -120,7 +120,8 @@ def test_a_threshold_not_in_the_clause_is_rejected() -> None:
     ]
     assert (investigation["justified"], investigation["formula_id"]) == (None, None)
     assert len(investigation["searched"]) == 4
-    assert steps[-3].startswith("Can't use the answer: threshold_bps 1000 has no source")
+    assert steps[-4].startswith("Can't use the answer: threshold_bps 1000 has no source")
+    assert steps[-2] == "Keep paying 3 800,00 € for RENT"
     assert done["result"]["headline"]["text"].endswith(": needs your review")
     assert done["mode"] == "AGENT"
 
