@@ -432,6 +432,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 - Per finding: the payment decision (keep, or the new amount), the forecast effect (P05 `window_impact`) and the disputed amounts.
 - A `verified` change with a new amount proposes an update of the recurring item's future outflows.
 - **Done when:** hero → keep `RENT` at 380000, window impact 91200, S0 unchanged; a variant with the VPI above the threshold proposes the indexed amount for `RENT-06…08`.
+- **As built:** `domain/proof/propagation.py` (`propagate(finding, cost_item, forecast)`, `describe`); the shapes (`FindingPropagation`, `PaymentDecision`, `ForecastEffect`) live in `findings.py` and replace the untyped `propagation`. Numbers only from the engine (`window_impact` twice: billed vs proposed for `disputed_in_window`, current vs proposed for `forecast`; `annualize`). Set wherever a finding is classified: `proof_runs.with_propagation` after an investigation (trace step `PROPAGATE`) and after a CHECK that verifies an upload, and in `build_base` for the preloaded findings (invoices → `PAID`). Only a `CONFLICT` has disputed amounts. Nothing changes the schedule; `UPDATE` waits for P14's `execute_amount_change`. Variant numbers (PROOF §7.5): `UPDATE` 399388, disputed 11012 / 132144 / 33036, forecast +58164.
 
 ### P14 · Actions, policy and execution — MUST
 - New recommendation kinds `KEEP_PAYMENT`, `UPDATE_RECURRING_AMOUNT`, `SEND_LETTER`, linked to their finding.

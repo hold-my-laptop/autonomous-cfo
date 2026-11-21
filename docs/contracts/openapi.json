@@ -4536,6 +4536,154 @@
         ],
         "title": "FindingKind"
       },
+      "FindingPropagation": {
+        "properties": {
+          "decision": {
+            "$ref": "#/components/schemas/PaymentDecision"
+          },
+          "cost_ref": {
+            "type": "string",
+            "title": "Cost Ref"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "current_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Amount",
+            "description": "Per payment, scheduled now"
+          },
+          "billed_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billed Amount"
+          },
+          "proposed_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proposed Amount",
+            "description": "Per payment, from now on"
+          },
+          "disputed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disputed",
+            "description": "Billed above what is allowed, per payment or invoice"
+          },
+          "disputed_annual": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disputed Annual",
+            "description": "`disputed` over 12 months, for a monthly cost"
+          },
+          "disputed_in_window": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disputed In Window",
+            "description": "Billed above what is allowed, inside the 91-day window"
+          },
+          "forecast": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ForecastEffect"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "engine_version": {
+            "type": "string",
+            "title": "Engine Version",
+            "description": "The engine that computed these numbers"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "decision",
+          "cost_ref",
+          "engine_version"
+        ],
+        "title": "FindingPropagation",
+        "description": "`KEEP`: keep paying the current amount; `UPDATE`: pay `proposed_amount` from\n`effective_from` (needs approval, P14); `PAID`: an invoice already paid on its date."
+      },
       "FindingStatus": {
         "type": "string",
         "enum": [
@@ -4756,6 +4904,55 @@
           "closed"
         ],
         "title": "ForecastDay"
+      },
+      "ForecastEffect": {
+        "properties": {
+          "payments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Payments",
+            "description": "Refs of the payments it changes, by date"
+          },
+          "outflow_difference": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Outflow Difference",
+            "description": "Proposed − current, inside the window",
+            "examples": [
+              "125050"
+            ]
+          },
+          "lowest_before": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Lowest Before",
+            "description": "Lowest balance with the current amount",
+            "examples": [
+              "125050"
+            ]
+          },
+          "lowest_after": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Lowest After",
+            "description": "Lowest balance with the proposed amount",
+            "examples": [
+              "125050"
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "payments",
+          "outflow_difference",
+          "lowest_before",
+          "lowest_after"
+        ],
+        "title": "ForecastEffect",
+        "description": "The proposal's effect on the 91-day forecast: the item's payments in the window at the\nproposed instead of the current amount."
       },
       "ForecastSummary": {
         "properties": {
@@ -5505,6 +5702,15 @@
         ],
         "title": "Overview"
       },
+      "PaymentDecision": {
+        "type": "string",
+        "enum": [
+          "KEEP",
+          "UPDATE",
+          "PAID"
+        ],
+        "title": "PaymentDecision"
+      },
       "PlannedEvent": {
         "properties": {
           "id": {
@@ -5768,14 +5974,12 @@
           "propagation": {
             "anyOf": [
               {
-                "additionalProperties": true,
-                "type": "object"
+                "$ref": "#/components/schemas/FindingPropagation"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Propagation"
+            ]
           },
           "recommendation_ids": {
             "items": {

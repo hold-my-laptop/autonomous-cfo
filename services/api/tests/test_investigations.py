@@ -189,13 +189,18 @@ def test_agent_path() -> None:
         )
         steps = [(s["kind"], s["source"], s["label"]) for s in done["trace"]]
         assert ("THINK", "AGENT", "Checking the lease") in steps
-        assert steps[-3:] == [
+        assert steps[-4:] == [
             (
                 "INVESTIGATE",
                 "AGENT",
                 "Vero's note: The index moved 3.06 %, below the 5 % threshold of §4.2.",
             ),
             ("GROUND", "BACKEND", "Recomputed: 3 800,00 € allowed, 4 104,00 € billed"),
+            (
+                "PROPAGATE",
+                "BACKEND",
+                "Keep paying 3 800,00 € for RENT; 912,00 € disputed in the next 13 weeks",
+            ),
             ("SUMMARY", "BACKEND", done["result"]["headline"]["text"]),
         ]
         result = finding(client, run_id)
