@@ -91,6 +91,11 @@ Other rules every pod follows:
   all capabilities dropped, seccomp `RuntimeDefault`.
 - Base images come from Red Hat registries (UBI 9, RHEL 9), not from Docker Hub.
 - Every container has CPU and memory requests and limits.
+- web and api wait 5 s in `preStop` before they stop, so the router and the Service stop sending them requests first.
+  The web rolls out with RollingUpdate and no failed requests (tested with constant requests during a restart).
+  The api keeps runs and their timers in memory, so it runs as one replica with `Recreate`: two copies at once would split
+  that state. The price is a gap of about 3 s during an api rollout (the browser polls get 502 and retry), so we do not
+  deploy the api during a demo. ai and db also use `Recreate` (one replica, one volume for the db).
 - Secrets (`db` with the Postgres password and `DATABASE_URL`, `internal-token` for the ai to api calls) are generated
   inside the cluster with `openssl rand` by the make targets. They are never written to a file or to git.
 - Only the web has a Route. nginx only forwards `/api/v1/*`, so `/internal/*` stays inside the cluster
