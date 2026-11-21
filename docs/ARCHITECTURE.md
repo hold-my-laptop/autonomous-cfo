@@ -447,10 +447,10 @@ sequenceDiagram
   alt DEMO_MODE off
     A-->>W: 403
   else
-    A->>DB: TX: truncate business tables
     A->>A: import sample statement up to 4 May 2025 (as in 2.1), as_of 5 May 2025, mandate v1
     A->>A: engine: baseline forecast (S0)
-    A->>DB: store
+    A->>A: Vero Proof: fixture, Cost Memory, CHECK, scripted investigation (AS-11607), propagation
+    A->>DB: TX: replace the state (runs, recommendations, uploads and files, findings, audit gone)
     A-->>W: {reset: true, as_of_date: 2025-05-05, financial_version: 1}
     W->>A: GET /api/v1/overview
     A-->>W: green dashboard
