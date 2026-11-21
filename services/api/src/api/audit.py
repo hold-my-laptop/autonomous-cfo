@@ -28,6 +28,7 @@ class AuditActor(StrEnum):
 
 class AuditAgent(StrEnum):
     CASH = "CASH"
+    PROOF = "PROOF"
 
 
 @dataclass(frozen=True, slots=True)

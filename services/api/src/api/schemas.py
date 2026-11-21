@@ -792,7 +792,7 @@ class AuditEntry(BaseModel):
     seq: int
     timestamp: str = Field(description="UTC with milliseconds, exactly as hashed")
     actor: Literal["AGENT", "RULES", "OWNER", "SYSTEM"]
-    agent: Literal["CASH"] | None
+    agent: Literal["CASH", "PROOF"] | None
     action: str
     run_id: UUID | None
     recommendation_id: UUID | None

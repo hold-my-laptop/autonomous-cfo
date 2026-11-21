@@ -37,8 +37,10 @@ from api.domain.models import (
     Transaction,
 )
 from api.domain.planner import PlanResult, apply_moves, plan_moves
+from api.domain.proof.check import RoutineCheck, preloaded_findings
 from api.domain.proof.cost_memory import CostItem, build_cost_memory
 from api.domain.proof.dataset import ProofDataset, load_dataset
+from api.domain.proof.findings import ProofFinding
 from api.domain.recurring import detect_recurring, project_outflows
 from api.domain.revenue import RevenueModel, build_revenue_model
 from api.domain.schedule import project_scheduled, sort_outflows
@@ -73,6 +75,8 @@ class BaseData:
     inflows: tuple[Inflow, ...] = ()
     proof: ProofDataset | None = None
     cost_memory: tuple[CostItem, ...] = ()
+    routine_checks: tuple[RoutineCheck, ...] = ()
+    preloaded_findings: tuple[ProofFinding, ...] = ()
 
 
 @dataclass
@@ -98,6 +102,8 @@ class DemoState:
     audit: list[AuditEntry] = field(default_factory=list)
     proof: ProofDataset | None = None
     cost_memory: tuple[CostItem, ...] = ()
+    routine_checks: tuple[RoutineCheck, ...] = ()
+    findings: dict[UUID, ProofFinding] = field(default_factory=dict)
 
     @classmethod
     def from_base(cls, base: BaseData, mandates: list[Mandate], **changes: Any) -> "DemoState":
@@ -113,6 +119,7 @@ class DemoState:
             inflows=list(base.inflows),
             proof=base.proof,
             cost_memory=base.cost_memory,
+            routine_checks=base.routine_checks,
             mandates=mandates,
             **changes,
         )
@@ -200,6 +207,8 @@ def build_base(settings: Settings, statement: StatementImport | None = None) -> 
     history = [t for t in statement.transactions if t.booking_date < as_of]
     end = window_end(as_of, settings.forecast_horizon_days)
     recurring = detect_recurring(history, as_of)
+    cost_memory = build_cost_memory(recurring, history, proof, as_of)
+    findings, routine = preloaded_findings(proof, cost_memory, history, demo_load_time(as_of))
     outflows = project_outflows(
         recurring,
         as_of,
@@ -216,18 +225,25 @@ def build_base(settings: Settings, statement: StatementImport | None = None) -> 
         recurring=tuple(recurring),
         outflows=tuple(sort_outflows(outflows)),
         proof=proof,
-        cost_memory=build_cost_memory(recurring, history, proof, as_of),
+        cost_memory=cost_memory,
+        routine_checks=routine,
+        preloaded_findings=findings,
     )
 
 
+def demo_load_time(as_of: date) -> datetime:
+    """When the demo data counts as loaded: 08:00 UTC on `as_of`, fixed so resets repeat."""
+    return datetime.combine(as_of, time(8, 0), tzinfo=UTC)
+
+
 def initial_mandates(as_of: date) -> list[Mandate]:
-    return [initial_mandate(datetime.combine(as_of, time(8, 0), tzinfo=UTC))]
+    return [initial_mandate(demo_load_time(as_of))]
 
 
 def fresh_state(base: BaseData) -> DemoState:
     """The demo company as loaded, with a new activity log that starts at the load."""
     mandates = initial_mandates(base.as_of)
-    state = DemoState.from_base(base, mandates)
+    state = DemoState.from_base(base, mandates, findings={f.id: f for f in base.preloaded_findings})
     record(
         state,
         mandates[0].created_at,

@@ -38,6 +38,7 @@ from api.domain.models import (
     RunStatus,
     TraceStep,
 )
+from api.domain.proof.findings import ProofFinding
 from api.state import (
     BaseData,
     DemoState,
@@ -49,7 +50,7 @@ from api.state import (
 from api.statement_db import read_statement_table
 
 COMPANY_ROW_ID = 1
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class SchemaMetaRow(SQLModel, table=True):
@@ -205,6 +206,16 @@ class AuditRow(SQLModel, table=True):
     hash: str
 
 
+class ProofFindingRow(SQLModel, table=True):
+    """A Vero Proof finding, stored whole as JSON in its public shape."""
+
+    __tablename__ = "proof_findings"
+
+    id: UUID = Field(primary_key=True)
+    seq: int
+    body: dict[str, Any] = Field(sa_type=JSON)
+
+
 class IdempotencyRow(SQLModel, table=True):
     __tablename__ = "idempotency_keys"
 
@@ -224,6 +235,7 @@ _CHANGEABLE_TABLES = (
     RecommendationRow,
     ReceiptRow,
     AuditRow,
+    ProofFindingRow,
 )
 _ALL_TABLES = (SchemaMetaRow, CompanyStateRow, *_CHANGEABLE_TABLES)
 
@@ -352,6 +364,7 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
     recommendations = session.exec(select(RecommendationRow).order_by(RecommendationRow.seq)).all()
     receipts = session.exec(select(ReceiptRow).order_by(ReceiptRow.seq)).all()
     audit = session.exec(select(AuditRow).order_by(AuditRow.seq)).all()
+    findings = session.exec(select(ProofFindingRow).order_by(ProofFindingRow.seq)).all()
     state = DemoState.from_base(
         base,
         [_mandate(r) for r in mandates],
@@ -422,6 +435,7 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
             )
             for r in audit
         ],
+        findings={r.id: ProofFinding.model_validate(r.body) for r in findings},
     )
     state.outflows = [
         replace(o, scheduled_date=changes[o.id].scheduled_date, version=changes[o.id].version)
@@ -562,6 +576,14 @@ def _save(session: Session, state: DemoState) -> None:
     )
 
     _save_audit(session, state.audit)
+    _sync(
+        session,
+        ProofFindingRow,
+        [
+            ProofFindingRow(id=f.id, seq=i, body=f.stored())
+            for i, f in enumerate(state.findings.values())
+        ],
+    )
 
     existing_keys = {row.key: row for row in session.exec(select(IdempotencyRow)).all()}
     for key, row in existing_keys.items():

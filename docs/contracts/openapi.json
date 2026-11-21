@@ -1684,6 +1684,194 @@
         }
       }
     },
+    "/api/v1/findings": {
+      "get": {
+        "tags": [
+          "proof"
+        ],
+        "summary": "List Findings",
+        "description": "Vero Proof findings, by the date of what they concern (oldest first).",
+        "operationId": "list_findings",
+        "parameters": [
+          {
+            "name": "classification",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Classification"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Classification"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/FindingStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ProofFinding"
+                  },
+                  "title": "Response List Findings"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/{finding_id}": {
+      "get": {
+        "tags": [
+          "proof"
+        ],
+        "summary": "Get Finding",
+        "operationId": "get_finding",
+        "parameters": [
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProofFinding"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
+    "/api/v1/findings/{finding_id}/acknowledge": {
+      "post": {
+        "tags": [
+          "proof"
+        ],
+        "summary": "Acknowledge Finding",
+        "description": "The owner's one tap on a change Vero handled quietly: it leaves the digest. A finding\nthat is not quiet (it needs evidence or a decision) or was already acknowledged gives\nNOT_PENDING.",
+        "operationId": "acknowledge_finding",
+        "parameters": [
+          {
+            "name": "finding_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Finding Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProofFinding"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
     "/api/v1/assistant/ask": {
       "post": {
         "tags": [
@@ -1884,7 +2072,10 @@
             "anyOf": [
               {
                 "type": "string",
-                "const": "CASH"
+                "enum": [
+                  "CASH",
+                  "PROOF"
+                ]
               },
               {
                 "type": "null"
@@ -2210,6 +2401,15 @@
           "text"
         ],
         "title": "Check"
+      },
+      "Classification": {
+        "type": "string",
+        "enum": [
+          "VERIFIED",
+          "UNEXPLAINED",
+          "CONFLICT"
+        ],
+        "title": "Classification"
       },
       "ClosurePayload": {
         "properties": {
@@ -2799,6 +2999,16 @@
           "follow_up_recommendation_ids"
         ],
         "title": "DecisionResult"
+      },
+      "DifferenceKind": {
+        "type": "string",
+        "enum": [
+          "PRICE_CHANGE",
+          "NEW_ITEM",
+          "NEW_CHARGE",
+          "AMOUNT_CHANGE"
+        ],
+        "title": "DifferenceKind"
       },
       "Document": {
         "properties": {
@@ -3595,6 +3805,78 @@
         ],
         "title": "EventType"
       },
+      "EvidenceKind": {
+        "type": "string",
+        "enum": [
+          "DOCUMENT",
+          "INVOICE_LINE",
+          "PRICE_LIST_ITEM",
+          "CLAUSE",
+          "TRANSACTION",
+          "EMAIL",
+          "COST_ITEM"
+        ],
+        "title": "EvidenceKind"
+      },
+      "EvidenceRef": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/EvidenceKind"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "item_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Item Id",
+            "description": "Line, price list item or clause id inside the document"
+          },
+          "transaction_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Id"
+          },
+          "cost_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Ref"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "EvidenceRef"
+      },
       "Execution": {
         "properties": {
           "execution": {
@@ -3739,6 +4021,278 @@
           "text"
         ],
         "title": "Finding"
+      },
+      "FindingDifference": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/DifferenceKind"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "line_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line Id"
+          },
+          "previous_unit_price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,9}(\\.[0-9]{1,6})?$",
+                "description": "A decimal number as a string, never a float: unit prices and quantities, e.g. \"0.1234\" or \"2.5\"",
+                "examples": [
+                  "9.40"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Unit Price"
+          },
+          "unit_price": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,9}(\\.[0-9]{1,6})?$",
+                "description": "A decimal number as a string, never a float: unit prices and quantities, e.g. \"0.1234\" or \"2.5\"",
+                "examples": [
+                  "9.40"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit Price"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,9}(\\.[0-9]{1,6})?$",
+                "description": "A decimal number as a string, never a float: unit prices and quantities, e.g. \"0.1234\" or \"2.5\"",
+                "examples": [
+                  "9.40"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "expected_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Amount",
+            "description": "Amounts: what was expected"
+          },
+          "billed_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billed Amount"
+          },
+          "delta": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Delta",
+            "description": "Effect in cents on this document or payment",
+            "examples": [
+              "125050"
+            ]
+          },
+          "bps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bps",
+            "description": "Change in basis points, when it has one"
+          },
+          "explained": {
+            "type": "boolean",
+            "title": "Explained"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence",
+            "default": []
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "kind",
+          "description",
+          "delta",
+          "explained"
+        ],
+        "title": "FindingDifference",
+        "description": "One line or amount that differs from what Cost Memory expects."
+      },
+      "FindingHistoryEntry": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FindingStatus"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Classification"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "at",
+          "status",
+          "label"
+        ],
+        "title": "FindingHistoryEntry"
+      },
+      "FindingImpact": {
+        "properties": {
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected",
+            "description": "What Cost Memory expected (amounts)"
+          },
+          "billed": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Billed"
+          },
+          "delta": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Delta",
+            "description": "Billed minus expected, in cents (per payment for rent)",
+            "examples": [
+              "125050"
+            ]
+          },
+          "bps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bps"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "currency",
+          "expected",
+          "billed",
+          "delta",
+          "bps"
+        ],
+        "title": "FindingImpact"
+      },
+      "FindingKind": {
+        "type": "string",
+        "enum": [
+          "INVOICE_PRICES",
+          "RECURRING_AMOUNT"
+        ],
+        "title": "FindingKind"
+      },
+      "FindingStatus": {
+        "type": "string",
+        "enum": [
+          "INGESTED",
+          "EXTRACTED",
+          "CHECKED",
+          "INVESTIGATING",
+          "CLASSIFIED",
+          "PENDING_APPROVAL",
+          "RESOLVED"
+        ],
+        "title": "FindingStatus"
       },
       "Forecast": {
         "properties": {
@@ -4811,6 +5365,230 @@
           "code"
         ],
         "title": "Problem"
+      },
+      "ProofFinding": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "description": "One line for lists, e.g. the counterparty and the change"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FindingKind"
+          },
+          "classification": {
+            "$ref": "#/components/schemas/Classification"
+          },
+          "escalated": {
+            "type": "boolean",
+            "title": "Escalated",
+            "description": "UNEXPLAINED after an investigation that could not find a reason",
+            "default": false
+          },
+          "status": {
+            "$ref": "#/components/schemas/FindingStatus"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "counterparty_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counterparty Id"
+          },
+          "cost_ref": {
+            "type": "string",
+            "title": "Cost Ref"
+          },
+          "period_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period From",
+            "description": "Billing period or the change's start"
+          },
+          "period_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period To"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id",
+            "description": "The document that billed it"
+          },
+          "previous_document_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Document Id",
+            "description": "What it was compared with"
+          },
+          "transaction_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transaction Id",
+            "description": "A statement payment"
+          },
+          "differences": {
+            "items": {
+              "$ref": "#/components/schemas/FindingDifference"
+            },
+            "type": "array",
+            "title": "Differences"
+          },
+          "impact": {
+            "$ref": "#/components/schemas/FindingImpact"
+          },
+          "evidence_refs": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceRef"
+            },
+            "type": "array",
+            "title": "Evidence Refs",
+            "default": []
+          },
+          "propagation": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Propagation"
+          },
+          "recommendation_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Recommendation Ids",
+            "default": []
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/FindingHistoryEntry"
+            },
+            "type": "array",
+            "title": "History"
+          },
+          "quiet": {
+            "type": "boolean",
+            "title": "Quiet",
+            "description": "Handled without the owner: verified, nothing to decide.",
+            "readOnly": true
+          },
+          "in_digest": {
+            "type": "boolean",
+            "title": "In Digest",
+            "description": "Shown until the owner acknowledges it (quiet) or decides its actions (RESOLVED).",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "kind",
+          "classification",
+          "status",
+          "counterparty",
+          "counterparty_id",
+          "cost_ref",
+          "period_from",
+          "document_id",
+          "differences",
+          "impact",
+          "created_at",
+          "updated_at",
+          "history",
+          "quiet",
+          "in_digest"
+        ],
+        "title": "ProofFinding"
       },
       "ReadyStatus": {
         "properties": {
