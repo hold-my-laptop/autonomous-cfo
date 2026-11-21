@@ -1,6 +1,6 @@
 /**
  * Frontend data shapes. The real backend contract is docs/contracts/openapi.json (services/api);
- * the endpoints listed at the bottom of this file are not yet aligned with it.
+ * in live mode adapters.ts maps it onto these types (see the mapping at the bottom of this file).
  * CFO types use camelCase JSON; the Vero cost-check types (Finding & co.) use snake_case on purpose,
  * they mirror the agent's Finding schema one-to-one.
  * Money: plain numbers in EUR. Dates: ISO 8601 strings.
@@ -50,9 +50,10 @@ export interface ModelInfo {
 export interface Company {
   id: string;
   name: string;              // "Pizzeria Amalfi"
-  iban: string;
-  city: string;              // "Frankfurt am Main"
-  employees: number;
+  /** Mock only: the real backend does not send these three. */
+  iban?: string;
+  city?: string;             // "Frankfurt am Main"
+  employees?: number;
   ownerFirstName: string;    // "Vincenzo"
   currency: "EUR";
   /** "Today" in the demo time machine. Agents only see transactions before this date. */
@@ -449,10 +450,44 @@ export type ServerEvent =
 
 export type DemoScenario =
   | "reset"         // calm Monday 14 April 2025
-  | "rent_notice"   // landlord announces +8% rent from 1 June → Vero investigates
-  | "fast_forward"; // jump to 1 July 2025: reveal actuals, forecast vs actual
+  | "closure"       // live only: owner plans to close 1–30 June → POST /events CLOSURE_PLANNED
+  | "rent_notice"   // mock only: landlord announces +8% rent from 1 June → Vero investigates
+  | "fast_forward"; // mock only: jump to 1 July 2025: reveal actuals, forecast vs actual
 
-// ───────────────────────── API endpoints (all under /api/v1) ─────────────────────────
+// ───────────────────────── Chat (AI service, POST /api/v1/chat via nginx) ─────────────────────────
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface ChatRequest {
+  question: string;          // 1–500 chars
+  language?: "en" | "de";
+  history?: ChatTurn[];      // at most 6 turns
+}
+
+export interface ChatResponse {
+  answer: string;
+  source: "MODEL" | "FALLBACK";
+  tools_used: string[];
+  fallback_reason?: string | null;
+}
+
+// ───────────────────────── Live mode: how these map to the real backend ─────────────────────────
+//
+// company   ← GET /company + GET /mandate (cash_floor → safetyBufferEur)
+// policy    ← GET /mandate
+// decisions ← GET /overview (all lanes; ANALYSED findings become analysis-only items)
+// act       → POST /recommendations/{id}/approve|reject (Idempotency-Key)
+// forecast  ← GET /forecast?weekly=true
+// live      ← polls GET /runs?limit=1 (the backend has no event stream)
+// demo      → POST /demo/reset, POST /events (CLOSURE_PLANNED)
+// chat      → POST /chat (AI service)
+// Not in the backend yet (Phase 2 or undecided): audit, contracts, costs/*, documents/{id}.
+// The mapping lives in adapters.ts; the wire shapes in backend.ts.
+//
+// ───────────────────────── Mock API endpoints (all under /api/v1) ─────────────────────────
 //
 // GET  /api/v1/company                              → Company
 // GET  /api/v1/policy                               → Policy

@@ -348,7 +348,8 @@ const CARD = "#1c2748";
 const GRID = "rgb(255 255 255 / 0.07)";
 const ZERO = "rgb(255 255 255 / 0.35)";
 
-type DayRow = ForecastDay & { range?: [number, number]; below: number };
+/** `actual`: before the demo date, so a booked balance, not a forecast. */
+type DayRow = ForecastDay & { range?: [number, number]; below: number; actual: boolean };
 
 const weekday = (iso: string) =>
   new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
@@ -366,7 +367,7 @@ function DayTooltip({ active, payload }: TooltipContentProps<number, string>) {
     <div className="liquid-glass-strong min-w-52 rounded-xl p-3 text-xs text-ink">
       <p className="font-semibold">
         {weekday(d.date)} {formatDate(d.date)}
-        {d.lowEur === undefined && <span className="ml-1.5 font-medium text-ink-soft">(actual)</span>}
+        {d.actual && <span className="ml-1.5 font-medium text-ink-soft">(actual)</span>}
       </p>
       <p className={`num mt-1 text-[15px] font-semibold ${d.balanceEur < 0 ? "text-short" : "text-ink"}`}>{formatEurWhole(d.balanceEur)}</p>
       {d.lowEur !== undefined && d.highEur !== undefined && (
@@ -379,13 +380,15 @@ function DayTooltip({ active, payload }: TooltipContentProps<number, string>) {
 const swatch = (style: CSSProperties) => <span className="h-2.5 w-2.5 rounded-[3px]" style={style} aria-hidden="true" />;
 
 /** Legend for the daily forecast. */
-export function ForecastLegend({ bufferEur }: { bufferEur?: number }) {
+export function ForecastLegend({ bufferEur, range = true }: { bufferEur?: number; range?: boolean }) {
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-on-hero/80">
       <li className="inline-flex items-center gap-1.5">{lineIcon(CREAM, false, 2)}Balance</li>
-      <li className="inline-flex items-center gap-1.5">
-        {swatch({ background: RANGE_FILL, boxShadow: "inset 0 0 0 1px rgb(245 241 232 / 0.3)" })}Likely range
-      </li>
+      {range && (
+        <li className="inline-flex items-center gap-1.5">
+          {swatch({ background: RANGE_FILL, boxShadow: "inset 0 0 0 1px rgb(245 241 232 / 0.3)" })}Likely range
+        </li>
+      )}
       <li className="inline-flex items-center gap-1.5">{swatch({ background: OVERDRAFT_FILL })}Overdraft</li>
       <li className="inline-flex items-center gap-1.5">
         {lineIcon(BUFFER_SAND, true, 1.5)}
@@ -413,6 +416,7 @@ export function CashChart({ days, weeks, bufferEur, today, lowest, height }: Dai
     ...d,
     range: d.lowEur !== undefined && d.highEur !== undefined ? [d.lowEur, d.highEur] : undefined,
     below: Math.min(d.balanceEur, 0),
+    actual: d.date < today,
   }));
   const todayRow = data.find((d) => d.date === today) ?? data[0];
 

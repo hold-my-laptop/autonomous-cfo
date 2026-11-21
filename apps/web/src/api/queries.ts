@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { Decision, DecisionAction, Finding, RecommendedAction } from "./types";
+import type { ChatTurn, Decision, DecisionAction, Finding, RecommendedAction } from "./types";
 
 export const keys = {
   company: ["company"] as const,
@@ -37,8 +37,24 @@ export function useDecisionAction() {
       qc.setQueryData<Decision[]>(keys.decisions, (old = []) =>
         old.map((d) => (d.id === updated.id ? updated : d)),
       );
+      // An approval changes the schedule (forecast, balance) and can create follow-up items.
+      qc.invalidateQueries({ queryKey: keys.decisions });
+      qc.invalidateQueries({ queryKey: keys.forecast });
+      qc.invalidateQueries({ queryKey: keys.company });
       qc.invalidateQueries({ queryKey: keys.audit });
     },
+  });
+}
+
+/** One question to Vero. History is the earlier turns, oldest first (the AI service keeps at most 6). */
+export function useChat() {
+  return useMutation({
+    mutationFn: ({ question, history }: { question: string; history: ChatTurn[] }) =>
+      api.chat({
+        question,
+        language: "en",
+        history: history.slice(-6).map((t) => ({ ...t, content: t.content.slice(0, 2000) })),
+      }),
   });
 }
 

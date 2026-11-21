@@ -8,6 +8,9 @@ const SAMPLES = process.env.SAMPLES_DIR ?? fileURLToPath(new URL("../../data", i
 
 // services/api from `make up-app` listens on localhost:8000.
 const BACKEND = process.env.BACKEND_URL ?? "http://localhost:8000";
+// services/ai run locally: the api expects it on localhost:8001 (its default AI_URL).
+const AI = process.env.AI_URL ?? "http://localhost:8001";
+const toAi = (path: string) => ({ target: AI, changeOrigin: true, rewrite: () => path });
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -16,8 +19,11 @@ export default defineConfig({
     port: 5173,
     host: true,
     fs: { allow: [".", SAMPLES] },
-    // Same as apps/web/nginx.conf in production: /api/v1/... is forwarded unchanged.
+    // Same as apps/web/nginx.conf in production. The first matching key wins, so the two AI
+    // routes come before the catch-all; /api/v1/... goes to the api unchanged.
     proxy: {
+      "^/api/v1/chat$": toAi("/v1/chat"),
+      "^/api/v1/documents/extract$": toAi("/v1/documents/extract"),
       "/api/v1": { target: BACKEND, changeOrigin: true },
     },
   },

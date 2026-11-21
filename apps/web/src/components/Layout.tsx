@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef } from "react";
 import { NavLink, Outlet, useLocation, useSearchParams } from "react-router-dom";
 import { useCompany } from "../api/queries";
 import { useLive } from "../api/live";
+import { ChatPanel } from "../features/chat/ChatPanel";
 import { DemoPanel } from "../features/demo/DemoPanel";
 import { useTheme } from "../lib/theme";
 import { Icon } from "./Icon";
@@ -140,6 +141,7 @@ export function Layout() {
       </footer>
 
       {showDemo && <DemoPanel />}
+      <ChatPanel />
     </div>
   );
 }

@@ -16,6 +16,8 @@ const paths = {
   upload: "M12 15V3 M7 8l5-5 5 5 M5 21h14",
   sun: "M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z M12 1v2 M12 21v2 M4.2 4.2l1.4 1.4 M18.4 18.4l1.4 1.4 M1 12h2 M21 12h2 M4.2 19.8l1.4-1.4 M18.4 5.6l1.4-1.4",
   moon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z",
+  chat: "M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12Z",
+  send: "M22 2 11 13 M22 2l-7 20-4-9-9-4Z",
 } as const;
 
 export type IconName = keyof typeof paths;
