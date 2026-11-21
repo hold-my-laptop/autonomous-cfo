@@ -1,6 +1,6 @@
 # Backend (`services/api`): features to implement
 
-Phase 1, Vero Cash (B01–B32), and below it [Phase 2, Vero Proof](#phase-2-vero-proof) (P01–P22). Every Phase 1 feature traces back to [`DESIGN.md`](DESIGN.md) (rules, scenario numbers), [`contracts/DATA_CONTRACTS.md`](contracts/DATA_CONTRACTS.md) (fields, endpoints) and [`ARCHITECTURE.md`](ARCHITECTURE.md) (sequences).
+Phase 1, Vero Cash (B01–B32), and below it [Phase 2, Vero Proof](#phase-2-vero-proof) (P01–P23). Every Phase 1 feature traces back to [`DESIGN.md`](DESIGN.md) (rules, scenario numbers), [`contracts/DATA_CONTRACTS.md`](contracts/DATA_CONTRACTS.md) (fields, endpoints) and [`ARCHITECTURE.md`](ARCHITECTURE.md) (sequences).
 
 **Priority:** **MUST** = the demo fails without it · **SHOULD** = after the demo path works end to end · **MIGHT** = only if time remains.
 **Order:** build top to bottom. Each block ends in something runnable and testable.
@@ -349,12 +349,13 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 ### P09 · Investigation tools — MUST
 - Same registry and route as B22, with tools **scoped by run kind**: an investigation run can't call Cash tools and the reverse (`UNKNOWN_TOOL`). Limit per kind: `INVESTIGATION_MAX_TOOL_CALLS=6`.
 - Tools (read-only, deterministic over the fixture):
-  - `search_inbox(query, counterparty, date_range)`, `search_documents(query, doc_type)`: keyword search with a fixed ranking, no new dependency;
+  - `search_inbox(query, counterparty, date_range)`, `search_documents(query, doc_type)`: keyword search with a fixed ranking, built on the **same lexical retrieval module as the RAG assistant** (`api/rag.py`), not a second implementation; German aliases added (*Miete*, *Mieterhöhung*, *Mietanpassung*, *Nebenkosten*, *Logistikzuschlag*);
   - `read_clause(doc_id, section)`: text, page and box;
   - `get_reference_index(name, periods)`: VPI or EUR/CHF, flagged as demo values;
   - `get_price_list(supplier, item, date)`;
   - `compute(formula_id, inputs)`: P05.
 - Every result carries the evidence ids it returns; every call is a trace step with a plain label ("Searching the inbox for letters from Main Street Real Estate").
+- **Email and document text is untrusted data**, as bank references are for the RAG assistant: tool results are returned as data, the investigation prompt says so, and nothing in them can change a label (P11 sets it).
 - **Done when:** the hero's 4-step sequence returns the expected results, the hero query ranks the landlord's letter first among the ~20 emails, and a 7th call returns `TOOL_LIMIT_REACHED`.
 
 ### P10 · Investigation runs — MUST
@@ -366,6 +367,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 ### P11 · Grounding check and final label — MUST
 - A citation that no tool returned in this run is dropped and noted in the trace.
 - The backend recomputes the chosen formula from the values the tools returned; numbers in the completion are ignored.
+- The AI service applies the same checks as its RAG answers before calling `/complete` (only evidence ids returned by this run's tools, no number absent from the cited results). The backend's check is the one that decides.
 - **Final label:**
   - billed above the justified amount → `conflict`;
   - billed equal to the justified amount → `verified`;
@@ -407,7 +409,8 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 
 ### P17 · Contracts and OpenAPI — MUST
 - DATA_CONTRACTS: Finding, CostItem, Document (with highlight boxes), Digest, the new recommendation kinds, the investigation start/complete payloads (§3) and the new error codes. ARCHITECTURE: the investigation sequence. `make schema`.
-- **Done when:** `test_openapi.py` passes and the AI team has agreed the §3 payloads.
+- **RAG assistant contract** (AI team's `POST /api/v1/assistant/ask`), aligned with §0 before it merges: money fields named without a `_cents` suffix (the `Money` type already means cents), `UPPER_SNAKE` enum values (`TRANSACTION`, `OUTFLOW`, `INFLOW`), and the AI being unavailable returned as problem+json with its own code (e.g. `AI_UNAVAILABLE`, 503). The RAG branch touches `agent.py`, `config.py` and `openapi.json`: review and merge it **before P10**.
+- **Done when:** `test_openapi.py` passes and the AI team has agreed the §3 payloads and the RAG fixes.
 
 ### P18 · Demo reset for both phases — MUST
 - Reset rebuilds Cost Memory, deletes uploads, findings and investigation runs, and recreates the preloaded findings (P06, P12). Still under 5 s on PostgreSQL.
@@ -426,6 +429,10 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 ### P22 · MCP for the investigation tools — MIGHT
 - With B26: the investigation tools on `/internal/mcp`.
 
+### P23 · Findings and documents as RAG sources — MIGHT
+- The RAG assistant also retrieves findings and the documents they cite, so the owner can ask "Why is the rent still 3 800?" and get an answer citing the finding and lease §4.2. The computed numbers (30400, 364800) are in the finding, so the RAG number check still passes. Only documents already cited by a finding are retrievable; the mailbox stays private.
+- **Done when:** that question returns the rent finding and the lease as sources.
+
 ---
 
 ## Summary (Phase 2)
@@ -436,4 +443,4 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 | G · Check & engine | P05–P08 | Formulas, deterministic CHECK, findings, live upload |
 | H · Investigation | P09–P12 | Tools, investigation runs, grounding check, fallback |
 | I · Propagate & act | P13–P16 | Payment decision, forecast impact, approvals, digest, letter |
-| J · Delivery | P17–P22 | Contracts, reset, scenario test, extras |
+| J · Delivery | P17–P23 | Contracts, RAG alignment, reset, scenario test, extras |
