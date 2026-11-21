@@ -454,7 +454,8 @@ def call_tool(
 
     A repeated `call_id` replays the stored response, but only for the same tool and
     arguments. Every new call counts towards the limit and leaves a trace step, unknown tools
-    included, so a looping model shows in the trace and is stopped by the limit."""
+    included, so a looping model shows in the trace and is stopped by the limit. Each stored
+    call keeps its order (`seq`), tool, arguments and plain label for the grounding check."""
     run = state.runs.get(run_id)
     if run is None or run.status is not RunStatus.RUNNING:
         return _error("RUN_CLOSED", f"run {run_id} is not running", state, 0)
@@ -472,6 +473,7 @@ def call_tool(
 
     tool = TOOLS[run.kind].get(name)
     limit = tool_limit(run, settings)
+    label = None
     if used >= limit:
         response = _error("TOOL_LIMIT_REACHED", f"limit of {limit} calls reached", state, used)
     elif state.financial_version != run.started_financial_version:
@@ -483,7 +485,8 @@ def call_tool(
             response = _error(
                 "UNKNOWN_TOOL", f"no tool {name!r} for a {run.kind.value} run", state, used
             )
-            tracer.add("TOOL_CALL", f"Tool {name[:60]}: unknown tool", now)
+            label = f"Tool {name[:60]}: unknown tool"
+            tracer.add("TOOL_CALL", label, now)
         else:
             try:
                 output = tool.handler(state, run, tool.args.model_validate(arguments), settings)
@@ -492,10 +495,12 @@ def call_tool(
                     f"{'.'.join(map(str, e['loc']))}: {e['msg']}" for e in exc.errors()
                 )
                 response = _error("INVALID_ARGUMENT", message, state, used)
-                tracer.add("TOOL_CALL", f"Tool {name}: invalid arguments", now, name)
+                label = f"Tool {name}: invalid arguments"
+                tracer.add("TOOL_CALL", label, now, name)
             except ToolError as exc:
                 response = _error(exc.code, exc.message, state, used)
-                tracer.add("TOOL_CALL", f"Tool {name}: {exc.message}", now, name)
+                label = f"Tool {name}: {exc.message}"
+                tracer.add("TOOL_CALL", label, now, name)
             else:
                 response = {
                     "ok": True,
@@ -504,12 +509,20 @@ def call_tool(
                     "financial_version": state.financial_version,
                     "tool_calls_used": used,
                 }
-                tracer.add("TOOL_CALL", output.label, now, name, {"arguments": arguments})
+                label = output.label
+                tracer.add("TOOL_CALL", label, now, name, {"arguments": arguments})
                 if output.result_label:
                     tracer.add("TOOL_RESULT", output.result_label, now, name)
                 log |= output.log or {}
         run = replace(run, trace=tuple(tracer.steps))
 
-    calls[call_id] = {"fingerprint": fingerprint, "response": response}
+    calls[call_id] = {
+        "seq": len(calls) + 1,
+        "tool": name,
+        "arguments": arguments,
+        "label": label,
+        "fingerprint": fingerprint,
+        "response": response,
+    }
     state.runs[run_id] = replace(run, tool_log=log | {"calls": calls, "used": used})
     return response

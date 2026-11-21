@@ -33,12 +33,17 @@ from api.domain.proof.dataset import Document, DocumentType
 from api.domain.proof.extraction import check_extraction
 from api.domain.proof.findings import (
     Classification,
+    EvidenceRef,
     FindingHistoryEntry,
+    FindingInvestigation,
     FindingStatus,
+    InvestigationMode,
     ProofFinding,
 )
+from api.domain.proof.grounding import Grounding, base_sources, calls_of, ground, searched
 from api.domain.proof.uploads import MAX_UPLOAD_BYTES, Upload, UploadStatus, ValuesSource
 from api.errors import ApiError, ErrorCode
+from api.money import format_eur
 from api.proof_schemas import CostItem as CostItemOut
 from api.state import DemoState, StateRepository
 
@@ -461,6 +466,36 @@ def investigation_payload(state: DemoState, run: Run, settings: Settings) -> dic
     }
 
 
+def _documents(state: DemoState) -> dict[str, Document]:
+    fixture = {d.id: d for d in (state.proof.documents if state.proof else ())}
+    uploaded = {u.document_id: u.document for u in state.uploads.values() if u.document}
+    return fixture | uploaded
+
+
+def _merged(refs: tuple[EvidenceRef, ...], more: tuple[EvidenceRef, ...]) -> tuple:
+    return tuple(dict.fromkeys((*refs, *more)))
+
+
+def _history_label(grounding: Grounding) -> str:
+    result = grounding.investigation
+    if grounding.classification is Classification.CONFLICT:
+        return (
+            f"Conflict: {format_eur(result.billed)} billed, {format_eur(result.justified)} allowed"
+        )
+    if grounding.classification is Classification.VERIFIED:
+        return f"Verified: {format_eur(result.justified)} allowed by the evidence"
+    return "No usable evidence: needs your review"
+
+
+def _headline(finding: ProofFinding) -> str:
+    result = finding.investigation
+    if finding.classification is Classification.CONFLICT and result and result.disputed:
+        return f"{finding.title}: {format_eur(result.disputed)} more than allowed"
+    if finding.classification is Classification.VERIFIED:
+        return f"{finding.title}: verified"
+    return f"{finding.title}: needs your review"
+
+
 def conclude_investigation(
     state: DemoState,
     run_id: UUID,
@@ -469,9 +504,9 @@ def conclude_investigation(
     reason: str | None = None,
 ) -> None:
     """End the run's investigation with the agent's completion, or without the agent for
-    `reason`. The backend sets the label: the agent's answer is kept on the run for the
-    grounding check (P11), and until that check exists the finding stays UNEXPLAINED; without
-    the agent it is escalated until the scripted investigation (P12) takes over."""
+    `reason`. The backend sets the label: the completion goes through the grounding check
+    (P11); without the agent the finding is escalated until the scripted investigation (P12)
+    takes over."""
     run = state.runs.get(run_id)
     finding_id = investigating(run)
     if finding_id is None:
@@ -479,6 +514,7 @@ def conclude_investigation(
     finding = state.findings[finding_id]
     trace = _Trace(run)
     upload = state.uploads[run.document_id]
+    calls = calls_of(run.tool_log)
     if completion is not None:
         note = " ".join(completion["explanation"].split())[:300]
         trace.add(
@@ -491,14 +527,29 @@ def conclude_investigation(
             },
             source="AGENT",
         )
-        trace.add("INVESTIGATE", "The answer is not confirmed yet: still needs evidence", now)
+        documents = _documents(state)
+        cost_item = next((c for c in state.cost_memory if c.cost_ref == finding.cost_ref), None)
+        grounding = ground(
+            finding,
+            completion,
+            calls,
+            base_sources(finding, cost_item, documents.get(finding.document_id or "")),
+            state.proof,
+            documents,
+            state.forecast_input(),
+        )
+        for step in grounding.steps:
+            trace.add("GROUND", step, now)
         finding = finding.advance(
             now,
             FindingStatus.CLASSIFIED,
-            "Investigated: the reason is not confirmed yet",
-            Classification.UNEXPLAINED,
+            _history_label(grounding),
+            grounding.classification,
+            escalated=grounding.escalated,
+            investigation=grounding.investigation,
+            differences=grounding.differences,
+            evidence_refs=_merged(finding.evidence_refs, grounding.evidence),
         )
-        headline = f"{finding.title}: needs evidence"
         mode = run.mode
         run = replace(run, tool_log=(run.tool_log or {}) | {"completion": completion})
     else:
@@ -510,11 +561,15 @@ def conclude_investigation(
             "No reason found: needs your review",
             Classification.UNEXPLAINED,
             escalated=True,
+            investigation=FindingInvestigation(
+                mode=InvestigationMode.FALLBACK,
+                searched=searched(calls),
+                problems=(label,),
+            ),
         )
-        headline = f"{finding.title}: needs your review"
         mode = RunMode.FALLBACK
     state.findings[finding.id] = finding
-    _finish(state, run, trace, upload, now, headline, mode=mode, findings=(finding.id,))
+    _finish(state, run, trace, upload, now, _headline(finding), mode=mode, findings=(finding.id,))
 
 
 class ProofPipeline:

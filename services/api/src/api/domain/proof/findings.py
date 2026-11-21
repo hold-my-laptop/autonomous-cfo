@@ -49,6 +49,7 @@ class EvidenceKind(StrEnum):
     TRANSACTION = "TRANSACTION"
     EMAIL = "EMAIL"
     COST_ITEM = "COST_ITEM"
+    REFERENCE_VALUE = "REFERENCE_VALUE"
 
 
 class _Frozen(BaseModel):
@@ -63,6 +64,11 @@ class EvidenceRef(_Frozen):
     )
     transaction_id: UUID | None = None
     cost_ref: str | None = None
+    ref: str | None = Field(
+        default=None,
+        description="The evidence id an investigation tool returned: an email, a reference "
+        "series, or `document#clause`",
+    )
 
 
 class FindingDifference(_Frozen):
@@ -88,6 +94,32 @@ class FindingImpact(_Frozen):
     billed: Money | None
     delta: Money = Field(description="Billed minus expected, in cents (per payment for rent)")
     bps: int | None
+
+
+class InvestigationMode(StrEnum):
+    AGENT = "AGENT"
+    FALLBACK = "FALLBACK"
+
+
+class FindingInvestigation(_Frozen):
+    """What the investigation established, as the backend checked it: the formula of the
+    `compute` call the label rests on, recomputed from inputs that each have a source."""
+
+    mode: InvestigationMode
+    formula_id: str | None = None
+    engine_version: str | None = None
+    inputs: dict[str, Any] | None = None
+    outputs: dict[str, Any] | None = None
+    billed: Money | None = Field(default=None, description="What was billed for the change")
+    justified: Money | None = Field(default=None, description="What the evidence allows")
+    disputed: Money | None = Field(default=None, description="billed − justified, when above")
+    searched: tuple[str, ...] = Field(default=(), description="Every look-up, in order")
+    dropped_refs: tuple[str, ...] = Field(
+        default=(), description="Citations no tool returned in this run"
+    )
+    problems: tuple[str, ...] = Field(default=(), description="Why no label could be set")
+    note: str | None = Field(default=None, description="The agent's explanation (not a fact)")
+    proposed: Classification | None = Field(default=None, description="The agent's label")
 
 
 class FindingHistoryEntry(_Frozen):
@@ -118,6 +150,7 @@ class ProofFinding(_Frozen):
     differences: tuple[FindingDifference, ...]
     impact: FindingImpact
     evidence_refs: tuple[EvidenceRef, ...] = ()
+    investigation: FindingInvestigation | None = None
     propagation: dict[str, Any] | None = None
     recommendation_ids: tuple[UUID, ...] = ()
     run_id: UUID | None = None

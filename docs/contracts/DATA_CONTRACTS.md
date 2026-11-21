@@ -534,7 +534,8 @@ One difference Vero Proof found and everything it did about it, from `GET /findi
 | `transaction_id` | UUID? | For a statement payment that differs from its contract |
 | `differences` | FindingDifference[] | `{ kind: PRICE_CHANGE \| NEW_ITEM \| NEW_CHARGE \| AMOUNT_CHANGE, description, line_id?, previous_unit_price?, unit_price?, quantity? (Decimal), expected_amount?, billed_amount? (Money), delta (Money), bps?, explained, evidence: EvidenceRef[] }` |
 | `impact` | FindingImpact | `{ currency, expected?, billed?, delta, bps? }` (Money). Rent: per month. Invoices: net, `expected` at the previous prices |
-| `evidence_refs` | EvidenceRef[] | `{ kind: DOCUMENT \| INVOICE_LINE \| PRICE_LIST_ITEM \| CLAUSE \| TRANSACTION \| EMAIL \| COST_ITEM, document_id?, item_id?, transaction_id?, cost_ref? }`. A document cited here becomes visible in `GET /documents` |
+| `evidence_refs` | EvidenceRef[] | `{ kind: DOCUMENT \| INVOICE_LINE \| PRICE_LIST_ITEM \| CLAUSE \| TRANSACTION \| EMAIL \| COST_ITEM \| REFERENCE_VALUE, document_id?, item_id?, transaction_id?, cost_ref?, ref? }`. `ref` is the evidence id an investigation tool returned (`mail_…`, `ref_vpi_demo`, `lease_main_street_2021#s4_2`); emails and reference series have only `ref`. A document cited here becomes visible in `GET /documents` |
+| `investigation` | FindingInvestigation? | Set when an investigation ends (P11): `{ mode: AGENT \| FALLBACK, formula_id?, engine_version?, inputs?, outputs?, billed?, justified?, disputed? (Money), searched: string[], dropped_refs: string[], problems: string[], note?, proposed? }`. `formula_id`…`disputed` are the backend's recomputation of the `compute` call the label rests on; `disputed` = billed − justified when above. `searched`: every look-up in order, in plain words (shown for an escalated finding). `dropped_refs`: citations no tool returned. `problems`: why no label could be set. `note` and `proposed` are the agent's explanation and label, never facts |
 | `propagation` | object? | Set by propagation (P13) |
 | `recommendation_ids` | UUID[] | Its actions (P14) |
 | `run_id` | UUID? | The Proof run that checked or investigated it (P10) |
@@ -707,7 +708,17 @@ Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHE
 - `evidence_refs` are ids from this run's tool results (`evidence_ids`); others are dropped (P11).
 - `explanation` is shown as "Vero's note", never as a fact.
 
-As built in P10: the completion is stored on the run, and the finding ends `CLASSIFIED` and still `UNEXPLAINED` until the grounding check (P11) sets the label. Without the agent (deadline, `/fail`, unreachable, restart, `DATA_CHANGED`, `AGENT_DISABLED`) it ends `UNEXPLAINED` and `escalated` until the scripted investigation (P12) takes over.
+**The grounding check (P11) sets the label.** Citations no tool returned in this run are dropped. The `compute` call named by `compute_call_id` must be a successful `compute` call of this run with a formula that decides a label: `vpi_threshold_indexation` (a recurring amount: billed = the new amount, justified = `justified`) or `surcharge_rule` (a new charge on an invoice: billed = the charge, justified = `surcharge`). Each input needs a source:
+
+| Input | Accepted source |
+|---|---|
+| `base_amount` | What the cost was before the change (Cost Memory, the finding's expected amount, the old amount), or a `read_clause` parameter. Never the billed amount |
+| `base_index`, `current_index` | A value `get_reference_index` returned before the `compute` call |
+| `threshold_bps`, `surcharge`, `below_net_goods`, `valid_from` | A `read_clause` parameter returned before the `compute` call |
+| `net_goods` | The finding's expected amount (the goods without the new charge) |
+| `date` | The document's date, the finding's period, the adjustment's `effective_from` |
+
+Values compare by value (`380000` = `"380000"`). The backend then recomputes the formula: billed above justified → `CONFLICT`; otherwise → `VERIFIED` (the covered differences become `explained`). Anything unusable → `UNEXPLAINED`, `escalated`, with `investigation.problems` and `searched`. The agent's `classification` is only recorded as `proposed`. Without the agent (deadline, `/fail`, unreachable, restart, `DATA_CHANGED`, `AGENT_DISABLED`) the finding ends `UNEXPLAINED` and `escalated` until the scripted investigation (P12) takes over.
 
 #### Agent failure
 `{ reason: "MODEL_TIMEOUT" | "MODEL_ERROR" | "INVALID_TOOL_CALLS" | "NO_FINAL_ANSWER" | "TOOL_LIMIT_REACHED", detail?: string }`
