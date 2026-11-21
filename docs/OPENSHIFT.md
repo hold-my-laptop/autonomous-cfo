@@ -10,11 +10,11 @@ Everything runs in the project `autonomous-cfo`.
 
 ```mermaid
 flowchart LR
-  gh["GitHub main"] -- "BuildConfig, Docker build" --> is["ImageStreams api, ai"]
+  gh["GitHub main"] -- "BuildConfig, Docker build" --> is["ImageStreams web, api, ai"]
   is -- "image trigger rolls out" --> apipod
 
   subgraph ns["Project autonomous-cfo"]
-    webpod["web, nginx<br/>(next step)"]
+    webpod["web<br/>React + nginx"]
     apipod["api<br/>FastAPI"]
     aipod["ai<br/>agent"]
     dbpod[("Postgres 16<br/>5Gi volume")]
@@ -22,8 +22,9 @@ flowchart LR
     wb["Jupyter workbench<br/>cfo-notebook"]
   end
 
-  user(["Browser"]) -. "Route, HTTPS (next step)" .-> webpod
-  webpod -. "8080 /api/v1" .-> apipod
+  user(["Browser"]) -- "Route, HTTPS" --> webpod
+  webpod -- "8080 /api/v1" --> apipod
+  webpod -- "8080 /api/v1/chat" --> aipod
   apipod -- "5432" --> dbpod
   apipod -- "8080 start run, explain" --> aipod
   aipod -- "8080 /internal/v1 tools" --> apipod
@@ -37,13 +38,18 @@ Every arrow is a connection that a NetworkPolicy allows. Anything not drawn is b
 
 | Component | How it runs | Image | CPU request / limit | Memory request / limit | Health check |
 |---|---|---|---|---|---|
+| web | Deployment + Route (edge TLS) | built from `apps/web`, UBI 9 Node.js 22 build, UBI 9 nginx 1.24 | 50m / 500m | 64Mi / 256Mi | `/health` |
 | vero-llm | KServe InferenceService, vLLM runtime | `registry.redhat.io/rhaii/vllm-cuda-rhel9` + model from the OpenShift AI catalog | 2 / 8 + 1 GPU | 8Gi / 16Gi | KServe |
 | api | Deployment, 1 replica | built from `services/api` on UBI 9 Python 3.12 | 250m / 1 | 512Mi / 1Gi | `/api/v1/health/ready`, `/api/v1/health/live` |
 | ai | Deployment, 1 replica | built from `services/ai` | 100m / 500m | 256Mi / 512Mi | `/health/live` |
 | db | Deployment + PersistentVolumeClaim (gp3-csi, 5Gi) | `registry.redhat.io/rhel9/postgresql-16` | 250m / 1 | 512Mi / 1Gi | `pg_isready` |
 | cfo-notebook | OpenShift AI workbench | Standard Data Science notebook 3.5 | 2 / 2 | 4Gi / 4Gi | OpenShift AI |
 
-The GPU is only used by the model. The api, ai and db pods together ask for less than one CPU.
+The GPU is only used by the model. The web, api, ai and db pods together ask for less than one CPU.
+
+In the console's Topology view the pods are grouped as the application `vero`, with runtime icons and arrows for
+who calls whom (`app.openshift.io/runtime` labels and `app.openshift.io/connects-to` annotations).
+The Postgres volume is labeled for the OpenShift AI dashboard, so it shows up under Cluster storage next to the workbench.
 
 ## 2. The model
 
@@ -68,9 +74,11 @@ Ingress inside the project is closed by default and opened only where a service 
 |---|---|---|
 | `db-from-api` | db | api, port 5432 |
 | `ai-from-api` | ai | api, port 8080 |
+| `ai-from-web` | ai | web, port 8080 (nginx sends `/api/v1/chat` and `/api/v1/documents/extract` to the ai service) |
 | `api-from-web-ai-workbench` | api | web, ai and the workbench, port 8080 |
 | `model-from-ai-workbench` | vero-llm | ai and the workbench, port 8080, plus the monitoring namespaces for metrics |
 | `web-from-router` | web | the OpenShift router, port 8080 |
+| `mlflow-from-ai-workbench` | mlflow | ai and the workbench, port 8080 |
 | `default-deny-ingress` | everything in the project | nobody, unless a policy above allows it |
 
 Tested with a pod without labels, once from another project and once from this project: before the policies it could
@@ -85,12 +93,14 @@ Other rules every pod follows:
 - Every container has CPU and memory requests and limits.
 - Secrets (`db` with the Postgres password and `DATABASE_URL`, `internal-token` for the ai to api calls) are generated
   inside the cluster with `openssl rand` by the make targets. They are never written to a file or to git.
-- Only the web will get a Route. nginx only forwards `/api/v1/*`, so `/internal/*` stays inside the cluster.
+- Only the web has a Route. nginx only forwards `/api/v1/*`, so `/internal/*` stays inside the cluster
+  (checked: `/internal/v1/tools` on the Route returns the web page, not the api).
+- nginx compresses JS and CSS (the main bundle goes from 789 KB to 271 KB) and caches the hashed files under `/assets/`.
 
 ## 4. Build and deploy
 
 The cluster builds the images itself. Each service has a BuildConfig (Docker strategy) that clones `main` from GitHub
-and builds its folder (`services/api`, `services/ai`). The result goes into an ImageStream, and an image trigger on the
+and builds its folder (`apps/web`, `services/api`, `services/ai`). The result goes into an ImageStream, and an image trigger on the
 Deployment rolls out the new image. No registry outside the cluster is needed.
 
 From zero, logged in with `oc` to the cluster:
@@ -102,6 +112,7 @@ oc apply -f deploy/openshift/model/
 make oc-db-deploy
 make oc-ai-build oc-ai-deploy
 make oc-api-build oc-api-deploy
+make oc-web-build oc-web-deploy
 make oc-network
 make oc-monitoring
 make oc-check
@@ -114,7 +125,7 @@ Notes:
 - The api reads the bank statement from the `bank_statement_lines` table in Postgres (`STATEMENT_SOURCE=db`, 1125 lines for 2025).
 - The label makes the project show up in the OpenShift AI dashboard. The workbench is created there
   (Standard Data Science image).
-- A new build after a merge: `oc start-build api -n autonomous-cfo --follow` (or `ai`). The image trigger does the rollout.
+- A new build after a merge: `oc start-build api -n autonomous-cfo --follow` (or `ai`, `web`). The image trigger does the rollout.
 
 ## 5. Checking and operating it
 
