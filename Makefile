@@ -79,3 +79,8 @@ oc-monitoring:
 > oc apply -f deploy/openshift/monitoring/cluster-monitoring-config.yaml
 > for i in $$(seq 60); do oc get statefulset prometheus-user-workload -n openshift-user-workload-monitoring >/dev/null 2>&1 && break; sleep 5; done
 > oc rollout status statefulset/prometheus-user-workload -n openshift-user-workload-monitoring --timeout=300s
+
+oc-check:
+> oc get deploy,inferenceservice -n $(OC_NS)
+> oc get networkpolicy -n $(OC_NS) -l app.kubernetes.io/part-of=vero --no-headers | wc -l | xargs echo "network policies:"
+> oc exec -i -n $(OC_NS) deploy/api -- python - < deploy/openshift/check.py
