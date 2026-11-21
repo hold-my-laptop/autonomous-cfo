@@ -12,7 +12,7 @@ from api.rag import retrieve
 from api.routers.rag import router
 
 
-def test_retrieve_turkish_rent_question_and_amount():
+def test_retrieve_rent_question_and_amount():
     rent = SimpleNamespace(id=uuid4(), booking_date=date(2025, 4, 1), amount=-380000,
                            category=Category.RENT, counterparty="Main Street Real Estate",
                            type="RENT PAYMENT", reference="April rent")
@@ -21,11 +21,11 @@ def test_retrieve_turkish_rent_question_and_amount():
                               type="DIRECT DEBIT", reference="Electricity")
     state = SimpleNamespace(history=[rent, utility], outflows=[], inflows=[])
 
-    matches = retrieve(state, "Kira ödemesi 3800 euro ne zaman?")
+    matches = retrieve(state, "When is the rent of 3800 euro due?")
 
     assert [item["id"] for item in matches] == [str(rent.id)]
     assert matches[0]["amount_cents"] == "-380000"
-    assert retrieve(state, "bilinmeyen şirket", limit=12) == []
+    assert retrieve(state, "unknown company", limit=12) == []
 
 
 def test_public_question_route_passes_only_retrieved_records():
@@ -41,9 +41,9 @@ def test_public_question_route_passes_only_retrieved_records():
 
     class Agent:
         def ask(self, payload):
-            assert payload["question"] == "Kira ne zaman?"
+            assert payload["question"] == "When is the rent paid?"
             assert [source["id"] for source in payload["sources"]] == [str(rent.id)]
-            return {"answer": "Kira 2025-04-01 tarihinde.",
+            return {"answer": "The rent was paid on 2025-04-01.",
                     "sources": payload["sources"], "model": "test-model"}
 
     app = FastAPI()
@@ -51,7 +51,7 @@ def test_public_question_route_passes_only_retrieved_records():
     app.dependency_overrides[get_repository] = Repository
     app.dependency_overrides[get_agent_client] = Agent
     with TestClient(app) as client:
-        response = client.post("/api/v1/assistant/ask", json={"question": "Kira ne zaman?"})
+        response = client.post("/api/v1/assistant/ask", json={"question": "When is the rent paid?"})
     assert response.status_code == 200
     assert response.json()["sources"][0]["id"] == str(rent.id)
 
@@ -78,9 +78,10 @@ def test_ai_unavailable_lists_records_instead_of_503():
     app.dependency_overrides[get_repository] = Repository
     app.dependency_overrides[get_agent_client] = Agent
     with TestClient(app) as client:
-        response = client.post("/api/v1/assistant/ask", json={"question": "Kira ne zaman?"})
+        response = client.post("/api/v1/assistant/ask", json={"question": "When is the rent paid?"})
     body = response.json()
     assert response.status_code == 200 and body["answer_source"] == "TEMPLATE"
+    assert body["answer"].startswith("Records matching your question (1):")
     assert "Landlord" in body["answer"] and "-3 800,00 €" in body["answer"]
     assert body["sources"][0]["id"] == str(rent.id)
 

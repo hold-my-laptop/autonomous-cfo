@@ -11,11 +11,9 @@ from api.state import DemoState
 
 STOP = {"a", "an", "and", "are", "for", "how", "in", "is", "of", "on", "the", "to",
         "what", "when", "which", "with", "did", "do", "does", "i", "my", "me", "we", "our",
-        "much", "many", "pay", "paid", "was", "were", "it", "ve", "ile", "icin", "için", "ne", "nedir",
-        "kaç", "kac", "hangi", "bu", "bir", "mi", "mu", "mı", "mü", "ödemeler", "ödeme"}
-ALIASES = {"kira": "rent", "kiralar": "rent", "maaş": "payroll", "maas": "payroll",
-           "vergi": "tax", "vergiler": "tax", "elektrik": "utilities",
-           "gelir": "revenue", "gider": "cost", "transferler": "transfer"}
+        "much", "many", "pay", "paid", "was", "were", "it", "payment", "payments"}
+ALIASES = {"salary": "payroll", "salaries": "payroll", "wages": "payroll", "taxes": "tax",
+           "electricity": "utilities", "landlord": "rent", "transfers": "transfer"}
 
 
 def _terms(text: str) -> set[str]:

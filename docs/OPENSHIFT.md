@@ -211,5 +211,5 @@ oc port-forward svc/api 8000:8080 -n autonomous-cfo
 ## 6. Notebooks
 
 The workbench `cfo-notebook` runs next to the app and talks to the same model and api.
-See [notebooks/README.md](../notebooks/README.md): a model benchmark, a cash flow analysis of the bank statement,
+See [NOTEBOOKS.md](NOTEBOOKS.md): a model benchmark, a cash flow analysis of the bank statement,
 and a check of the forecast against the real year plus five agent runs on the same event.

@@ -1,5 +1,7 @@
 # Notebooks
 
+Files: `notebooks/`.
+
 These run in the `cfo-notebook` workbench on OpenShift AI, in the same project as the app.
 From there the workbench reaches the model and the api by their service names, nothing else.
 
