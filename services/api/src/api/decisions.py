@@ -7,10 +7,12 @@ from dataclasses import dataclass, replace
 from datetime import date, datetime
 from uuid import UUID, uuid4
 
+from api.audit import AuditActor, AuditAgent, audit_run_finished, record
 from api.domain.credit import size_credit_line
 from api.domain.forecast import ENGINE_VERSION, ForecastSummary, compute_forecast
 from api.domain.models import (
     CreditLine,
+    EventType,
     Outflow,
     Receipt,
     Recommendation,
@@ -35,6 +37,7 @@ from api.money import Cents, format_eur
 from api.state import DemoState
 
 CREDIT_PRODUCT = "SHORT_TERM_CREDIT_LINE"
+SIMULATED = "SIMULATED"
 
 
 class Tracer:
@@ -200,10 +203,70 @@ def _store(state: DemoState, rec: Recommendation, receipt: Receipt) -> Recommend
 
 
 def _supersede_pending(state: DemoState, now: datetime) -> None:
+    superseded = 0
     for rec_id, rec in list(state.recommendations.items()):
         if rec.status is RecommendationStatus.PENDING:
             state.recommendations[rec_id] = replace(
                 rec, status=RecommendationStatus.SUPERSEDED, decided_at=now
+            )
+            superseded += 1
+    if superseded:
+        record(
+            state,
+            now,
+            AuditActor.SYSTEM,
+            f"Replaced {superseded} earlier proposal{'s' if superseded > 1 else ''} "
+            "that still waited for you",
+            agent=AuditAgent.CASH,
+        )
+
+
+def subject_text(rec: Recommendation) -> str:
+    """'postpone X (4 333,34 €) to 30 Jul' or 'a credit line of 20 000,00 € from 27 Jun'."""
+    subject = rec.details["subject"]
+    if rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
+        to_day = _day(date.fromisoformat(subject["to_date"]))
+        return f"postpone {subject['counterparty']} ({format_eur(subject['amount'])}) to {to_day}"
+    start = _day(date.fromisoformat(subject["available_from"]))
+    return f"a credit line of {format_eur(subject['amount'])} from {start}"
+
+
+def _audit_recommendations(
+    state: DemoState,
+    run: Run,
+    recs: list[Recommendation],
+    now: datetime,
+    proposer: AuditActor,
+    model: str | None,
+) -> None:
+    """Who proposed each item, then what the rules did with it."""
+    owner_request = run.trigger_type is EventType.RESCHEDULE_REQUESTED
+    for rec in recs:
+        common = {
+            "agent": AuditAgent.CASH,
+            "run_id": run.id,
+            "recommendation_id": rec.id,
+            "lane": rec.lane,
+        }
+        if not owner_request:
+            record(state, now, proposer, f"Proposed to {subject_text(rec)}", model=model, **common)
+        if rec.status in (RecommendationStatus.EXECUTED, RecommendationStatus.APPROVED_EXECUTED):
+            done = "Allowed by your rules" if owner_request else "Done within your mandate"
+            record(
+                state,
+                now,
+                AuditActor.RULES,
+                f"{done}: {subject_text(rec)} (simulated)",
+                execution=SIMULATED,
+                **common,
+            )
+        elif rec.status is RecommendationStatus.BLOCKED:
+            record(
+                state,
+                now,
+                AuditActor.RULES,
+                f"Not allowed by your rules: {rec.details['explanation']['text']}",
+                **common,
             )
 
 
@@ -486,6 +549,9 @@ def fall_back(
 ) -> Run:
     trace = Tracer(run)
     trace.add("FALLBACK", fallback_label(reason), now, None, {"reason": reason})
+    record(
+        state, now, AuditActor.SYSTEM, fallback_label(reason), agent=AuditAgent.CASH, run_id=run.id
+    )
     return run_fallback(
         state,
         replace(run, trace=tuple(trace.steps)),
@@ -619,6 +685,11 @@ def _finish(
         explain_request=explain_request(state, run, before, recs) if finalizing else None,
     )
     state.runs[run.id] = finished
+    agent_model = (summary_data or {}).get("model") if mode is RunMode.AGENT else None
+    proposer = AuditActor.AGENT if mode is RunMode.AGENT else AuditActor.SYSTEM
+    _audit_recommendations(state, finished, recs, now, proposer, agent_model or None)
+    if not finalizing:
+        audit_run_finished(state, finished, now)
     return finished
 
 
@@ -679,6 +750,15 @@ def _refresh_pending(
                     trace.add(
                         "TOOL_RESULT", "Credit line no longer needed after your decision", now
                     )
+                    record(
+                        state,
+                        now,
+                        AuditActor.SYSTEM,
+                        f"Dropped {subject_text(rec)}: no longer needed after your decision",
+                        agent=AuditAgent.CASH,
+                        run_id=run.id,
+                        recommendation_id=rec.id,
+                    )
                 else:
                     trace.add(
                         "TOOL_RESULT",
@@ -686,7 +766,18 @@ def _refresh_pending(
                         now,
                         "size_credit_line",
                     )
-                    follow_ups.append(_propose_credit(state, run, trace, credit, now).id)
+                    follow_up = _propose_credit(state, run, trace, credit, now)
+                    follow_ups.append(follow_up.id)
+                    record(
+                        state,
+                        now,
+                        AuditActor.SYSTEM,
+                        _resize_label(credit, "after your decision"),
+                        agent=AuditAgent.CASH,
+                        run_id=run.id,
+                        recommendation_id=follow_up.id,
+                        lane=follow_up.lane,
+                    )
                 state.runs[run.id] = replace(run, trace=tuple(trace.steps))
                 continue
             after = _summary_with(state, lines=(rec.credit_line,))
@@ -722,14 +813,32 @@ def decide(
         state.recommendations[rec_id] = replace(
             rec, status=RecommendationStatus.STALE, decided_at=now
         )
+        record(
+            state,
+            now,
+            AuditActor.SYSTEM,
+            f"Could not apply your decision to {subject_text(rec)}: "
+            "the data changed since it was proposed",
+            agent=AuditAgent.CASH,
+            run_id=rec.run_id,
+            recommendation_id=rec.id,
+            lane=rec.lane,
+        )
         raise DecisionError(
             "STALE_RECOMMENDATION", "the data changed since this was proposed; plan again"
         )
 
     before = impact(state.forecast().summary)
+    common = {
+        "agent": AuditAgent.CASH,
+        "run_id": rec.run_id,
+        "recommendation_id": rec.id,
+        "lane": rec.lane,
+    }
     if not approve:
         rec = replace(rec, status=RecommendationStatus.REJECTED, decided_at=now, note=note)
         receipt = _receipt(state, rec, "DECISION", now, "Your decision", before, before, "REJECTED")
+        record(state, now, AuditActor.OWNER, f"Rejected: {subject_text(rec)}", **common)
         return _store(state, rec, receipt), receipt, []
 
     mandate = state.active_mandate
@@ -752,6 +861,14 @@ def decide(
             rec, status=RecommendationStatus.BLOCKED, decided_at=now, note=note, details=details
         )
         receipt = _receipt(state, rec, "DECISION", now, "Your decision", before, before, "APPROVED")
+        record(state, now, AuditActor.OWNER, f"Approved: {subject_text(rec)}", **common)
+        record(
+            state,
+            now,
+            AuditActor.RULES,
+            f"Not allowed by your rules: {_first_failure(decision)}",
+            **common,
+        )
         return _store(state, rec, receipt), receipt, []
 
     if rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
@@ -770,6 +887,14 @@ def decide(
     )
     after = impact(state.forecast().summary)
     receipt = _receipt(state, rec, "DECISION", now, "Your decision", before, after, "APPROVED")
+    record(
+        state,
+        now,
+        AuditActor.OWNER,
+        f"Approved: {subject_text(rec)} (simulated)",
+        execution=SIMULATED,
+        **common,
+    )
     rec = _store(state, rec, receipt)
     return rec, receipt, _refresh_pending(state, rec, now, credit_until, credit_rounding)
 

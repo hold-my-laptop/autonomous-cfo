@@ -84,7 +84,7 @@ def pause_mandate(key: IdempotencyKeyDep, repository: RepositoryDep, request: Re
             state,
             key,
             request_hash("POST", request.url.path, None),
-            lambda: Mandate.from_domain(set_paused(state, True)),
+            lambda: Mandate.from_domain(set_paused(state, True, datetime.now(UTC))),
         )
 
 
@@ -95,5 +95,5 @@ def resume_mandate(key: IdempotencyKeyDep, repository: RepositoryDep, request: R
             state,
             key,
             request_hash("POST", request.url.path, None),
-            lambda: Mandate.from_domain(set_paused(state, False)),
+            lambda: Mandate.from_domain(set_paused(state, False, datetime.now(UTC))),
         )

@@ -317,6 +317,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | 16 | Health / model check | `GET /health/live`, `/health/ready`, `/health/model` | live: `{ status: "ok" }` · ready: `{ status: "ok" \| "unavailable", state_loaded: bool }` (503 when not loaded) · model: **ModelHealth** |
 | 17 | Demo reset | `POST /demo/reset` | `{ reset: true, as_of_date, financial_version }` |
 | 18 | *(SHOULD)* Rules from a sentence | `POST /mandate/draft-from-text` with `{ text }` | **MandateDraft** |
+| 19 | Activity page | `GET /audit?after_seq=` (`after_seq` ≥ 0, default 0) | **AuditEntry[]**, oldest first |
 
 ### 2.2 Data types
 
@@ -449,6 +450,25 @@ Immutable evidence, from `GET /receipts/{id}`.
 | `versions` | map string→string | `engine`, `planner`, `policy`, `revenue_model` |
 | `execution` | `"SIMULATED"` | |
 | `explanation` | Explanation | |
+
+#### AuditEntry
+One line of the append-only activity log, from `GET /audit`. Entries are sealed as a hash chain: verify them by recomputing each `hash` in `seq` order.
+
+| Field | Type | Description |
+|---|---|---|
+| `seq` | int | 1, 2, 3, … with no gaps |
+| `timestamp` | string | UTC with milliseconds, e.g. `2025-05-05T08:00:00.000Z`; hashed exactly as sent |
+| `actor` | enum | `OWNER`, `AGENT` (the model ran it), `RULES` (the policy acted), `SYSTEM` (the backend) |
+| `agent` | enum? | `CASH` (Phase 2 adds `PROOF`); null for company-wide entries such as mandate changes |
+| `action` | string | What happened, in plain English, e.g. "Approved: a credit line of 20 000,00 € from 27 Jun (simulated)" |
+| `run_id`, `recommendation_id` | UUID? | The run and recommendation it belongs to |
+| `lane` | enum? | The recommendation's lane |
+| `execution` | `"SIMULATED"`? | Set when the entry records an execution |
+| `model` | string? | The model's name on `AGENT` entries |
+| `prev_hash` | string | The previous entry's `hash`; 64 zeros for the first entry |
+| `hash` | string | SHA-256 (lowercase hex) of the UTF-8 text `prev_hash\|seq\|timestamp\|actor\|agent\|run_id\|recommendation_id\|lane\|execution\|model\|action`, absent values as empty text |
+
+A demo reset starts a new log. Its first entry is always the demo load at `2025-05-05T08:00:00.000Z`.
 
 #### ModelHealth
 `{ ok: bool, model: string, mode: "live" | "replay" | "stub"?, latency_ms: int, error: string? }`, passed through from the AI service. `200` when `ok`, otherwise `503`. When the AI service itself cannot be reached, `model` is `"unknown"`, `mode` is `null` and `error` says so. Without `INTERNAL_TOKEN` (agent mode off) it is always `503`. Show `mode`: only `live` means the model on OpenShift AI answered.

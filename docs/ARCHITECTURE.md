@@ -61,7 +61,7 @@ flowchart LR
 flowchart TB
   subgraph API["services/api"]
     direction TB
-    public["Public routers /api/v1<br/>overview · forecast · backtest · transactions · outflows · revenue-model<br/>imports · planned-events · mandate · events · runs · recommendations · receipts · demo · health"]
+    public["Public routers /api/v1<br/>overview · forecast · backtest · transactions · outflows · revenue-model<br/>imports · planned-events · mandate · events · runs · recommendations · receipts · audit · demo · health"]
     internal["Internal routers /internal/v1<br/>tools · runs/{id}/notes · complete · fail<br/>+ MCP server /internal/mcp (SHOULD)"]
     importer["Statement importer<br/>CSV parse · CHF → EUR · classify · recurring detection"]
     orchestrator["Run orchestrator<br/>start run · 60 s watchdog · finalize"]
