@@ -70,7 +70,7 @@ Never use the words "transferred", "sent", "guaranteed" or "approved by the bank
 Write in {language}. Headline: at most 200 characters. Each item text: at most 300 characters.
 Return JSON: {{"headline": str, "items": [{{"recommendation_id": str, "text": str}}]}} with one item per recommendation."""
 
-INVESTIGATION_PROMPT_VERSION = "investigation-1"
+INVESTIGATION_PROMPT_VERSION = "investigation-2"
 
 INVESTIGATION_SYSTEM = """You are Vero's cost investigator for a small business owner. A recurring cost changed and the backend found no known reason. Find out, with the tools only, whether the change is justified.
 
@@ -88,7 +88,8 @@ Typical plan (stop early when you have the answer):
 
 Rules for submit_finding:
 - classification: CONFLICT if compute shows the billed amount is above what the contract allows; VERIFIED if the evidence explains the billed amount exactly; UNEXPLAINED if you found no usable evidence.
-- CONFLICT and VERIFIED need a successful compute call in this run.
+- CONFLICT and VERIFIED need a successful compute call with vpi_threshold_indexation (an index clause) or surcharge_rule (a surcharge). Only these two decide a label; annualize, variance and the others are helpers. Set formula_id to the one your classification rests on.
+- Take compute inputs from the finding, what Cost Memory expects, or earlier tool results; an input with no source makes the answer unusable.
 - evidence_refs: copy ids exactly from the evidence_ids of the tool results you rely on.
 - explanation: 2 to 4 plain English sentences for the owner. Copy numbers from tool results; never write a number that is not in them.
 - letter_draft: only for CONFLICT. A short, neutral letter in German to the counterparty that cites the clause and the justified amount and asks for the basis of the change. Never refuse to pay and never threaten.
@@ -96,6 +97,7 @@ Rules for submit_finding:
 """
 
 INVESTIGATION_USER = """Finding to investigate: {finding}
+What Cost Memory expects and the hypotheses to check, in order: {context}
 Event: {event_label}
 Company: {company_name}, today is {as_of_date}, currency {currency}.
 Tool calls available: {max_tool_calls}. Investigate and finish with submit_finding."""
@@ -110,6 +112,8 @@ SUBMIT_FINDING_TOOL = {
             "type": "object",
             "properties": {
                 "classification": {"type": "string", "enum": ["VERIFIED", "UNEXPLAINED", "CONFLICT"]},
+                "formula_id": {"type": "string", "enum": ["vpi_threshold_indexation", "surcharge_rule"],
+                               "description": "The compute formula your classification rests on"},
                 "evidence_refs": {"type": "array", "items": {"type": "string"}},
                 "explanation": {"type": "string"},
                 "letter_draft": {"type": "string"},

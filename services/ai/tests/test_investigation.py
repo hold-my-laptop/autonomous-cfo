@@ -82,7 +82,7 @@ def test_hero_investigation_completes_with_a_grounded_conflict(settings):
     assert done.classification == "CONFLICT" and done.evidence_refs == EVIDENCE
     assert done.compute_call_id == "c4"  # the id of the compute tool call
     assert done.letter_draft.startswith("Sehr geehrte") and done.tool_calls == 4
-    assert done.prompt_version == "investigation-1" and done.model == "scripted-model"
+    assert done.prompt_version == "investigation-2" and done.model == "scripted-model"
     assert backend.listed_for == "p1"  # the Proof tools of this run
     assert [n for n, _ in backend.calls] == ["search_inbox", "read_clause", "get_reference_index", "compute"]
 
@@ -147,3 +147,51 @@ def test_a_proof_run_start_goes_to_the_investigation():
             time.sleep(0.05)
     assert backend.listed_for == "p1"
     assert backend.failed[0] == "NO_FINAL_ANSWER"  # stub mode: the backend's scripted one decides
+
+
+ANNUALIZE = ("compute", {"formula_id": "annualize", "inputs": {"monthly": "30400"}})
+
+
+class HelperAfterwards(ProofBackend):
+    async def call_tool(self, name, run_id, arguments, call_id):
+        result = await super().call_tool(name, run_id, arguments, call_id)
+        if name == "compute" and arguments.get("formula_id") == "annualize":
+            result.result = {"formula_id": "annualize", "outputs": {"yearly": "364800"}}
+        return result
+
+
+def test_a_later_helper_compute_does_not_replace_the_deciding_call(settings):
+    backend, llm = HelperAfterwards(), ScriptedLLM([*HERO, ANNUALIZE, submit()])
+    assert asyncio.run(run_investigation(START, llm, backend, settings)) == "COMPLETED"
+    assert backend.completed.compute_call_id == "c4"  # the index clause, not annualize (c5)
+
+
+def test_only_a_deciding_formula_can_be_named(settings):
+    helper = ("submit_finding", {**submit()[1], "formula_id": "annualize"})
+    backend, llm = HelperAfterwards(), ScriptedLLM([*HERO, ANNUALIZE, helper, submit()])
+    assert asyncio.run(run_investigation(START, llm, backend, settings)) == "COMPLETED"
+    assert backend.completed.compute_call_id == "c4"
+    assert any("only these decide a label" in m["content"] for m in llm.seen_messages[-1] if m["role"] == "tool")
+
+    missing = ("submit_finding", {**submit()[1], "formula_id": "surcharge_rule"})
+    backend, llm = HelperAfterwards(), ScriptedLLM([*HERO, missing, submit()])
+    assert asyncio.run(run_investigation(START, llm, backend, settings)) == "COMPLETED"
+    assert "surcharge_rule" in llm.seen_messages[-1][-1]["content"]
+
+
+def test_only_helper_computes_cannot_carry_a_conflict(settings):
+    plain = submit(explanation="Lease §4.2 needs a 500 bps index move before the rent may change.")
+    backend, llm = HelperAfterwards(), ScriptedLLM([*HERO[:3], ANNUALIZE, plain, plain, plain])
+    assert asyncio.run(run_investigation(START, llm, backend, settings)) == "FAILED"
+    assert backend.failed[0] == "INVALID_TOOL_CALLS" and "vpi_threshold_indexation" in backend.failed[1]
+
+
+def test_the_backends_cost_memory_context_reaches_the_model_and_the_number_check(settings):
+    start = START.model_copy(update={"finding": {"finding_id": "f1"}})
+    start.investigation = {"cost_item": {"cost_ref": "RENT", "expected_amount": "380000"},
+                           "hypotheses": ["NOTICE", "CLAUSE"]}
+    only_expected = submit("UNEXPLAINED", refs=[], explanation="Cost Memory expects 3,800.00 EUR.",
+                           letter=None)
+    backend, llm = ProofBackend(), ScriptedLLM([only_expected])
+    assert asyncio.run(run_investigation(start, llm, backend, settings)) == "COMPLETED"
+    assert '"expected_amount": "380000"' in llm.seen_messages[0][1]["content"]
