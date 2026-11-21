@@ -142,9 +142,9 @@ def test_demo_path_is_logged_and_sealed(client: TestClient) -> None:
         ("OWNER", "Saved mandate v2 as a draft"),
         ("OWNER", f"Activated mandate v2: floor -5 000,00 €, {ACTS_ALONE}"),
         ("OWNER", "Planned a closure: 1 Jun – 30 Jun"),
-        ("SYSTEM", f"Proposed to {CHF_MOVE}"),
+        ("SYSTEM", f"Proposed: {CHF_MOVE}"),
         ("RULES", f"Done within your mandate: {CHF_MOVE} (simulated)"),
-        ("SYSTEM", "Proposed to a credit line of 20 000,00 € from 27 Jun"),
+        ("SYSTEM", "Proposed: a credit line of 20 000,00 € from 27 Jun"),
         ("SYSTEM", log[7]["action"]),
         ("OWNER", "Approved: a credit line of 20 000,00 € from 27 Jun (simulated)"),
     ]
@@ -256,7 +256,7 @@ def test_agent_run_is_logged_by_the_agent_with_its_model() -> None:
             time.sleep(0.02)
         log = entries(client)
     assert_chain(log)
-    proposals = [e for e in log if e["action"].startswith("Proposed to ")]
+    proposals = [e for e in log if e["action"].startswith("Proposed: ")]
     assert [(e["actor"], e["model"]) for e in proposals] == [("AGENT", "vero-llm")] * 2
     assert (log[-1]["actor"], log[-1]["action"], log[-1]["model"]) == (
         "AGENT",
@@ -274,4 +274,4 @@ def test_unreachable_agent_fallback_is_logged() -> None:
     assert_chain(log)
     fallback = next(e for e in log if e["action"].startswith("The AI service is unavailable"))
     assert fallback["actor"] == "SYSTEM"
-    assert [e["actor"] for e in log if e["action"].startswith("Proposed to ")] == ["SYSTEM"] * 2
+    assert [e["actor"] for e in log if e["action"].startswith("Proposed: ")] == ["SYSTEM"] * 2

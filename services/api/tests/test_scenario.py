@@ -234,7 +234,7 @@ def test_phase_1_demo_through_the_public_api(mode: str) -> None:
         refused = [e for e in log if e["actor"] == "RULES" and e["lane"] == "NOT_ALLOWED"]
         assert len(refused) == 1
         assert refused[0]["action"].startswith("Not allowed by your rules: ")
-        proposed = [e for e in log if e["action"].startswith("Proposed to ")]
+        proposed = [e for e in log if e["action"].startswith("Proposed: ")]
         assert [e["actor"] for e in proposed] == ["AGENT" if agent else "SYSTEM"] * 2
         assert all(e["model"] == ("vero-llm" if agent else None) for e in proposed)
 
