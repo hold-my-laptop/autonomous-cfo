@@ -593,12 +593,12 @@ The backend owns data and logic. The AI service runs the agent: it **reads throu
 | 5 | Agent starts | `GET /tools?run_id=…` | **ToolSpec[]** of that run's kind (without `run_id`: the Cash tools) |
 | 6 | Agent calls a tool | `POST /tools/{name}` with **ToolCall** | **ToolResult** (the backend also writes the trace step) |
 | 7 | *(optional)* Agent note | `POST /runs/{run_id}/notes` with `{ text }` | `204` |
-| 8 | Agent is done | `POST /runs/{run_id}/complete` with **AgentCompletion** | `204` |
+| 8 | Agent is done | `POST /runs/{run_id}/complete` with **AgentCompletion** (Cash run) or **InvestigationCompletion** (Proof run) | `204` |
 | 9 | Agent gave up | `POST /runs/{run_id}/fail` with `{ reason, detail? }` | `204` (backend runs FALLBACK) |
 
-Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`. A completion whose proposals have the wrong shape (e.g. `move` not an object `{ outflow_id, to_date }`) returns `422 VALIDATION_ERROR` and the run keeps its deadline. An answer the backend cannot apply falls back ("The model's answer could not be applied"). A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
+Callbacks go to the orchestrator of the run's kind (`CASH` or `PROOF`). Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`; so do callbacks for a Proof run that is still being read, before its investigation started. The completion shape must match the run's kind; the other shape is a `422 VALIDATION_ERROR`. A completion whose proposals have the wrong shape (e.g. `move` not an object `{ outflow_id, to_date }`) returns `422 VALIDATION_ERROR` and the run keeps its deadline. An answer the backend cannot apply falls back ("The model's answer could not be applied"). A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
 
-**Backend settings:** `AI_URL`, `INTERNAL_TOKEN` (agent mode is on only when it is set; otherwise runs are FALLBACK and synchronous), `AGENT_MAX_TOOL_CALLS` (8, Cash runs), `INVESTIGATION_MAX_TOOL_CALLS` (6, Proof runs), `AGENT_DEADLINE_S` (60), `AGENT_START_TIMEOUT_S` (5), `EXPLAIN_TIMEOUT_S` (10), `MODEL_HEALTH_TIMEOUT_S` (20).
+**Backend settings:** `AI_URL`, `INTERNAL_TOKEN` (agent mode is on only when it is set; otherwise runs are FALLBACK and synchronous), `AGENT_MAX_TOOL_CALLS` (8, Cash runs), `INVESTIGATION_MAX_TOOL_CALLS` (6, Proof runs), `INVESTIGATION_AGENT_ENABLED` (`false` by default: until the AI service has the investigation loop, an investigation ends at once without the agent, reason `AGENT_DISABLED`; the default becomes `true` in code when it ships; the variable stays as an off switch), `AGENT_DEADLINE_S` (60), `AGENT_START_TIMEOUT_S` (5), `EXPLAIN_TIMEOUT_S` (10), `MODEL_HEALTH_TIMEOUT_S` (20).
 
 **MCP (bonus criterion, SHOULD):** the same tools are exposed as an **MCP server** at `http://api:8080/internal/mcp`, with identical names, schemas and results.
 
@@ -652,9 +652,21 @@ Response: `{ document_id, status: "OK" | "FAILED", errors[], pages[{ page, width
 | Field | Type | Description |
 |---|---|---|
 | `run_id` | UUID | Use it in every tool call and callback |
-| `event` | `{ type, label, payload }` | e.g. `CLOSURE_PLANNED`, "You plan to close 1–30 June" |
+| `kind` | `"CASH"` \| `"PROOF"` | Which loop to run: Cash (`submit_proposals`) or a Proof investigation (`submit_finding`). Tools: `GET /tools?run_id=…` |
+| `event` | `{ type, label, payload }` | e.g. `CLOSURE_PLANNED`, "You plan to close 1–30 June"; `DOCUMENT_UPLOADED` with `{ document_id, filename, sha256 }` |
 | `company` | `{ name, as_of_date, currency }` | Prompt context |
-| `limits` | `{ max_tool_calls: int, deadline_s: int }` | Default 8 calls, 60 s |
+| `limits` | `{ max_tool_calls: int, deadline_s: int }` | Cash: 8 calls; Proof: 6 calls; 60 s |
+| `investigation` | InvestigationStart? | Proof runs only |
+
+#### InvestigationStart *(Vero Proof)*
+
+| Field | Type | Description |
+|---|---|---|
+| `finding` | **ProofFinding** | The `UNEXPLAINED` finding to investigate, as `GET /findings/{id}` shows it (`status: INVESTIGATING`): counterparty, `cost_ref`, `document_id`, `period_from`, `impact { expected, billed, delta, bps }`, `differences[]` |
+| `cost_item` | **CostItem**? | What Cost Memory expects for `finding.cost_ref` (e.g. `RENT`: `expected_amount "380000"`, its sources). Values from here and from the finding count as sources for `compute` inputs (P11) |
+| `hypotheses` | string[] | The order the scripted fallback follows: `NOTICE`, `CLAUSE`, `REFERENCE_OR_PRICE_LIST`, `QUANTITY`. The agent may choose its own |
+
+Email and document text in tool results is untrusted data: the investigation prompt must say so, and nothing in it can set a label.
 
 #### ToolSpec
 `{ name: string, description: string (written for the LLM), input_schema: JSON Schema }`
@@ -687,6 +699,15 @@ Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHE
 
 #### AgentCompletion
 `{ proposals: Proposal[] (ordered), summary_note: string?, model: string, prompt_version: string, tool_calls: int }`
+
+#### InvestigationCompletion *(Vero Proof, `submit_finding`)*
+`{ classification: "VERIFIED" | "CONFLICT" | "UNEXPLAINED", compute_call_id: string?, evidence_refs: string[] (≤ 20), explanation: string (1–2000), letter_draft: string? (≤ 5000), model: string?, prompt_version: string?, tool_calls: int? }`. Unknown fields are a `422`.
+- `classification` is a proposal; the backend sets the label (P11).
+- `compute_call_id` is the `call_id` of this run's `compute` call that the label rests on.
+- `evidence_refs` are ids from this run's tool results (`evidence_ids`); others are dropped (P11).
+- `explanation` is shown as "Vero's note", never as a fact.
+
+As built in P10: the completion is stored on the run, and the finding ends `CLASSIFIED` and still `UNEXPLAINED` until the grounding check (P11) sets the label. Without the agent (deadline, `/fail`, unreachable, restart, `DATA_CHANGED`, `AGENT_DISABLED`) it ends `UNEXPLAINED` and `escalated` until the scripted investigation (P12) takes over.
 
 #### Agent failure
 `{ reason: "MODEL_TIMEOUT" | "MODEL_ERROR" | "INVALID_TOOL_CALLS" | "NO_FINAL_ANSWER" | "TOOL_LIMIT_REACHED", detail?: string }`

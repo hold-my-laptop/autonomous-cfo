@@ -1,0 +1,320 @@
+import time
+from datetime import UTC, datetime
+from typing import Any
+from uuid import UUID, uuid4
+
+import pytest
+from fastapi.testclient import TestClient
+from test_document_upload import FakeAI, upload
+
+from api.agent import AgentUnavailableError
+from api.config import Settings, get_settings
+from api.main import create_app
+from api.proof_runs import accept_upload
+
+TOKEN = "test-internal-token"
+AUTH = {"Authorization": f"Bearer {TOKEN}"}
+base = get_settings()
+pytestmark = pytest.mark.skipif(not base.statement_path.exists(), reason="sample CSV not found")
+PDF_DIR = base.proof_dataset_path.parent / "pdf"
+RENT_PDF = (PDF_DIR / "doc_rent_adjustment_2025_06.pdf").read_bytes()
+ANSWER = {
+    "classification": "CONFLICT",
+    "compute_call_id": "c4",
+    "evidence_refs": ["ntc_main_street_2025_04", "lease_main_street_2021#s4_2", "ref_vpi_demo"],
+    "explanation": "The index moved 3.06 %, below the 5 % threshold of §4.2.",
+    "letter_draft": None,
+    "model": "vero-llm",
+    "prompt_version": "investigate-1",
+    "tool_calls": 4,
+}
+
+
+class InvestigatingAI(FakeAI):
+    def __init__(self, unreachable: bool = False) -> None:
+        super().__init__()
+        self.started: list[dict[str, Any]] = []
+        self._unreachable = unreachable
+
+    def start_run(self, payload: dict[str, Any]) -> None:
+        if self._unreachable:
+            raise AgentUnavailableError("connection refused")
+        self.started.append(payload)
+
+
+def make_client(ai: FakeAI, **changes) -> TestClient:
+    settings = Settings(
+        **(
+            base.model_dump()
+            | {"internal_token": TOKEN, "investigation_agent_enabled": True}
+            | changes
+        )
+    )
+    return TestClient(create_app(settings, ai))
+
+
+def start(client: TestClient) -> str:
+    response = upload(client, RENT_PDF, "Mietanpassung.pdf")
+    assert response.status_code == 202, response.text
+    return response.json()["run_id"]
+
+
+def run(client: TestClient, run_id: str) -> dict:
+    return client.get(f"/api/v1/runs/{run_id}").json()
+
+
+def finding(client: TestClient, run_id: str) -> dict:
+    [finding_id] = run(client, run_id)["finding_ids"]
+    return client.get(f"/api/v1/findings/{finding_id}").json()
+
+
+def labels(client: TestClient, run_id: str) -> list[str]:
+    return [step["label"] for step in run(client, run_id)["trace"]]
+
+
+def post(client: TestClient, run_id: str, path: str, body: dict):
+    return client.post(f"/internal/v1/runs/{run_id}/{path}", json=body, headers=AUTH)
+
+
+def tool(client: TestClient, run_id: str, name: str, arguments: dict) -> dict:
+    response = client.post(
+        f"/internal/v1/tools/{name}",
+        json={"run_id": run_id, "arguments": arguments, "call_id": str(uuid4())},
+        headers=AUTH,
+    )
+    return response.json()
+
+
+def wait_until_finished(client: TestClient, run_id: str) -> dict:
+    deadline = time.monotonic() + 5
+    while run(client, run_id)["status"] == "RUNNING" and time.monotonic() < deadline:
+        time.sleep(0.02)
+    return run(client, run_id)
+
+
+def test_agent_path() -> None:
+    ai = InvestigatingAI()
+    with make_client(ai) as client:
+        run_id = start(client)
+        running = run(client, run_id)
+        assert (running["status"], running["mode"]) == ("RUNNING", "AGENT")
+        assert labels(client, run_id)[-1] == (
+            "Vero's agent looks for the reason: letters, contracts, reference values "
+            "(at most 6 look-ups)"
+        )
+        assert finding(client, run_id)["status"] == "INVESTIGATING"
+
+        [payload] = ai.started
+        assert (payload["run_id"], payload["kind"]) == (run_id, "PROOF")
+        assert payload["event"]["type"] == "DOCUMENT_UPLOADED"
+        assert payload["limits"] == {"max_tool_calls": 6, "deadline_s": 60}
+        investigation = payload["investigation"]
+        assert investigation["finding"]["id"] == running["finding_ids"][0]
+        assert investigation["finding"]["impact"]["billed"] == "410400"
+        assert investigation["cost_item"]["cost_ref"] == "RENT"
+        assert investigation["cost_item"]["expected_amount"] == "380000"
+        assert investigation["hypotheses"] == [
+            "NOTICE",
+            "CLAUSE",
+            "REFERENCE_OR_PRICE_LIST",
+            "QUANTITY",
+        ]
+
+        tools = client.get(f"/internal/v1/tools?run_id={run_id}", headers=AUTH).json()
+        assert tools[0]["name"] == "search_inbox"
+        assert tool(client, run_id, "search_inbox", {"query": "rent increase"})["ok"]
+        assert post(client, run_id, "notes", {"text": "Checking the lease"}).status_code == 204
+
+        assert post(client, run_id, "complete", ANSWER).status_code == 204
+
+        done = run(client, run_id)
+        assert (done["status"], done["mode"]) == ("SUCCEEDED", "AGENT")
+        steps = [(s["kind"], s["source"], s["label"]) for s in done["trace"]]
+        assert ("THINK", "AGENT", "Checking the lease") in steps
+        assert steps[-3:] == [
+            (
+                "INVESTIGATE",
+                "AGENT",
+                "Vero's note: The index moved 3.06 %, below the 5 % threshold of §4.2.",
+            ),
+            ("INVESTIGATE", "BACKEND", "The answer is not confirmed yet: still needs evidence"),
+            ("SUMMARY", "BACKEND", done["result"]["headline"]["text"]),
+        ]
+        result = finding(client, run_id)
+        assert (result["classification"], result["status"], result["escalated"]) == (
+            "UNEXPLAINED",
+            "CLASSIFIED",
+            False,
+        )
+        with client.app.state.repository.read() as state:
+            stored = state.runs[UUID(run_id)].tool_log
+        assert stored["completion"] == ANSWER
+        assert len(stored["calls"]) == 1
+        log = client.get("/api/v1/audit").json()
+        actions = [e["action"] for e in log if e["run_id"] == run_id]
+        assert actions[-1] == done["result"]["headline"]["text"]
+
+
+def test_agent_completion_must_have_the_investigation_shape() -> None:
+    with make_client(InvestigatingAI()) as client:
+        run_id = start(client)
+
+        cash_shape = post(client, run_id, "complete", {"proposals": [], "summary_note": "x"})
+        no_explanation = post(client, run_id, "complete", ANSWER | {"explanation": ""})
+        bad_label = post(client, run_id, "complete", ANSWER | {"classification": "MAYBE"})
+
+        for response in (cash_shape, no_explanation, bad_label):
+            assert (response.status_code, response.json()["code"]) == (422, "VALIDATION_ERROR")
+        assert "body.classification" in cash_shape.json()["detail"]
+        assert run(client, run_id)["status"] == "RUNNING"
+
+
+def test_cash_runs_still_take_proposals() -> None:
+    with make_client(InvestigatingAI()) as client:
+        from test_tools import start_run
+
+        cash = start_run(client)
+        wrong = post(client, cash, "complete", ANSWER)
+        assert (wrong.status_code, wrong.json()["code"]) == (422, "VALIDATION_ERROR")
+
+
+def test_deadline_falls_back_and_late_callbacks_are_closed() -> None:
+    with make_client(InvestigatingAI(), agent_deadline_s=0.2) as client:
+        run_id = start(client)
+
+        done = wait_until_finished(client, run_id)
+
+        assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
+        assert labels(client, run_id)[-2] == "The agent took too long: no reason found"
+        fallback = [s for s in done["trace"] if s["kind"] == "FALLBACK"]
+        assert fallback[-1]["data"] == {"reason": "DEADLINE_PASSED"}
+        result = finding(client, run_id)
+        assert (result["classification"], result["status"], result["escalated"]) == (
+            "UNEXPLAINED",
+            "CLASSIFIED",
+            True,
+        )
+        assert result["history"][-1]["label"] == "No reason found: needs your review"
+        assert done["result"]["headline"]["text"].endswith(": needs your review")
+
+        for path, body in (
+            ("complete", ANSWER),
+            ("notes", {"text": "late"}),
+            ("fail", {"reason": "MODEL_ERROR"}),
+        ):
+            late = post(client, run_id, path, body)
+            assert (late.status_code, late.json()["code"]) == (409, "RUN_CLOSED")
+        late_tool = tool(client, run_id, "search_inbox", {"query": "rent"})
+        assert late_tool["error"]["code"] == "RUN_CLOSED"
+
+
+def test_agent_failure_falls_back() -> None:
+    with make_client(InvestigatingAI()) as client:
+        run_id = start(client)
+
+        assert post(client, run_id, "fail", {"reason": "MODEL_ERROR"}).status_code == 204
+
+        done = run(client, run_id)
+        assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
+        assert labels(client, run_id)[-2] == "The agent stopped (MODEL_ERROR): no reason found"
+        assert finding(client, run_id)["escalated"] is True
+
+
+def test_unreachable_ai_falls_back_at_once() -> None:
+    with make_client(InvestigatingAI(unreachable=True)) as client:
+        run_id = start(client)
+
+        done = run(client, run_id)
+        assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
+        assert labels(client, run_id)[-2] == "The AI service is unavailable: no reason found"
+
+
+def test_investigation_agent_switch_is_off_by_default() -> None:
+    ai = InvestigatingAI()
+    with make_client(ai, investigation_agent_enabled=False) as client:
+        run_id = start(client)
+
+        assert ai.started == []
+        assert run(client, run_id)["status"] == "SUCCEEDED"
+        assert labels(client, run_id)[-2] == "The investigation agent is off: no reason found"
+    assert Settings().investigation_agent_enabled is False
+
+
+def test_without_internal_token_the_upload_finishes_at_once() -> None:
+    settings = Settings(**(base.model_dump() | {"internal_token": None}))
+    with TestClient(create_app(settings, InvestigatingAI())) as client:
+        response = upload(client, RENT_PDF, "Mietanpassung.pdf")
+        assert response.json()["status"] == "SUCCEEDED"
+        run_id = response.json()["run_id"]
+        assert labels(client, run_id)[-2] == "The investigation agent is off: no reason found"
+        assert finding(client, run_id)["escalated"] is True
+
+
+def test_data_change_during_the_investigation_falls_back() -> None:
+    with make_client(InvestigatingAI()) as client:
+        run_id = start(client)
+        with client.app.state.repository.write() as state:
+            state.financial_version += 1
+
+        assert tool(client, run_id, "search_inbox", {"query": "rent"})["error"]["code"] == (
+            "STALE_RUN"
+        )
+        assert post(client, run_id, "complete", ANSWER).status_code == 204
+
+        assert labels(client, run_id)[-2] == (
+            "Your data changed during the investigation: no reason found"
+        )
+
+
+def test_restart_during_the_investigation_finishes_without_the_agent() -> None:
+    ai = InvestigatingAI()
+    with make_client(ai) as client:
+        run_id = start(client)
+
+        client.app.state.proof.recover()
+
+        done = run(client, run_id)
+        assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
+        assert labels(client, run_id)[-2] == (
+            "Vero restarted during the investigation: no reason found"
+        )
+        assert len(ai.started) == 1
+
+
+def test_restart_during_extraction_also_ends_the_investigation() -> None:
+    ai = InvestigatingAI()
+    with make_client(ai) as client:
+        repository = client.app.state.repository
+        with repository.write() as state:
+            started = accept_upload(state, "late.pdf", RENT_PDF, datetime.now(UTC), agent=True)
+        run_id = str(started.id)
+
+        client.app.state.proof.recover()
+
+        done = run(client, run_id)
+        assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
+        assert labels(client, run_id)[1].startswith("Vero restarted while reading it")
+        assert labels(client, run_id)[-2] == (
+            "Vero restarted during the investigation: no reason found"
+        )
+        assert (ai.extracted, ai.started) == ([], [])
+
+
+def test_callbacks_before_the_investigation_are_closed() -> None:
+    with make_client(InvestigatingAI()) as client:
+        with client.app.state.repository.write() as state:
+            reading = accept_upload(state, "late.pdf", RENT_PDF, datetime.now(UTC), agent=True)
+
+        early = post(client, str(reading.id), "complete", ANSWER)
+
+        assert (early.status_code, early.json()["code"]) == (409, "RUN_CLOSED")
+
+
+def test_one_run_at_a_time_while_investigating() -> None:
+    with make_client(InvestigatingAI()) as client:
+        start(client)
+        other = (PDF_DIR / "inv_AS-11607.pdf").read_bytes() + b"\n"
+
+        refused = upload(client, other, "other.pdf")
+
+        assert (refused.status_code, refused.json()["code"]) == (409, "RUN_IN_PROGRESS")

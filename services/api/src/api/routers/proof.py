@@ -15,7 +15,13 @@ from api.domain.proof.findings import Classification, FindingStatus, ProofFindin
 from api.domain.proof.uploads import MAX_UPLOAD_BYTES
 from api.errors import ApiError, ErrorCode
 from api.idempotency import IdempotencyKeyDep, request_hash, run_idempotent
-from api.proof_runs import REASON_DISABLED, Extraction, accept_upload, apply_extraction
+from api.proof_runs import (
+    REASON_DISABLED,
+    Extraction,
+    accept_upload,
+    apply_extraction,
+    conclude_investigation,
+)
 from api.proof_schemas import CostItem, Document, DocumentSummary, UploadAccepted
 from api.state import DemoState
 
@@ -220,6 +226,7 @@ def upload_document(
                     Extraction(reason=REASON_DISABLED, detail="no INTERNAL_TOKEN"),
                     now,
                 )
+                conclude_investigation(state, run.id, now, reason=REASON_DISABLED)
             current = state.runs[run.id]
             return UploadAccepted(
                 document_id=current.document_id or "",

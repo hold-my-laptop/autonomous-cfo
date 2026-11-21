@@ -157,6 +157,7 @@ def start_payload(state: DemoState, run: Run, settings: Settings) -> dict[str, A
     event = next(e for e in state.events if e.id == run.event_id)
     return {
         "run_id": str(run.id),
+        "kind": run.kind.value,
         "event": {
             "type": run.trigger_type.value,
             "label": run.trigger_label,
