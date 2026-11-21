@@ -14,21 +14,13 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, ValidationError
 
 from api.domain.importer import StatementImport
-from api.money import Cents, Money
+from api.money import Cents, DecimalStr, Money
 
-DECIMAL_PATTERN = r"^-?[0-9]{1,9}(\.[0-9]{1,6})?$"
-_DECIMAL_RE = re.compile(DECIMAL_PATTERN)
 _PERIOD_RE = re.compile(r"^[0-9]{4}-(0[1-9]|1[0-2])$")
 
 
 class ProofDatasetError(ValueError):
     pass
-
-
-def _validate_decimal(value: object) -> Decimal:
-    if isinstance(value, str) and _DECIMAL_RE.fullmatch(value):
-        return Decimal(value)
-    raise ValueError('must be a decimal string such as "12.5", never a number')
 
 
 def _validate_period(value: object) -> str:
@@ -37,7 +29,6 @@ def _validate_period(value: object) -> str:
     raise ValueError('must be a month as "YYYY-MM"')
 
 
-DecimalStr = Annotated[Decimal, BeforeValidator(_validate_decimal)]
 Period = Annotated[str, BeforeValidator(_validate_period)]
 Box = tuple[float, float, float, float]
 
@@ -150,7 +141,7 @@ class Document(_Model):
     currency: Literal["EUR", "CHF"]
     document_number: str | None = None
     cost_ref: str | None = None
-    preloaded: bool
+    source: Literal["DOCUMENTS", "MAILBOX", "UPLOAD"]
     sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     pages: tuple[Page, ...] = Field(min_length=1)
     lines: tuple[LineItem, ...] = ()
@@ -159,6 +150,18 @@ class Document(_Model):
     price_list: PriceList | None = None
     rent_adjustment: RentAdjustment | None = None
     highlights: tuple[Highlight, ...] = ()
+
+    @property
+    def preloaded(self) -> bool:
+        """In the demo data from the start: the owner's documents and the mailbox's
+        attachments. An UPLOAD document arrives only when the owner uploads it."""
+        return self.source != "UPLOAD"
+
+    @property
+    def listed(self) -> bool:
+        """Shown in the document list from the start. A mailbox attachment is found only by
+        searching the inbox, and becomes visible when a finding cites it."""
+        return self.source == "DOCUMENTS"
 
     def clause(self, clause_id: str) -> Clause | None:
         return next((c for c in self.clauses if c.id == clause_id), None)
@@ -437,6 +440,10 @@ def _check_against_statement(
 
 def _check_mailbox(problems: _Problems, dataset: ProofDataset, as_of: date) -> None:
     emails = {e.id: e for e in dataset.mailbox}
+    attached = {a for e in dataset.mailbox for a in e.attachments}
+    for document in dataset.documents:
+        if document.source == "MAILBOX" and document.id not in attached:
+            problems.add(f"document {document.id}: a MAILBOX document must be attached to an email")
     for email in dataset.mailbox:
         where = f"email {email.id}"
         if email.date >= as_of:

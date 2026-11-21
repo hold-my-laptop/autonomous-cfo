@@ -37,6 +37,7 @@ from api.domain.models import (
     Transaction,
 )
 from api.domain.planner import PlanResult, apply_moves, plan_moves
+from api.domain.proof.cost_memory import CostItem, build_cost_memory
 from api.domain.proof.dataset import ProofDataset, load_dataset
 from api.domain.recurring import detect_recurring, project_outflows
 from api.domain.revenue import RevenueModel, build_revenue_model
@@ -71,6 +72,7 @@ class BaseData:
     outflows: tuple[Outflow, ...]
     inflows: tuple[Inflow, ...] = ()
     proof: ProofDataset | None = None
+    cost_memory: tuple[CostItem, ...] = ()
 
 
 @dataclass
@@ -94,6 +96,8 @@ class DemoState:
     receipts: dict[UUID, Receipt] = field(default_factory=dict)
     idempotency: dict[str, StoredResponse] = field(default_factory=dict)
     audit: list[AuditEntry] = field(default_factory=list)
+    proof: ProofDataset | None = None
+    cost_memory: tuple[CostItem, ...] = ()
 
     @classmethod
     def from_base(cls, base: BaseData, mandates: list[Mandate], **changes: Any) -> "DemoState":
@@ -107,6 +111,8 @@ class DemoState:
             recurring=list(base.recurring),
             outflows=list(base.outflows),
             inflows=list(base.inflows),
+            proof=base.proof,
+            cost_memory=base.cost_memory,
             mandates=mandates,
             **changes,
         )
@@ -210,6 +216,7 @@ def build_base(settings: Settings, statement: StatementImport | None = None) -> 
         recurring=tuple(recurring),
         outflows=tuple(sort_outflows(outflows)),
         proof=proof,
+        cost_memory=build_cost_memory(recurring, history, proof, as_of),
     )
 
 

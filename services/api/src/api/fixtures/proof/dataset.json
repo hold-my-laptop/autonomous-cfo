@@ -67,7 +67,7 @@
       "currency": "EUR",
       "document_number": null,
       "cost_ref": "RENT",
-      "preloaded": true,
+      "source": "DOCUMENTS",
       "sha256": "3a3ad03348877db60d7caad202f5341c0c89072a7a3b0584dfbc17ba2c7a6650",
       "pages": [
         {
@@ -289,7 +289,7 @@
       "currency": "EUR",
       "document_number": null,
       "cost_ref": "RENT",
-      "preloaded": true,
+      "source": "MAILBOX",
       "sha256": "899afe1b88e3bbfbb0dc9966838ea6135d5b378e99143588e4d8da7367bc6015",
       "pages": [
         {
@@ -429,7 +429,7 @@
       "currency": "EUR",
       "document_number": null,
       "cost_ref": "RENT",
-      "preloaded": false,
+      "source": "UPLOAD",
       "sha256": "a6d61b0ddba66f6d863404ff2af384a6d889d40ef66b66d7a668c690572d615e",
       "pages": [
         {
@@ -607,7 +607,7 @@
       "currency": "CHF",
       "document_number": null,
       "cost_ref": "XFER",
-      "preloaded": true,
+      "source": "DOCUMENTS",
       "sha256": "79d25821fcb6bd84a86c56685d57c1bd06ba6a490cf781f8373a18af63f47869",
       "pages": [
         {
@@ -722,7 +722,7 @@
       "currency": "EUR",
       "document_number": null,
       "cost_ref": "UTIL",
-      "preloaded": true,
+      "source": "DOCUMENTS",
       "sha256": "f675198c55128b6a32e65c785ab34fa1aed024c6794109849d596cd1fef35f34",
       "pages": [
         {
@@ -840,8 +840,8 @@
       "language": "de",
       "currency": "EUR",
       "document_number": null,
-      "cost_ref": null,
-      "preloaded": true,
+      "cost_ref": "FATTORIA",
+      "source": "DOCUMENTS",
       "sha256": "b6eb0f7a6d429eef5ef7b85c43653962d1896f03325d9b591cd108a07ff9b2e6",
       "pages": [
         {
@@ -1099,8 +1099,8 @@
       "language": "de",
       "currency": "EUR",
       "document_number": "FLV-16261",
-      "cost_ref": null,
-      "preloaded": true,
+      "cost_ref": "FATTORIA",
+      "source": "DOCUMENTS",
       "sha256": "107849e932b1678f4e05beda319c477af40d6a78d7e5b971431e6068f221f4fd",
       "pages": [
         {
@@ -1928,8 +1928,8 @@
       "language": "de",
       "currency": "EUR",
       "document_number": "FLV-94818",
-      "cost_ref": null,
-      "preloaded": true,
+      "cost_ref": "FATTORIA",
+      "source": "DOCUMENTS",
       "sha256": "d1a9a7579066a4fc76fae62362505ab82a370acb020a1bf2a63e6ae3f30a71ed",
       "pages": [
         {
@@ -2757,8 +2757,8 @@
       "language": "de",
       "currency": "EUR",
       "document_number": null,
-      "cost_ref": null,
-      "preloaded": true,
+      "cost_ref": "ASIMEX",
+      "source": "DOCUMENTS",
       "sha256": "ab90e96b1563f1fb6cce02b5cc842182345064e128ce116857c6a73c47c76e05",
       "pages": [
         {
@@ -3034,8 +3034,8 @@
       "language": "de",
       "currency": "EUR",
       "document_number": null,
-      "cost_ref": null,
-      "preloaded": true,
+      "cost_ref": "ASIMEX",
+      "source": "DOCUMENTS",
       "sha256": "50eb0cc90c5b03bd3ed9d6495df93345af3e153d290596201810a35f426e0f60",
       "pages": [
         {
@@ -3147,8 +3147,8 @@
       "language": "de",
       "currency": "EUR",
       "document_number": "AS-80497",
-      "cost_ref": null,
-      "preloaded": true,
+      "cost_ref": "ASIMEX",
+      "source": "DOCUMENTS",
       "sha256": "63ed347d1982bb72ded83bf4de3219049913c457c7920be0da89129004fa4956",
       "pages": [
         {
@@ -3900,8 +3900,8 @@
       "language": "de",
       "currency": "EUR",
       "document_number": "AS-72217",
-      "cost_ref": null,
-      "preloaded": true,
+      "cost_ref": "ASIMEX",
+      "source": "DOCUMENTS",
       "sha256": "d712dd0ab38053dff2dc26c36655416b466d4a3af53185b38d80bfdc5d120799",
       "pages": [
         {
@@ -4729,8 +4729,8 @@
       "language": "de",
       "currency": "EUR",
       "document_number": "AS-11607",
-      "cost_ref": null,
-      "preloaded": true,
+      "cost_ref": "ASIMEX",
+      "source": "DOCUMENTS",
       "sha256": "255b91e9a07337a3bae7fa71cf189660ab2f98e5aaceaee51b1bda3196396fd6",
       "pages": [
         {

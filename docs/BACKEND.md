@@ -328,9 +328,9 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 - **Done when:** a re-run changes no file; the stored box for "4.104,00 €" on the rent adjustment is within 2 points of the box `pypdfium2` reports for that text (top-left origin); `expected.json` lists every uploadable demo document.
 
 ### P04 · Cost Memory — MUST
-- **CostItem:** counterparty, `cost_ref` (`RENT`, `UTIL`, `XFER`, or the supplier), expected amount and currency, unit, sources (`STATEMENT`, `CONTRACT`, `PRICE_LIST`, `INVOICE`) with evidence refs.
+- **CostItem:** counterparty, `cost_ref` (`RENT`, `UTIL`, `XFER`, the other detected fixed costs `PAY`, `SOC`, `WTAX`, or the supplier), expected amount and currency, unit, sources (`STATEMENT`, `CONTRACT`, `PRICE_LIST`, `INVOICE`) with evidence refs. `XFER` is the cost whose Phase 1 outflows are `CHF-…`, so each item also names its outflow prefix.
 - Built from Phase 1's recurring detection (B04) on the rows before `as_of`, plus the fixture's documents and price lists. It is **base data** like the imported statement (rebuilt on load and reset); only changeable state is persisted.
-- Read API: `GET /api/v1/cost-memory`, `GET /api/v1/documents`, `GET /api/v1/documents/{id}` (metadata, pages, highlight boxes), `GET /api/v1/documents/{id}/file` (the PDF). The mailbox is **not** listed publicly; a document becomes visible when a finding cites it.
+- Read API: `GET /api/v1/cost-memory`, `GET /api/v1/documents`, `GET /api/v1/documents/{id}` (metadata, pages, highlight boxes), `GET /api/v1/documents/{id}/file` (the PDF). The mailbox is **not** listed publicly; a document becomes visible when a finding cites it. Each fixture document says where it lives (`source`: `DOCUMENTS`, `MAILBOX`, `UPLOAD`): only the landlord's letter is mailbox-only.
 - **Contracts with the feature:** CostItem and Document go into DATA_CONTRACTS §2 and `openapi.json` here, so the frontend can build against them early.
 - **Done when:** `RENT` expects 380000 (statement + lease), `XFER` expects 416667 CHF (statement + partnership agreement), Fattoria and Asimex items carry their list prices.
 
