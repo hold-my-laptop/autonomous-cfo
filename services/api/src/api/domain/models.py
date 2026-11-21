@@ -138,7 +138,9 @@ class RecurringPayment:
 
 @dataclass(frozen=True, slots=True)
 class Outflow:
-    """A known future payment. `amount` is positive (money going out)."""
+    """A known future payment. `amount` is positive (money going out). `base_amount` is the
+    amount before an executed amount change (None when unchanged), as `due_date` is the date
+    before a move."""
 
     id: UUID
     ref: str
@@ -155,6 +157,7 @@ class Outflow:
     original_currency: str | None = None
     fx_rate: str | None = None
     version: int = 1
+    base_amount: Cents | None = None
 
 
 class EventType(StrEnum):
@@ -232,6 +235,23 @@ class Run:
 class RecommendationKind(StrEnum):
     RESCHEDULE_PAYMENT = "RESCHEDULE_PAYMENT"
     CREDIT_LINE = "CREDIT_LINE"
+    KEEP_PAYMENT = "KEEP_PAYMENT"
+    UPDATE_RECURRING_AMOUNT = "UPDATE_RECURRING_AMOUNT"
+    SEND_LETTER = "SEND_LETTER"
+
+    @property
+    def proof(self) -> bool:
+        """Vero Proof's actions on a finding (P14); the others are Vero Cash's."""
+        return self in PROOF_KINDS
+
+
+PROOF_KINDS = frozenset(
+    {
+        RecommendationKind.KEEP_PAYMENT,
+        RecommendationKind.UPDATE_RECURRING_AMOUNT,
+        RecommendationKind.SEND_LETTER,
+    }
+)
 
 
 class RecommendationStatus(StrEnum):
@@ -247,7 +267,8 @@ class RecommendationStatus(StrEnum):
 @dataclass(frozen=True, slots=True)
 class Recommendation:
     """A proposed or executed action. `details` holds JSON-ready display data: subject,
-    reason, checks, impact and explanation."""
+    reason, checks, impact and explanation. A Proof action belongs to `finding_id`; an amount
+    change sets `amount` on `outflow_ids` (at `outflow_versions`)."""
 
     id: UUID
     run_id: UUID
@@ -267,6 +288,10 @@ class Recommendation:
     confirmation_ref: str | None = None
     executed_at: datetime | None = None
     note: str | None = None
+    finding_id: UUID | None = None
+    outflow_ids: tuple[UUID, ...] = ()
+    outflow_versions: tuple[int, ...] = ()
+    amount: Cents | None = None
 
 
 @dataclass(frozen=True, slots=True)

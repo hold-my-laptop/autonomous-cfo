@@ -1,6 +1,7 @@
 """Public API response models (see docs/contracts/DATA_CONTRACTS.md). Money is serialized as a
 string of integer cents."""
 
+import datetime as dt
 from datetime import date, datetime
 from typing import Annotated, Literal, Self
 from uuid import UUID
@@ -626,10 +627,70 @@ class CreditLineSubject(BaseModel):
     illustrative: Literal[True]
 
 
+class PaymentRef(BaseModel):
+    outflow_id: UUID
+    ref: str
+    date: dt.date
+
+
+class KeepPaymentSubject(BaseModel):
+    """Vero Proof: keep paying `amount` (what the contract allows) instead of `billed_amount`."""
+
+    kind: Literal["KEEP_PAYMENT"]
+    finding_id: UUID
+    cost_ref: str
+    counterparty: str
+    category: Category | None
+    amount: Money
+    billed_amount: Money
+    effective_from: dt.date | None
+    payments: list[PaymentRef]
+
+
+class UpdateAmountSubject(BaseModel):
+    """Vero Proof: pay `to_amount` instead of `from_amount` for these payments."""
+
+    kind: Literal["UPDATE_RECURRING_AMOUNT"]
+    finding_id: UUID
+    cost_ref: str
+    counterparty: str
+    category: Category | None
+    from_amount: Money
+    to_amount: Money
+    effective_from: dt.date
+    payments: list[PaymentRef]
+
+
+class LetterSubject(BaseModel):
+    """Vero Proof: a letter asking the counterparty for the basis of a change (German)."""
+
+    kind: Literal["SEND_LETTER"]
+    finding_id: UUID
+    counterparty: str
+    counterparty_id: str | None
+    letter_subject: str
+    language: Literal["de"]
+    draft: str | None = Field(description="The letter's text, when written (P16)")
+
+
+Subject = Annotated[
+    RescheduleSubject
+    | CreditLineSubject
+    | KeepPaymentSubject
+    | UpdateAmountSubject
+    | LetterSubject,
+    Field(discriminator="kind"),
+]
+
+
 class Reason(BaseModel):
     first_breach: date | None
     shortfall: Money
     requested_by: Literal["OWNER"] | None = None
+    finding_id: UUID | None = Field(default=None, description="Vero Proof: the finding")
+    disputed: Money | None = Field(
+        default=None, description="Vero Proof: billed above what is allowed, per payment"
+    )
 
 
 class Execution(BaseModel):
@@ -646,7 +707,7 @@ class Recommendation(BaseModel):
     lane: Literal["DONE_WITHIN_MANDATE", "NEEDS_APPROVAL", "NOT_ALLOWED"]
     status: RecommendationStatus
     execution: Literal["SIMULATED"]
-    subject: RescheduleSubject | CreditLineSubject = Field(discriminator="kind")
+    subject: Subject
     reason: Reason
     checks: list[Check]
     impact: Impact
@@ -656,6 +717,7 @@ class Recommendation(BaseModel):
     note: str | None
     created_at: datetime
     decided_at: datetime | None
+    finding_id: UUID | None = Field(default=None, description="Vero Proof: the finding")
 
     @classmethod
     def from_domain(cls, r: dm.Recommendation) -> Self:
@@ -684,6 +746,7 @@ class Recommendation(BaseModel):
             note=r.note,
             created_at=r.created_at,
             decided_at=r.decided_at,
+            finding_id=r.finding_id,
         )
 
 
@@ -693,7 +756,7 @@ class Receipt(BaseModel):
     kind: Literal["PROPOSAL", "DECISION"]
     created_at: datetime
     trigger: str
-    subject: RescheduleSubject | CreditLineSubject = Field(discriminator="kind")
+    subject: Subject
     lane: str
     decision: Literal["APPROVED", "REJECTED", "REQUESTED"] | None
     checks: list[Check]

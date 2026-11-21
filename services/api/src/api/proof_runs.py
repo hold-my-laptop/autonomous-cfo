@@ -42,6 +42,7 @@ from api.domain.proof.propagation import describe, propagate
 from api.domain.proof.uploads import MAX_UPLOAD_BYTES, Upload, UploadStatus, ValuesSource
 from api.errors import ApiError, ErrorCode
 from api.money import format_eur
+from api.proof_actions import propose_actions
 from api.proof_schemas import CostItem as CostItemOut
 from api.scripted_investigation import investigate
 from api.state import DemoState, StateRepository
@@ -547,7 +548,19 @@ def conclude_investigation(
     finding = with_propagation(state, finding)
     if finding.propagation:
         trace.add("PROPAGATE", describe(finding.propagation), now)
+    by_agent = completion is not None
+    finding = propose_actions(
+        state,
+        run,
+        finding,
+        now,
+        trace,
+        AuditActor.AGENT if by_agent else AuditActor.SYSTEM,
+        completion.get("model") if by_agent else None,
+        completion.get("letter_draft") if by_agent else None,
+    )
     state.findings[finding.id] = finding
+    run = replace(run, recommendation_ids=finding.recommendation_ids)
     _finish(state, run, trace, upload, now, _headline(finding), mode=mode, findings=(finding.id,))
 
 

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import StrEnum
 
-from api.domain.models import CreditLine, Mandate, Outflow
+from api.domain.models import Category, CreditLine, Mandate, Outflow, RecommendationKind
 from api.money import Cents, format_eur
 
 POLICY_VERSION = "policy-1.0.0"
@@ -216,3 +216,33 @@ def evaluate_moves(
             done_today += proposal.outflow.amount
         decisions.append(decision)
     return decisions
+
+
+def evaluate_proof_action(
+    kind: RecommendationKind,
+    category: Category | None,
+    counterparty: str,
+    mandate: Mandate,
+    owner_approved: bool = False,
+) -> PolicyDecision:
+    """Vero Proof's actions always need the owner (docs/PROOF.md §6): a letter contacts a third
+    party, an amount decision moves money. Amount decisions on protected categories are not
+    allowed; a pause is respected."""
+    checks: list[Check] = []
+    if kind is RecommendationKind.SEND_LETTER:
+        rule, text = "R7", f"A letter contacts {counterparty}"
+    else:
+        if category in mandate.protected_categories:
+            checks.append(_failed("R4", f"{category} payments are protected", Lane.NOT_ALLOWED))
+        else:
+            checks.append(_passed("R4", f"{category} payments are not protected"))
+        if kind is RecommendationKind.KEEP_PAYMENT:
+            rule, text = "R6", "Paying a different amount than billed"
+        else:
+            rule, text = "R6", "Changing a recurring payment"
+    if owner_approved:
+        checks.append(_approved(rule, f"{text} always needs your approval"))
+    else:
+        checks.append(_failed(rule, f"{text} always needs your approval", Lane.NEEDS_APPROVAL))
+    checks.append(_pause_check(mandate, owner_approved))
+    return _decide(checks)

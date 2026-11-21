@@ -97,6 +97,8 @@ def test_fallback_steps_are_backend_steps_in_hypothesis_order() -> None:
         "Index moved 3.06%, less than 5.00%: the amount stays at 3 800,00 €",
         "Recomputed: 3 800,00 € allowed, 4 104,00 € billed",
         "Keep paying 3 800,00 € for RENT; 912,00 € disputed in the next 13 weeks",
+        "Keep paying 3 800,00 € for RENT: needs approval",
+        "Send a letter to Main Street Real Estate GmbH: needs approval",
         agent_headline(),
     ]
 

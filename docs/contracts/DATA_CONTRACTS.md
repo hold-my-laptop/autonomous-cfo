@@ -411,12 +411,12 @@ Statement imports (`POST /imports/bank-statement`) create a `STATEMENT_IMPORTED`
 | Field | Type | Description |
 |---|---|---|
 | `id`, `run_id` | UUID | |
-| `kind` | enum | `RESCHEDULE_PAYMENT`, `CREDIT_LINE` |
+| `kind` | enum | Vero Cash: `RESCHEDULE_PAYMENT`, `CREDIT_LINE`. Vero Proof (P14): `KEEP_PAYMENT`, `UPDATE_RECURRING_AMOUNT`, `SEND_LETTER` |
 | `lane` | enum | `DONE_WITHIN_MANDATE`, `NEEDS_APPROVAL`, `NOT_ALLOWED` (fixed when proposed) |
 | `status` | enum | `EXECUTED` (done alone), `PENDING`, `APPROVED_EXECUTED`, `REJECTED`, `BLOCKED` (refused by the rules), `STALE` (data changed before the decision), `SUPERSEDED` (a newer run replaced it) |
 | `execution` | `"SIMULATED"` | Always. Show a "Simulated" badge |
-| `subject` | RescheduleSubject \| CreditLineSubject | By `kind` (discriminator `subject.kind`) |
-| `reason` | `{ first_breach: Date?, shortfall: Money, requested_by?: "OWNER" }` | The problem it addresses. `requested_by` is set for owner reschedule requests |
+| `subject` | RescheduleSubject \| CreditLineSubject \| KeepPaymentSubject \| UpdateAmountSubject \| LetterSubject | By `kind` (discriminator `subject.kind`) |
+| `reason` | `{ first_breach: Date?, shortfall: Money, requested_by?: "OWNER", finding_id?: UUID, disputed?: Money }` | The problem it addresses. `requested_by` is set for owner reschedule requests. Vero Proof actions: `first_breach` null, `shortfall` 0, the finding and its disputed amount per payment |
 | `checks` | Check[] | Every rule checked, including passes |
 | `impact` | `{ before: ImpactState, after_if_executed: ImpactState }` | |
 | `explanation` | Explanation | |
@@ -424,12 +424,21 @@ Statement imports (`POST /imports/bank-statement`) create a `STATEMENT_IMPORTED`
 | `executed` | `{ execution: "SIMULATED", confirmation_ref: "SIM-…", executed_by: "VERO" \| "OWNER", executed_at: Timestamp }?` | When it was executed |
 | `note` | string? | Owner's note on the decision |
 | `created_at`, `decided_at` | Timestamp, Timestamp? | |
+| `finding_id` | UUID? | Vero Proof: the finding the action belongs to (`ProofFinding.recommendation_ids` lists them) |
 
 **RescheduleSubject**: `kind: "RESCHEDULE_PAYMENT"`, `outflow_id`, `ref`, `counterparty`, `category`, `amount`, `original_amount?`, `original_currency?`, `from_date`, `to_date`.
 
 **CreditLineSubject**: `kind: "CREDIT_LINE"`, `product: "SHORT_TERM_CREDIT_LINE"`, `amount`, `available_from`, `available_until`, `shortfall`, `rounded_to`, `headroom_at_lowest`, `illustrative: true` (show "illustrative, not a bank offer").
 
-**Check**: `{ rule: "R1".."R5" | "VALIDITY" | "PAUSE", result: "PASS" | "FAIL" | "INFO", effect: "NEEDS_APPROVAL" | "NOT_ALLOWED" | null, text: string }` (`effect` only on FAIL), e.g. "4 333,34 € is within your 5 000 € limit for acting alone".
+**Vero Proof actions (P14).** Proposed when an investigation classifies a finding, from its `propagation`: a `CONFLICT` with `decision: KEEP` → `KEEP_PAYMENT`; `decision: UPDATE` (a verified new amount, or a conflict whose justified amount is above the current one) → `UPDATE_RECURRING_AMOUNT`; every `CONFLICT` → `SEND_LETTER`. The finding then goes `PENDING_APPROVAL` and is `RESOLVED` once each action is approved, rejected, refused or stale. All need the owner: rule **R6** (paying a different amount than billed, changing a recurring payment) and **R7** (a letter contacts a third party) are `NEEDS_APPROVAL`; amount decisions on protected categories fail **R4** (`NOT_ALLOWED`); a pause is respected. Approve and reject through `POST /recommendations/{id}/approve` and `/reject`, with receipts and log entries under agent `PROOF`. Approving `KEEP_PAYMENT` or `SEND_LETTER` changes no data (a `SIM-…` confirmation; the letter is marked sent); approving `UPDATE_RECURRING_AMOUNT` sets the new amount on its payments, bumps `financial_version` (so a pending Vero Cash proposal becomes `STALE_RECOMMENDATION`) and changes the forecast, never the backtest (it restores original amounts as it restores due dates). A Proof action is stale only if one of its payments changed since; a new Vero Cash run doesn't supersede it.
+
+**KeepPaymentSubject**: `kind: "KEEP_PAYMENT"`, `finding_id`, `cost_ref`, `counterparty`, `category?`, `amount` (keep paying), `billed_amount`, `effective_from?`, `payments: { outflow_id, ref, date }[]`.
+
+**UpdateAmountSubject**: `kind: "UPDATE_RECURRING_AMOUNT"`, `finding_id`, `cost_ref`, `counterparty`, `category?`, `from_amount`, `to_amount`, `effective_from`, `payments: { outflow_id, ref, date }[]`.
+
+**LetterSubject**: `kind: "SEND_LETTER"`, `finding_id`, `counterparty`, `counterparty_id?`, `letter_subject` (German, e.g. "Ihre Mietanpassung ab 01.06.2025 – Bitte um Erläuterung gemäß §4.2 Mietvertrag"), `language: "de"`, `draft?` (the agent's draft until P16 writes the letter).
+
+**Check**: `{ rule: "R1".."R7" | "VALIDITY" | "PAUSE", result: "PASS" | "FAIL" | "INFO", effect: "NEEDS_APPROVAL" | "NOT_ALLOWED" | null, text: string }` (`effect` only on FAIL), e.g. "4 333,34 € is within your 5 000 € limit for acting alone".
 
 **ImpactState**: `{ first_breach: Date?, lowest: Money, lowest_date: Date, days_below_floor: int }`.
 

@@ -1,7 +1,7 @@
 """Runs, recommendations, simulated execution and receipts. Callers hold the write lock.
 
-The executor functions here are the only code that changes a payment date or adds a credit
-line. Every executed action is simulated: nothing reaches a real bank."""
+The executor functions here are the only code that changes a payment date or amount or adds
+a credit line. Every executed action is simulated: nothing reaches a real bank."""
 
 from dataclasses import dataclass, replace
 from datetime import date, datetime
@@ -11,6 +11,7 @@ from api.audit import AuditActor, AuditAgent, audit_run_finished, record
 from api.domain.credit import size_credit_line
 from api.domain.forecast import ENGINE_VERSION, ForecastSummary, compute_forecast
 from api.domain.models import (
+    Category,
     CreditLine,
     EventType,
     Outflow,
@@ -30,7 +31,9 @@ from api.domain.policy import (
     PolicyDecision,
     evaluate_credit,
     evaluate_move,
+    evaluate_proof_action,
 )
+from api.domain.proof.findings import FindingStatus
 from api.domain.revenue import MODEL_VERSION
 from api.explain import explain_request
 from api.money import Cents, format_eur
@@ -91,14 +94,19 @@ def _versions() -> dict[str, str]:
 
 
 def _summary_with(
-    state: DemoState, moves=(), lines: tuple[CreditLine, ...] = ()
+    state: DemoState, moves=(), lines: tuple[CreditLine, ...] = (), amounts=()
 ) -> ForecastSummary:
     data = state.forecast_input()
     targets = dict(moves)
+    new_amounts = dict(amounts)
     data = replace(
         data,
         outflows=tuple(
-            replace(o, scheduled_date=targets[o.id]) if o.id in targets else o
+            replace(
+                o,
+                scheduled_date=targets.get(o.id, o.scheduled_date),
+                amount=new_amounts.get(o.id, o.amount),
+            )
             for o in data.outflows
         ),
         credit_lines=(*data.credit_lines, *lines),
@@ -117,6 +125,29 @@ def execute_move(state: DemoState, outflow_id: UUID, to_date: date) -> Outflow:
 def execute_credit(state: DemoState, line: CreditLine) -> None:
     state.credit_lines.append(line)
     state.financial_version += 1
+
+
+def execute_amount_change(
+    state: DemoState, outflow_ids: tuple[UUID, ...], amount: Cents
+) -> list[Outflow]:
+    """Pay `amount` for these payments from now on. Each keeps its amount before the first
+    change (`base_amount`), as it keeps its due date, so the backtest can restore it."""
+    targets = set(outflow_ids)
+    changed = []
+    outflows = []
+    for o in state.outflows:
+        if o.id in targets:
+            o = replace(
+                o,
+                amount=amount,
+                base_amount=o.amount if o.base_amount is None else o.base_amount,
+                version=o.version + 1,
+            )
+            changed.append(o)
+        outflows.append(o)
+    state.outflows = outflows
+    state.financial_version += 1
+    return changed
 
 
 def _move_subject(outflow: Outflow, to_date: date) -> dict:
@@ -203,9 +234,11 @@ def _store(state: DemoState, rec: Recommendation, receipt: Receipt) -> Recommend
 
 
 def _supersede_pending(state: DemoState, now: datetime) -> None:
+    """A new Cash run replaces Vero Cash's proposals still waiting; Vero Proof's actions belong
+    to their finding and stay."""
     superseded = 0
     for rec_id, rec in list(state.recommendations.items()):
-        if rec.status is RecommendationStatus.PENDING:
+        if rec.status is RecommendationStatus.PENDING and not rec.kind.proof:
             state.recommendations[rec_id] = replace(
                 rec, status=RecommendationStatus.SUPERSEDED, decided_at=now
             )
@@ -224,6 +257,13 @@ def _supersede_pending(state: DemoState, now: datetime) -> None:
 def subject_text(rec: Recommendation) -> str:
     """'postpone X (4 333,34 €) to 30 Jul' or 'a credit line of 20 000,00 € from 27 Jun'."""
     subject = rec.details["subject"]
+    if rec.kind is RecommendationKind.KEEP_PAYMENT:
+        return f"keep paying {format_eur(subject['amount'])} for {subject['cost_ref']}"
+    if rec.kind is RecommendationKind.UPDATE_RECURRING_AMOUNT:
+        start = _day(date.fromisoformat(subject["effective_from"]))
+        return f"pay {format_eur(subject['to_amount'])} for {subject['cost_ref']} from {start}"
+    if rec.kind is RecommendationKind.SEND_LETTER:
+        return f"send a letter to {subject['counterparty']}"
     if rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
         to_day = _day(date.fromisoformat(subject["to_date"]))
         return f"postpone {subject['counterparty']} ({format_eur(subject['amount'])}) to {to_day}"
@@ -701,6 +741,14 @@ class DecisionError(Exception):
 
 
 def _is_stale(state: DemoState, rec: Recommendation) -> bool:
+    """A Cash proposal is stale once the data changed. A Proof action depends only on its
+    finding: an amount change goes stale when one of its payments changed since."""
+    if rec.kind.proof:
+        current = {o.id: o.version for o in state.outflows}
+        return any(
+            current.get(i) != version
+            for i, version in zip(rec.outflow_ids, rec.outflow_versions, strict=True)
+        )
     if state.financial_version != rec.based_on_financial_version:
         return True
     if rec.outflow_id is not None:
@@ -790,6 +838,28 @@ def _refresh_pending(
     return follow_ups
 
 
+_DECIDED = {
+    RecommendationStatus.APPROVED_EXECUTED: "approved",
+    RecommendationStatus.REJECTED: "rejected",
+    RecommendationStatus.BLOCKED: "not allowed",
+    RecommendationStatus.STALE: "out of date",
+}
+
+
+def settle_finding(state: DemoState, rec: Recommendation, now: datetime) -> None:
+    """A finding is RESOLVED once every one of its actions is decided."""
+    finding = state.findings.get(rec.finding_id) if rec.finding_id else None
+    if finding is None or finding.status is FindingStatus.RESOLVED:
+        return
+    actions = [state.recommendations[i] for i in finding.recommendation_ids]
+    if not actions or any(a.status is RecommendationStatus.PENDING for a in actions):
+        return
+    decided = "; ".join(f"{subject_text(a)} ({_DECIDED[a.status]})" for a in actions)
+    state.findings[finding.id] = finding.advance(
+        now, FindingStatus.RESOLVED, f"You decided: {decided}"
+    )
+
+
 def decide(
     state: DemoState,
     rec_id: UUID,
@@ -809,6 +879,7 @@ def decide(
         raise DecisionError("NOT_FOUND", f"no recommendation {rec_id}")
     if rec.status is not RecommendationStatus.PENDING:
         raise DecisionError("NOT_PENDING", f"recommendation is {rec.status}")
+    agent = AuditAgent.PROOF if rec.kind.proof else AuditAgent.CASH
     if _is_stale(state, rec):
         state.recommendations[rec_id] = replace(
             rec, status=RecommendationStatus.STALE, decided_at=now
@@ -819,18 +890,19 @@ def decide(
             AuditActor.SYSTEM,
             f"Could not apply your decision to {subject_text(rec)}: "
             "the data changed since it was proposed",
-            agent=AuditAgent.CASH,
+            agent=agent,
             run_id=rec.run_id,
             recommendation_id=rec.id,
             lane=rec.lane,
         )
+        settle_finding(state, state.recommendations[rec_id], now)
         raise DecisionError(
             "STALE_RECOMMENDATION", "the data changed since this was proposed; plan again"
         )
 
     before = impact(state.forecast().summary)
     common = {
-        "agent": AuditAgent.CASH,
+        "agent": agent,
         "run_id": rec.run_id,
         "recommendation_id": rec.id,
         "lane": rec.lane,
@@ -839,10 +911,22 @@ def decide(
         rec = replace(rec, status=RecommendationStatus.REJECTED, decided_at=now, note=note)
         receipt = _receipt(state, rec, "DECISION", now, "Your decision", before, before, "REJECTED")
         record(state, now, AuditActor.OWNER, f"Rejected: {subject_text(rec)}", **common)
-        return _store(state, rec, receipt), receipt, []
+        rec = _store(state, rec, receipt)
+        settle_finding(state, rec, now)
+        return rec, receipt, []
 
     mandate = state.active_mandate
-    if rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
+    if rec.kind.proof:
+        subject = rec.details["subject"]
+        category = subject.get("category")
+        decision = evaluate_proof_action(
+            rec.kind,
+            Category(category) if category else None,
+            subject["counterparty"],
+            mandate,
+            owner_approved=True,
+        )
+    elif rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
         outflow = next(o for o in state.outflows if o.id == rec.outflow_id)
         decision = evaluate_move(
             outflow,
@@ -869,12 +953,16 @@ def decide(
             f"Not allowed by your rules: {_first_failure(decision)}",
             **common,
         )
-        return _store(state, rec, receipt), receipt, []
+        rec = _store(state, rec, receipt)
+        settle_finding(state, rec, now)
+        return rec, receipt, []
 
     if rec.kind is RecommendationKind.RESCHEDULE_PAYMENT:
         execute_move(state, rec.outflow_id, rec.to_date)
-    else:
+    elif rec.kind is RecommendationKind.CREDIT_LINE:
         execute_credit(state, rec.credit_line)
+    elif rec.kind is RecommendationKind.UPDATE_RECURRING_AMOUNT:
+        execute_amount_change(state, rec.outflow_ids, rec.amount)
     rec = replace(
         rec,
         status=RecommendationStatus.APPROVED_EXECUTED,
@@ -896,6 +984,9 @@ def decide(
         **common,
     )
     rec = _store(state, rec, receipt)
+    if rec.kind.proof:
+        settle_finding(state, rec, now)
+        return rec, receipt, []
     return rec, receipt, _refresh_pending(state, rec, now, credit_until, credit_rounding)
 
 

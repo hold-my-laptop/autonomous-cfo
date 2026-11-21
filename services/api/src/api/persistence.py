@@ -27,6 +27,7 @@ from api.domain.models import (
     EventType,
     Mandate,
     MandateStatus,
+    Outflow,
     PlannedEvent,
     PlannedEventKind,
     Receipt,
@@ -52,7 +53,7 @@ from api.state import (
 from api.statement_db import read_statement_table
 
 COMPANY_ROW_ID = 1
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 
 class SchemaMetaRow(SQLModel, table=True):
@@ -153,6 +154,7 @@ class OutflowChangeRow(SQLModel, table=True):
     outflow_id: UUID = Field(primary_key=True)
     scheduled_date: date
     version: int
+    amount: int | None = Field(default=None, sa_type=BigInteger)
 
 
 class RecommendationRow(SQLModel, table=True):
@@ -179,6 +181,10 @@ class RecommendationRow(SQLModel, table=True):
     confirmation_ref: str | None = None
     executed_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))
     note: str | None = None
+    finding_id: UUID | None = None
+    outflow_ids: list[str] = Field(default_factory=list, sa_type=JSON)
+    outflow_versions: list[int] = Field(default_factory=list, sa_type=JSON)
+    amount: int | None = Field(default=None, sa_type=BigInteger)
 
 
 class ReceiptRow(SQLModel, table=True):
@@ -313,6 +319,10 @@ def _recommendation_row(seq: int, r: Recommendation) -> RecommendationRow:
         confirmation_ref=r.confirmation_ref,
         executed_at=r.executed_at,
         note=r.note,
+        finding_id=r.finding_id,
+        outflow_ids=[str(i) for i in r.outflow_ids],
+        outflow_versions=list(r.outflow_versions),
+        amount=r.amount,
     )
 
 
@@ -338,6 +348,10 @@ def _recommendation(r: RecommendationRow) -> Recommendation:
         confirmation_ref=r.confirmation_ref,
         executed_at=r.executed_at,
         note=r.note,
+        finding_id=r.finding_id,
+        outflow_ids=tuple(UUID(i) for i in r.outflow_ids),
+        outflow_versions=tuple(r.outflow_versions),
+        amount=r.amount,
     )
 
 
@@ -468,13 +482,16 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
         findings={r.id: ProofFinding.model_validate(r.body) for r in findings},
         uploads={r.document_id: Upload.model_validate(r.body) for r in uploads},
     )
-    state.outflows = [
-        replace(o, scheduled_date=changes[o.id].scheduled_date, version=changes[o.id].version)
-        if o.id in changes
-        else o
-        for o in state.outflows
-    ]
+    state.outflows = [_changed(o, changes[o.id]) if o.id in changes else o for o in state.outflows]
     return state
+
+
+def _changed(outflow: Outflow, change: OutflowChangeRow) -> Outflow:
+    """A base outflow with its stored move and amount change."""
+    moved = replace(outflow, scheduled_date=change.scheduled_date, version=change.version)
+    if change.amount is None:
+        return moved
+    return replace(moved, amount=change.amount, base_amount=outflow.amount)
 
 
 def _save(session: Session, state: DemoState) -> None:
@@ -583,9 +600,14 @@ def _save(session: Session, state: DemoState) -> None:
         session,
         OutflowChangeRow,
         [
-            OutflowChangeRow(outflow_id=o.id, scheduled_date=o.scheduled_date, version=o.version)
+            OutflowChangeRow(
+                outflow_id=o.id,
+                scheduled_date=o.scheduled_date,
+                version=o.version,
+                amount=o.amount if o.base_amount is not None else None,
+            )
             for o in state.outflows
-            if o.version > 1 or o.scheduled_date != o.due_date
+            if o.version > 1 or o.scheduled_date != o.due_date or o.base_amount is not None
         ],
     )
     _sync(

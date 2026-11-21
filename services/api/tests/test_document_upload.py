@@ -146,7 +146,7 @@ def test_correct_extraction_creates_the_rent_finding() -> None:
             finding["status"],
             finding["escalated"],
             finding["run_id"],
-        ) == ("CONFLICT", "CLASSIFIED", False, run["run_id"])
+        ) == ("CONFLICT", "PENDING_APPROVAL", False, run["run_id"])
         assert finding["impact"] | {"currency": "EUR"} == {
             "currency": "EUR",
             "expected": "380000",
@@ -412,6 +412,8 @@ def test_upload_is_in_the_activity_log() -> None:
         mine = [(e["actor"], e["agent"], e["action"]) for e in log if e["run_id"] == run["run_id"]]
         assert mine == [
             ("OWNER", "PROOF", "Uploaded Mietanpassung.pdf"),
+            ("SYSTEM", "PROOF", "Proposed to keep paying 3 800,00 € for RENT"),
+            ("SYSTEM", "PROOF", "Proposed to send a letter to Main Street Real Estate GmbH"),
             ("SYSTEM", "PROOF", run["result"]["headline"]["text"]),
         ]
 
