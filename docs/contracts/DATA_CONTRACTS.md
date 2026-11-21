@@ -354,7 +354,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 **Explanation**: `{ text: string, source: "MODEL" | "REPLAY" | "TEMPLATE" }`.
 
 #### MandateIn
-The same fields as **Mandate** minus `version`, `status`, `created_at` and `activated_at`. Unknown fields are rejected. Removing `PAYROLL`, `SOCIAL_SECURITY` or `TAX` from `protected_categories` returns `MANDATE_INVALID`.
+The same fields as **Mandate** minus `version`, `status`, `paused`, `created_at` and `activated_at`. Unknown fields, including these, are rejected (`VALIDATION_ERROR`), so the body of `GET /mandate` cannot be sent back unchanged. `paused` is changed only with `POST /mandate/pause` and `/resume`. Removing `PAYROLL`, `SOCIAL_SECURITY` or `TAX` from `protected_categories` returns `MANDATE_INVALID`.
 
 #### MandateDraft *(SHOULD)*
 `{ draft: MandateIn, diff: { field, old, new }[], uncertain: string[], unsupported: string[], source: "MODEL" | "REPLAY" | "STUB" }`
