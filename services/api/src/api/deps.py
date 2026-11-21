@@ -4,6 +4,7 @@ from fastapi import Depends, Request
 
 from api.agent import AgentClient, AgentOrchestrator
 from api.config import Settings
+from api.proof_runs import ProofPipeline
 from api.state import StateRepository
 
 
@@ -26,6 +27,13 @@ def get_agent(request: Request) -> AgentOrchestrator:
 
 
 AgentDep = Annotated[AgentOrchestrator, Depends(get_agent)]
+
+
+def get_proof(request: Request) -> ProofPipeline:
+    return request.app.state.proof
+
+
+ProofDep = Annotated[ProofPipeline, Depends(get_proof)]
 
 
 def get_agent_client(request: Request) -> AgentClient:

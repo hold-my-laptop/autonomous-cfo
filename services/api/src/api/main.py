@@ -8,6 +8,7 @@ from fastapi.routing import APIRoute
 from api.agent import AgentClient, AgentOrchestrator, HttpAgentClient
 from api.config import Settings, get_settings
 from api.errors import Problem, install_error_handlers
+from api.proof_runs import ProofPipeline
 from api.routers import (
     audit,
     data,
@@ -67,8 +68,9 @@ def create_app(
     app.state.repository = build_repository(settings)
     app.state.agent_client = agent_client or HttpAgentClient(settings)
     app.state.agent = AgentOrchestrator(app.state.repository, settings, app.state.agent_client)
+    app.state.proof = ProofPipeline(app.state.repository, settings, app.state.agent_client)
     app.state.loader = StateLoader(
-        app.state.repository, app.state.agent, settings.state_load_retry_s
+        app.state.repository, app.state.agent, settings.state_load_retry_s, app.state.proof
     )
     install_error_handlers(app)
     app.add_middleware(

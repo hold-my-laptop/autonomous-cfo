@@ -116,6 +116,12 @@ class CostItem(BaseModel):
         )
 
 
+class UploadAccepted(BaseModel):
+    document_id: str = Field(description="Use GET /documents/{id} once the run has read it")
+    run_id: UUID = Field(description="Poll GET /runs/{run_id} for the progress")
+    status: Literal["RUNNING", "SUCCEEDED", "FAILED"]
+
+
 class CounterpartyRef(BaseModel):
     id: str
     name: str

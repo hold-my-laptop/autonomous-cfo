@@ -505,7 +505,7 @@ class RunCounts(BaseModel):
 
 
 class RunResult(BaseModel):
-    forecast_id: UUID
+    forecast_id: UUID | None = Field(description="Cash runs: the forecast it ended with")
     recommendation_ids: list[UUID]
     headline: Explanation | None
     counts: RunCounts
@@ -524,6 +524,11 @@ class TraceStep(BaseModel):
 
 class Run(BaseModel):
     run_id: UUID
+    kind: Literal["CASH", "PROOF"] = Field(
+        description="CASH: Vero Cash's liquidity runs; PROOF: a document's check"
+    )
+    document_id: str | None = Field(description="PROOF: the uploaded document")
+    finding_ids: list[UUID] = Field(description="PROOF: the findings it created")
     status: PublicRunStatus
     mode: RunMode
     trigger: RunTrigger
@@ -539,6 +544,9 @@ class Run(BaseModel):
         ]
         return cls(
             run_id=r.id,
+            kind=r.kind.value,
+            document_id=r.document_id,
+            finding_ids=list(r.finding_ids),
             status=r.status,
             mode=r.mode,
             trigger=RunTrigger(type=r.trigger_type, label=r.trigger_label),
@@ -567,7 +575,7 @@ class Run(BaseModel):
                 ),
                 gap_closed=r.gap_closed,
             )
-            if r.forecast_id
+            if r.forecast_id or (r.kind is dm.RunKind.PROOF and r.headline)
             else None,
             created_at=r.created_at,
             finished_at=r.finished_at,

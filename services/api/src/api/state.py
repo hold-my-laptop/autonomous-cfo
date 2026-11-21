@@ -41,6 +41,7 @@ from api.domain.proof.check import RoutineCheck, preloaded_findings
 from api.domain.proof.cost_memory import CostItem, build_cost_memory
 from api.domain.proof.dataset import ProofDataset, load_dataset
 from api.domain.proof.findings import ProofFinding
+from api.domain.proof.uploads import Upload
 from api.domain.recurring import detect_recurring, project_outflows
 from api.domain.revenue import RevenueModel, build_revenue_model
 from api.domain.schedule import project_scheduled, sort_outflows
@@ -104,6 +105,8 @@ class DemoState:
     cost_memory: tuple[CostItem, ...] = ()
     routine_checks: tuple[RoutineCheck, ...] = ()
     findings: dict[UUID, ProofFinding] = field(default_factory=dict)
+    uploads: dict[str, Upload] = field(default_factory=dict)
+    new_files: dict[str, bytes] = field(default_factory=dict)
 
     @classmethod
     def from_base(cls, base: BaseData, mandates: list[Mandate], **changes: Any) -> "DemoState":
@@ -270,6 +273,9 @@ class StateRepository(Protocol):
 
     def write(self) -> AbstractContextManager[DemoState]: ...
 
+    def read_file(self, document_id: str) -> bytes | None:
+        """The bytes of an uploaded PDF, or None."""
+
 
 class InMemoryStateRepository:
     """Holds one DemoState in memory. Lost on restart; reset rebuilds it from the statement."""
@@ -278,6 +284,7 @@ class InMemoryStateRepository:
         self._settings = settings
         self._lock = threading.RLock()
         self._state: DemoState | None = None
+        self._files: dict[str, bytes] = {}
 
     def start(self) -> None:
         self.reset()
@@ -289,6 +296,7 @@ class InMemoryStateRepository:
         state = build_demo_state(self._settings)
         with self._lock:
             self._state = state
+            self._files = {}
         return state
 
     def _current(self) -> DemoState:
@@ -317,3 +325,9 @@ class InMemoryStateRepository:
             except BaseException:
                 self._state = snapshot
                 raise
+            self._files.update(state.new_files)
+            state.new_files.clear()
+
+    def read_file(self, document_id: str) -> bytes | None:
+        with self._lock:
+            return self._files.get(document_id)
