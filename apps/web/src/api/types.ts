@@ -106,6 +106,8 @@ export interface DraftMessage {
   body: string;
   /** Same message in English, when the original is in another language. */
   english?: { subject: string; body: string };
+  /** Language of subject/body. Default: "de" when there is an English version, otherwise "en". */
+  language?: "de" | "en";
 }
 
 export type DecisionStatus =

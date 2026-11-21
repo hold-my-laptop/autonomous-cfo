@@ -343,8 +343,10 @@ function ActionRow({ a, resolved, checked, onCheck }: { a: RecommendedAction; re
                 ))}
               </div>
               <p className="text-[11px] text-ink-soft">To: {d.to}</p>
-              <p className="text-[13px] font-semibold">{text.subject}</p>
-              <p className="mt-2 whitespace-pre-line text-[13px]">{text.body}</p>
+              <div lang={lang === "en" && d.english ? "en" : (a.language ?? d.language ?? "de")}>
+                <p className="text-[13px] font-semibold">{text.subject}</p>
+                <p className="mt-2 whitespace-pre-line text-[13px]">{text.body}</p>
+              </div>
             </div>
           )}
         </div>

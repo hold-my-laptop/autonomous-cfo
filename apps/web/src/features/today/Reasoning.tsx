@@ -102,6 +102,8 @@ export function EmailPanel({ decision: d, id }: { decision: Decision; id: string
   const m = d.draftMessage;
   if (!m) return null;
   const text = english && m.english ? m.english : m;
+  // Screen readers switch pronunciation by lang (the originals are German letters).
+  const lang = english && m.english ? "en" : (m.language ?? (m.english ? "de" : "en"));
   return (
     <div id={id} className="glass-inset rounded-xl border border-line p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -122,8 +124,10 @@ export function EmailPanel({ decision: d, id }: { decision: Decision; id: string
           </div>
         )}
       </div>
-      <p className="font-semibold">{text.subject}</p>
-      <p className="mt-2 whitespace-pre-line text-[13px]">{text.body}</p>
+      <div lang={lang}>
+        <p className="font-semibold">{text.subject}</p>
+        <p className="mt-2 whitespace-pre-line text-[13px]">{text.body}</p>
+      </div>
     </div>
   );
 }

@@ -69,7 +69,7 @@ export function ContractPage() {
           Reading the document…
         </p>
       )}
-      {upload.isError && <p className="mt-6 text-short">Couldn't read that file. Try a PDF or check that the backend is running.</p>}
+      {upload.isError && <p role="alert" className="mt-6 text-short">Couldn't read that file. Try a PDF or check that the backend is running.</p>}
 
       {result?.kind === "lease" && <LeaseResult r={result} />}
       {result?.kind === "contract" && <ContractResult sim={result} />}
@@ -123,6 +123,9 @@ function ContractResult({ sim }: { sim: ContractSimulation }) {
   const [english, setEnglish] = useState(false);
   const t = sim.extractedTerms;
   const msg = english && sim.counterProposal.english ? sim.counterProposal.english : sim.counterProposal;
+  // Screen readers switch pronunciation by lang (the original counter-proposal is German).
+  const msgLang =
+    english && sim.counterProposal.english ? "en" : (sim.counterProposal.language ?? (sim.counterProposal.english ? "de" : "en"));
 
   return (
     <div className="mt-10 space-y-10">
@@ -180,9 +183,9 @@ function ContractResult({ sim }: { sim: ContractSimulation }) {
         </div>
         <div className="liquid-glass-strong mt-4 rounded-3xl p-5">
           <p className="text-sm text-ink-soft">To: {sim.counterProposal.to}</p>
-          <p className="font-semibold">{msg.subject}</p>
+          <p className="font-semibold" lang={msgLang}>{msg.subject}</p>
           <label htmlFor="email-body" className="sr-only">Email text</label>
-          <textarea key={String(english)} id="email-body" className="glass-inset mt-3 h-56 w-full rounded-xl border border-line p-4" defaultValue={msg.body} />
+          <textarea key={String(english)} id="email-body" lang={msgLang} className="glass-inset mt-3 h-56 w-full rounded-xl border border-line p-4" defaultValue={msg.body} />
           <button
             className="btn-primary mt-4 h-10 rounded-full px-5 text-[14px] font-semibold"
             onClick={async () => {

@@ -7,12 +7,22 @@
     <title>Vero</title>
     <meta name="color-scheme" content="light dark" />
     <script>
-      // Apply the saved theme (or the system one) before the first paint, so the page never flashes.
+      // Apply the saved theme (or the system one) and the accessibility settings (src/lib/a11y.ts)
+      // before the first paint, so the page never flashes the default theme, text size or contrast.
       (function () {
+        var root = document.documentElement;
         var t = null;
         try { t = localStorage.getItem("vero-theme"); } catch (e) {}
         if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-        document.documentElement.dataset.theme = t;
+        root.dataset.theme = t;
+        try {
+          var a = JSON.parse(localStorage.getItem("vero-a11y") || "null") || {};
+          root.dataset.textSize = a.textSize === "large" || a.textSize === "xlarge" ? a.textSize : "normal";
+          if (a.highContrast === true) root.dataset.contrast = "high";
+          if (a.colorBlind === true) root.dataset.colorblind = "on";
+          if (a.reduceMotion === true) root.dataset.motion = "reduce";
+          root.dataset.keyboard = a.keyboard === true ? "on" : "off";
+        } catch (e) {}
       })();
     </script>
     <style>
