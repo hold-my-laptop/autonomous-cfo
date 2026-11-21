@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import {
   Area,
   Bar,
@@ -38,6 +38,42 @@ const COMPARE = "rgba(255,255,255,0.8)";
 const LABEL_INK = "#1b2547";
 const LABEL_MUTED = "#535a6e";
 const LABEL_SHORT = "#b3402b";
+const LABEL_GOOD = "#1f7a4a";
+const TIP_BORDER = "#e6e8ef";
+
+/** Recharts tooltip settings shared by both charts: no animation, no focus outline, may leave the chart vertically. */
+const TOOLTIP_PROPS = {
+  isAnimationActive: false,
+  offset: 14,
+  allowEscapeViewBox: { x: false, y: true },
+  wrapperStyle: { outline: "none", zIndex: 30 },
+} as const;
+
+const amountColor = (value: number) => (value < 0 ? LABEL_SHORT : LABEL_INK);
+
+/**
+ * Tooltip surface. Solid white with fixed colours, like the "Lowest" callout: the charts sit on the
+ * navy forecast card, whose glass tint would be inherited by a glass tooltip (navy text on navy),
+ * and a backdrop-filter inside another one renders empty.
+ */
+function TipCard({ minWidth, children }: { minWidth: number; children: ReactNode }) {
+  return (
+    <div
+      role="status"
+      className="rounded-xl p-3 text-xs"
+      style={{
+        minWidth,
+        background: "#ffffff",
+        color: LABEL_INK,
+        border: `1px solid ${TIP_BORDER}`,
+        boxShadow: "0 8px 24px rgb(15 26 53 / 0.28)",
+        pointerEvents: "none",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 const STATUS_LABEL: Record<RiskLevel, string> = {
   green: "Above your buffer",
@@ -93,45 +129,59 @@ function ForecastTooltip({ active, payload, compareLabel }: TooltipContentProps<
   const w = payload[0].payload as Row;
   const gap = w.balanceEur - w.bufferEur;
   return (
-    <div className="liquid-glass-strong min-w-60 rounded-xl p-3 text-xs text-ink">
+    <TipCard minWidth={240}>
       <p className="font-semibold">
         W{w.week} · week of {formatDate(w.startDate)}
-        {w.isActual && <span className="ml-1.5 font-medium text-ink-soft">(actual)</span>}
+        {w.isActual && (
+          <span className="ml-1.5 font-medium" style={{ color: LABEL_MUTED }}>
+            (actual)
+          </span>
+        )}
       </p>
-      <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 text-ink-soft">
+      <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1" style={{ color: LABEL_MUTED }}>
         <dt>Cash at end of week</dt>
-        <dd className={`num text-right font-semibold ${w.balanceEur < 0 ? "text-short" : "text-ink"}`}>{formatEurWhole(w.balanceEur)}</dd>
+        <dd className="num text-right font-semibold" style={{ color: amountColor(w.balanceEur) }}>
+          {formatEurWhole(w.balanceEur)}
+        </dd>
         {w.lowestEur !== undefined && w.lowestEur < w.balanceEur && (
           <>
             <dt>Lowest day</dt>
-            <dd className={`num text-right ${w.lowestEur < 0 ? "text-short" : "text-ink"}`}>{formatEurWhole(w.lowestEur)}</dd>
+            <dd className="num text-right" style={{ color: amountColor(w.lowestEur) }}>
+              {formatEurWhole(w.lowestEur)}
+            </dd>
           </>
         )}
         {(w.inflowEur !== 0 || w.outflowEur !== 0) && (
           <>
             <dt>Money in</dt>
-            <dd className="num text-right text-ink">{formatEurWhole(w.inflowEur)}</dd>
+            <dd className="num text-right" style={{ color: LABEL_INK }}>
+              {formatEurWhole(w.inflowEur)}
+            </dd>
             <dt>Money out</dt>
-            <dd className="num text-right text-ink">{formatEurWhole(-Math.abs(w.outflowEur))}</dd>
+            <dd className="num text-right" style={{ color: LABEL_INK }}>
+              {formatEurWhole(-Math.abs(w.outflowEur))}
+            </dd>
           </>
         )}
         <dt>vs safety buffer</dt>
-        <dd className={`num text-right font-medium ${gap < 0 ? "text-short" : "text-ink"}`}>
+        <dd className="num text-right font-medium" style={{ color: gap < 0 ? LABEL_SHORT : LABEL_GOOD }}>
           {gap >= 0 ? "+" : ""}
           {formatEurWhole(gap)}
         </dd>
         {w.compare !== undefined && (
           <>
             <dt>{compareLabel}</dt>
-            <dd className="num text-right text-ink">{formatEurWhole(w.compare)}</dd>
+            <dd className="num text-right" style={{ color: LABEL_INK }}>
+              {formatEurWhole(w.compare)}
+            </dd>
           </>
         )}
       </dl>
-      <p className="mt-2 flex items-center gap-1.5 border-t border-line pt-2 text-ink-soft">
+      <p className="mt-2 flex items-center gap-1.5 pt-2" style={{ color: LABEL_MUTED, borderTop: `1px solid ${TIP_BORDER}` }}>
         <span className="h-2 w-2 rounded-full" style={{ background: STATUS_DOT[w.status] }} aria-hidden="true" />
         {STATUS_LABEL[w.status]}
       </p>
-    </div>
+    </TipCard>
   );
 }
 
@@ -298,6 +348,7 @@ export function WeeklyCashChart({
                 width={58}
               />
               <Tooltip
+                {...TOOLTIP_PROPS}
                 cursor={{ fill: "rgba(255,255,255,0.06)" }}
                 content={(p) => <ForecastTooltip {...(p as TooltipContentProps<number, string>)} compareLabel={compareLabel} />}
               />
@@ -364,16 +415,24 @@ function DayTooltip({ active, payload }: TooltipContentProps<number, string>) {
   if (!active || !payload?.length) return null;
   const d = payload[0].payload as DayRow;
   return (
-    <div className="liquid-glass-strong min-w-52 rounded-xl p-3 text-xs text-ink">
+    <TipCard minWidth={208}>
       <p className="font-semibold">
         {weekday(d.date)} {formatDate(d.date)}
-        {d.actual && <span className="ml-1.5 font-medium text-ink-soft">(actual)</span>}
+        {d.actual && (
+          <span className="ml-1.5 font-medium" style={{ color: LABEL_MUTED }}>
+            (actual)
+          </span>
+        )}
       </p>
-      <p className={`num mt-1 text-[15px] font-semibold ${d.balanceEur < 0 ? "text-short" : "text-ink"}`}>{formatEurWhole(d.balanceEur)}</p>
+      <p className="num mt-1 text-[15px] font-semibold" style={{ color: amountColor(d.balanceEur) }}>
+        {formatEurWhole(d.balanceEur)}
+      </p>
       {d.lowEur !== undefined && d.highEur !== undefined && (
-        <p className="num mt-0.5 text-ink-soft">Likely {rangeText(d.lowEur, d.highEur)}</p>
+        <p className="num mt-0.5" style={{ color: LABEL_MUTED }}>
+          Likely {rangeText(d.lowEur, d.highEur)}
+        </p>
       )}
-    </div>
+    </TipCard>
   );
 }
 
@@ -495,6 +554,7 @@ export function CashChart({ days, weeks, bufferEur, today, lowest, height }: Dai
                 width={58}
               />
               <Tooltip
+                {...TOOLTIP_PROPS}
                 cursor={{ stroke: "rgb(255 255 255 / 0.4)", strokeWidth: 1 }}
                 content={(p) => <DayTooltip {...(p as TooltipContentProps<number, string>)} />}
               />
