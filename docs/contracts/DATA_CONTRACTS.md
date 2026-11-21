@@ -599,7 +599,7 @@ The backend owns data and logic. The AI service runs the agent: it **reads throu
 
 Callbacks go to the orchestrator of the run's kind (`CASH` or `PROOF`). Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`; so do callbacks for a Proof run that is still being read, before its investigation started. The completion shape must match the run's kind; the other shape is a `422 VALIDATION_ERROR`. A completion whose proposals have the wrong shape (e.g. `move` not an object `{ outflow_id, to_date }`) returns `422 VALIDATION_ERROR` and the run keeps its deadline. An answer the backend cannot apply falls back ("The model's answer could not be applied"). A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
 
-**Backend settings:** `AI_URL`, `INTERNAL_TOKEN` (agent mode is on only when it is set; otherwise runs are FALLBACK and synchronous), `AGENT_MAX_TOOL_CALLS` (8, Cash runs), `INVESTIGATION_MAX_TOOL_CALLS` (6, Proof runs), `INVESTIGATION_AGENT_ENABLED` (`false` by default: until the AI service has the investigation loop, an investigation ends at once without the agent, reason `AGENT_DISABLED`; the default becomes `true` in code when it ships; the variable stays as an off switch), `AGENT_DEADLINE_S` (60), `AGENT_START_TIMEOUT_S` (5), `EXPLAIN_TIMEOUT_S` (10), `MODEL_HEALTH_TIMEOUT_S` (20).
+**Backend settings:** `AI_URL`, `INTERNAL_TOKEN` (agent mode is on only when it is set; otherwise runs are FALLBACK and synchronous), `AGENT_MAX_TOOL_CALLS` (8, Cash runs), `INVESTIGATION_MAX_TOOL_CALLS` (6, Proof runs), `INVESTIGATION_AGENT_ENABLED` (`true`; `false` ends every investigation at once without the agent, reason `AGENT_DISABLED`), `AGENT_DEADLINE_S` (60), `AGENT_START_TIMEOUT_S` (5), `EXPLAIN_TIMEOUT_S` (10), `MODEL_HEALTH_TIMEOUT_S` (20).
 
 **MCP (bonus criterion, SHOULD):** the same tools are exposed as an **MCP server** at `http://api:8080/internal/mcp`, with identical names, schemas and results.
 
@@ -657,13 +657,13 @@ Response: `{ document_id, status: "OK" | "FAILED", errors[], pages[{ page, width
 | `event` | `{ type, label, payload }` | e.g. `CLOSURE_PLANNED`, "You plan to close 1–30 June"; `DOCUMENT_UPLOADED` with `{ document_id, filename, sha256 }` |
 | `company` | `{ name, as_of_date, currency }` | Prompt context |
 | `limits` | `{ max_tool_calls: int, deadline_s: int }` | Cash: 8 calls; Proof: 6 calls; 60 s |
+| `finding` | **ProofFinding**? | Proof runs only: the `UNEXPLAINED` finding to investigate, as `GET /findings/{id}` shows it (`status: INVESTIGATING`): counterparty, `cost_ref`, `document_id`, `period_from`, `impact { expected, billed, delta, bps }`, `differences[]` |
 | `investigation` | InvestigationStart? | Proof runs only |
 
 #### InvestigationStart *(Vero Proof)*
 
 | Field | Type | Description |
 |---|---|---|
-| `finding` | **ProofFinding** | The `UNEXPLAINED` finding to investigate, as `GET /findings/{id}` shows it (`status: INVESTIGATING`): counterparty, `cost_ref`, `document_id`, `period_from`, `impact { expected, billed, delta, bps }`, `differences[]` |
 | `cost_item` | **CostItem**? | What Cost Memory expects for `finding.cost_ref` (e.g. `RENT`: `expected_amount "380000"`, its sources). Values from here and from the finding count as sources for `compute` inputs (P11) |
 | `hypotheses` | string[] | The order the scripted fallback follows: `NOTICE`, `CLAUSE`, `REFERENCE_OR_PRICE_LIST`, `QUANTITY`. The agent may choose its own |
 

@@ -143,9 +143,10 @@ def test_agent_path() -> None:
         assert (payload["run_id"], payload["kind"]) == (run_id, "PROOF")
         assert payload["event"]["type"] == "DOCUMENT_UPLOADED"
         assert payload["limits"] == {"max_tool_calls": 6, "deadline_s": 60}
+        assert payload["finding"]["id"] == running["finding_ids"][0]
+        assert payload["finding"]["impact"]["billed"] == "410400"
+        assert payload["finding"]["status"] == "INVESTIGATING"
         investigation = payload["investigation"]
-        assert investigation["finding"]["id"] == running["finding_ids"][0]
-        assert investigation["finding"]["impact"]["billed"] == "410400"
         assert investigation["cost_item"]["cost_ref"] == "RENT"
         assert investigation["cost_item"]["expected_amount"] == "380000"
         assert investigation["hypotheses"] == [
@@ -268,7 +269,7 @@ def test_unreachable_ai_falls_back_at_once() -> None:
         assert labels(client, run_id)[-2] == "The AI service is unavailable: no reason found"
 
 
-def test_investigation_agent_switch_is_off_by_default() -> None:
+def test_investigation_agent_switch_turns_the_agent_off() -> None:
     ai = InvestigatingAI()
     with make_client(ai, investigation_agent_enabled=False) as client:
         run_id = start(client)
@@ -276,7 +277,7 @@ def test_investigation_agent_switch_is_off_by_default() -> None:
         assert ai.started == []
         assert run(client, run_id)["status"] == "SUCCEEDED"
         assert labels(client, run_id)[-2] == "The investigation agent is off: no reason found"
-    assert Settings().investigation_agent_enabled is False
+    assert Settings().investigation_agent_enabled is True
 
 
 def test_without_internal_token_the_upload_finishes_at_once() -> None:

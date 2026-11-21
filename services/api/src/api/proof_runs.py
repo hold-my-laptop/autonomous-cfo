@@ -434,8 +434,9 @@ def investigating(run: Run | None) -> UUID | None:
 
 
 def investigation_payload(state: DemoState, run: Run, settings: Settings) -> dict:
-    """What the AI service's investigation loop starts from: the finding as the API shows it,
-    what Cost Memory expects for that cost, the hypotheses in order and the limits."""
+    """What the AI service's investigation loop starts from: the finding as the API shows it
+    (top-level `finding`, where the loop reads it), what Cost Memory expects for that cost, the
+    hypotheses in order and the limits."""
     finding = state.findings[investigating(run)]
     event = next(e for e in state.events if e.id == run.event_id)
     cost_item = next((c for c in state.cost_memory if c.cost_ref == finding.cost_ref), None)
@@ -456,8 +457,8 @@ def investigation_payload(state: DemoState, run: Run, settings: Settings) -> dic
             "max_tool_calls": settings.investigation_max_tool_calls,
             "deadline_s": int(settings.agent_deadline_s),
         },
+        "finding": finding.model_dump(mode="json"),
         "investigation": {
-            "finding": finding.model_dump(mode="json"),
             "cost_item": CostItemOut.from_domain(cost_item).model_dump(mode="json")
             if cost_item
             else None,
