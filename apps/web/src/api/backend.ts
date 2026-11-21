@@ -231,3 +231,29 @@ export interface BeDocument extends BeDocumentSummary {
   /** Every printed value, e.g. ref "lines.l1.unit_price", text "12,90 €", with its box. */
   highlights: { ref: string; page: number; text: string; box: BeBox }[];
 }
+
+// ───────────────────────── Proof findings (GET /findings), the parts the Overview reads ─────────────────────────
+
+export type BeEvidenceKind =
+  | "DOCUMENT"
+  | "INVOICE_LINE"
+  | "PRICE_LIST_ITEM"
+  | "CLAUSE"
+  | "TRANSACTION"
+  | "EMAIL"
+  | "COST_ITEM"
+  | "REFERENCE_VALUE";
+
+export interface BeFinding {
+  id: string;
+  title: string;
+  kind: "INVOICE_PRICES" | "RECURRING_AMOUNT";
+  classification: "VERIFIED" | "UNEXPLAINED" | "CONFLICT";
+  escalated: boolean;
+  status: "INGESTED" | "EXTRACTED" | "CHECKED" | "INVESTIGATING" | "CLASSIFIED" | "PENDING_APPROVAL" | "RESOLVED";
+  counterparty: string;
+  impact: { currency: string; expected: Cents | null; billed: Cents | null; delta: Cents | null; bps: number | null } | null;
+  differences: { kind: string; description: string; explained: boolean; evidence: { kind: BeEvidenceKind }[] }[];
+  recommendation_ids: string[];
+  acknowledged_at: string | null;
+}

@@ -123,6 +123,8 @@ export interface Decision {
   id: string;
   agent: AgentId;
   autonomy: AutonomyLevel;
+  /** For analysis-only items from the real backend: what kind of observation it is. */
+  insightKind?: "DRIVER" | "RECURRING" | "FX_EXPOSURE" | "BACKTEST";
   execution: ExecutionMode;
   status: DecisionStatus;
   createdAt: ISODateTime;
@@ -218,6 +220,10 @@ export interface Forecast {
   overdraftLimitEur?: Eur;
   /** Only once actuals are known (after "Fast-forward"). */
   accuracy?: { weeksCompared: number; meanAbsErrorEur: Eur; meanAbsErrorPct: number };
+  /** Days below the floor (the safety buffer, or the overdraft limit when the floor is negative),
+   *  counting arranged credit. From the real backend; the mock leaves it out (computed on the page). */
+  daysBelowFloor?: number;
+  firstBreachDate?: ISODate;
 }
 
 // ───────────────────────── Contract check ─────────────────────────
@@ -528,3 +534,23 @@ export interface ChatResponse {
 // POST /api/v1/costs/findings/{finding_id}/approve  → Finding   (body: { actions: RecommendedAction["type"][] })
 // GET  /api/v1/events                               → text/event-stream of ServerEvent
 // POST /api/v1/demo/{scenario}                      → { ok: true }
+
+// ───────────────────────── Cost checks, summarised for the Overview ─────────────────────────
+
+/**
+ * One checked cost change (a bill or a recurring payment that differed from what Vero expected),
+ * reduced to what the Overview needs. From GET /findings (real) or the mock's findings.
+ */
+export interface CostCheck {
+  id: string;
+  title: string;            // "Asimex Wholesale Ltd: new prices on AS-72217"
+  counterparty: string;
+  /** matches: the change is explained; needs_evidence: no reason found yet; conflict: more than the contract allows. */
+  outcome: "matches" | "needs_evidence" | "conflict";
+  /** The owner has to look at it (a decision, missing evidence or a conflict). */
+  needsOwner: boolean;
+  /** Billed minus expected, in euros, when known. */
+  deltaEur?: Eur;
+  /** What the change was checked against: "price list", "email", "contract" … */
+  evidence: string[];
+}
