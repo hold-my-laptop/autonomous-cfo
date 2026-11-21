@@ -128,6 +128,65 @@ def chain_holds(log: list[dict]) -> bool:
     return True
 
 
+CASH_KINDS = ("RESCHEDULE_PAYMENT", "CREDIT_LINE")
+
+
+def closure_story(
+    client: TestClient, ai: AgentService, agent: bool, approve_credit: bool = True
+) -> dict:
+    """The Phase 1 demo's core with DESIGN.md's numbers: mandate v2, the closure 1–30 June,
+    CHF-06 moved within the mandate, the 20 000 € credit line proposed (and approved).
+    Returns the credit line recommendation."""
+    v2 = {
+        k: v
+        for k, v in client.get("/api/v1/mandate").json().items()
+        if k not in ("version", "status", "created_at", "activated_at", "paused")
+    } | {"act_alone_enabled": True, "note": "Act alone within the limits"}
+    assert post(client, "/mandate", v2)["version"] == 2
+    assert post(client, "/mandate/2/activate", {"expected_active_version": 1})["status"] == (
+        "ACTIVE"
+    )
+
+    version = client.get("/api/v1/company").json()["financial_version"]
+    started = post(
+        client,
+        "/events",
+        {
+            "type": "CLOSURE_PLANNED",
+            "expected_financial_version": version,
+            "payload": {"date_from": "2025-06-01", "date_to": "2025-06-30"},
+        },
+    )
+    if agent:
+        assert started["status"] == "RUNNING"
+        act_like_the_model(client, started["run_id"])
+    run = finished(client, started["run_id"])
+    assert (run["status"], run["mode"]) == ("SUCCEEDED", "AGENT" if agent else "FALLBACK")
+    cash_runs = [p["run_id"] for p in ai.started if p.get("kind", "CASH") == "CASH"]
+    assert cash_runs == ([started["run_id"]] if agent else [])
+
+    recommendations = [
+        r for r in client.get("/api/v1/recommendations").json() if r["kind"] in CASH_KINDS
+    ]
+    assert [(r["kind"], r["lane"], r["status"]) for r in recommendations] == [
+        ("RESCHEDULE_PAYMENT", "DONE_WITHIN_MANDATE", "EXECUTED"),
+        ("CREDIT_LINE", "NEEDS_APPROVAL", "PENDING"),
+    ]
+    move, credit = recommendations
+    assert (move["subject"]["ref"], move["subject"]["to_date"]) == ("CHF-06", "2025-07-30")
+    assert (credit["subject"]["amount"], credit["subject"]["available_from"]) == (
+        "2000000",
+        "2025-06-27",
+    )
+    assert summary(client) == S2
+    if approve_credit:
+        approved = post(client, f"/recommendations/{credit['id']}/approve")
+        assert approved["recommendation"]["status"] == "APPROVED_EXECUTED"
+        assert approved["forecast_summary"]["first_breach"] is None
+        assert summary(client)["first_breach"] is None
+    return credit
+
+
 @pytest.mark.parametrize("mode", ["FALLBACK", "AGENT"])
 def test_phase_1_demo_through_the_public_api(mode: str) -> None:
     agent = mode == "AGENT"
@@ -139,50 +198,7 @@ def test_phase_1_demo_through_the_public_api(mode: str) -> None:
         first_log = client.get("/api/v1/audit").json()
         assert len(first_log) == 1
 
-        v2 = {
-            k: v
-            for k, v in client.get("/api/v1/mandate").json().items()
-            if k not in ("version", "status", "created_at", "activated_at", "paused")
-        } | {"act_alone_enabled": True, "note": "Act alone within the limits"}
-        assert post(client, "/mandate", v2)["version"] == 2
-        assert post(client, "/mandate/2/activate", {"expected_active_version": 1})["status"] == (
-            "ACTIVE"
-        )
-
-        version = client.get("/api/v1/company").json()["financial_version"]
-        started = post(
-            client,
-            "/events",
-            {
-                "type": "CLOSURE_PLANNED",
-                "expected_financial_version": version,
-                "payload": {"date_from": "2025-06-01", "date_to": "2025-06-30"},
-            },
-        )
-        if agent:
-            assert started["status"] == "RUNNING"
-            act_like_the_model(client, started["run_id"])
-        run = finished(client, started["run_id"])
-        assert (run["status"], run["mode"]) == ("SUCCEEDED", mode)
-        assert [p["run_id"] for p in ai.started] == ([started["run_id"]] if agent else [])
-
-        recommendations = client.get("/api/v1/recommendations").json()
-        assert [(r["kind"], r["lane"], r["status"]) for r in recommendations] == [
-            ("RESCHEDULE_PAYMENT", "DONE_WITHIN_MANDATE", "EXECUTED"),
-            ("CREDIT_LINE", "NEEDS_APPROVAL", "PENDING"),
-        ]
-        move, credit = recommendations
-        assert (move["subject"]["ref"], move["subject"]["to_date"]) == ("CHF-06", "2025-07-30")
-        assert (credit["subject"]["amount"], credit["subject"]["available_from"]) == (
-            "2000000",
-            "2025-06-27",
-        )
-        assert summary(client) == S2
-
-        approved = post(client, f"/recommendations/{credit['id']}/approve")
-        assert approved["recommendation"]["status"] == "APPROVED_EXECUTED"
-        assert approved["forecast_summary"]["first_breach"] is None
-        assert summary(client)["first_breach"] is None
+        closure_story(client, ai, agent)
 
         payroll = next(
             o for o in client.get("/api/v1/outflows").json() if o["category"] == "PAYROLL"
