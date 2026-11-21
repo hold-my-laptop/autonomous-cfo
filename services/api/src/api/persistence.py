@@ -13,7 +13,7 @@ from datetime import date, datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import JSON, BigInteger, DateTime
+from sqlalchemy import JSON, BigInteger, DateTime, LargeBinary
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Field, Session, SQLModel, create_engine, delete, select
@@ -34,11 +34,13 @@ from api.domain.models import (
     RecommendationKind,
     RecommendationStatus,
     Run,
+    RunKind,
     RunMode,
     RunStatus,
     TraceStep,
 )
 from api.domain.proof.findings import ProofFinding
+from api.domain.proof.uploads import Upload
 from api.state import (
     BaseData,
     DemoState,
@@ -50,7 +52,7 @@ from api.state import (
 from api.statement_db import read_statement_table
 
 COMPANY_ROW_ID = 1
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 
 class SchemaMetaRow(SQLModel, table=True):
@@ -140,6 +142,9 @@ class RunRow(SQLModel, table=True):
     tool_log: dict[str, Any] | None = Field(default=None, sa_type=JSON)
     headline_source: str = "TEMPLATE"
     explain_request: dict[str, Any] | None = Field(default=None, sa_type=JSON)
+    kind: str = "CASH"
+    document_id: str | None = None
+    finding_ids: list[str] = Field(default_factory=list, sa_type=JSON)
 
 
 class OutflowChangeRow(SQLModel, table=True):
@@ -216,6 +221,25 @@ class ProofFindingRow(SQLModel, table=True):
     body: dict[str, Any] = Field(sa_type=JSON)
 
 
+class UploadRow(SQLModel, table=True):
+    """An uploaded document's record, as JSON. Its bytes are in DocumentFileRow."""
+
+    __tablename__ = "uploads"
+
+    document_id: str = Field(primary_key=True)
+    seq: int
+    body: dict[str, Any] = Field(sa_type=JSON)
+
+
+class DocumentFileRow(SQLModel, table=True):
+    """The PDF of an upload, read only when the file is asked for."""
+
+    __tablename__ = "document_files"
+
+    document_id: str = Field(primary_key=True)
+    content: bytes = Field(sa_type=LargeBinary)
+
+
 class IdempotencyRow(SQLModel, table=True):
     __tablename__ = "idempotency_keys"
 
@@ -236,6 +260,8 @@ _CHANGEABLE_TABLES = (
     ReceiptRow,
     AuditRow,
     ProofFindingRow,
+    UploadRow,
+    DocumentFileRow,
 )
 _ALL_TABLES = (SchemaMetaRow, CompanyStateRow, *_CHANGEABLE_TABLES)
 
@@ -365,6 +391,7 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
     receipts = session.exec(select(ReceiptRow).order_by(ReceiptRow.seq)).all()
     audit = session.exec(select(AuditRow).order_by(AuditRow.seq)).all()
     findings = session.exec(select(ProofFindingRow).order_by(ProofFindingRow.seq)).all()
+    uploads = session.exec(select(UploadRow).order_by(UploadRow.seq)).all()
     state = DemoState.from_base(
         base,
         [_mandate(r) for r in mandates],
@@ -410,6 +437,9 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
                 tool_log=r.tool_log,
                 headline_source=r.headline_source,
                 explain_request=r.explain_request,
+                kind=RunKind(r.kind),
+                document_id=r.document_id,
+                finding_ids=tuple(UUID(i) for i in r.finding_ids),
             )
             for r in runs
         },
@@ -436,6 +466,7 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
             for r in audit
         ],
         findings={r.id: ProofFinding.model_validate(r.body) for r in findings},
+        uploads={r.document_id: Upload.model_validate(r.body) for r in uploads},
     )
     state.outflows = [
         replace(o, scheduled_date=changes[o.id].scheduled_date, version=changes[o.id].version)
@@ -541,6 +572,9 @@ def _save(session: Session, state: DemoState) -> None:
                 tool_log=r.tool_log,
                 headline_source=r.headline_source,
                 explain_request=r.explain_request,
+                kind=r.kind.value,
+                document_id=r.document_id,
+                finding_ids=[str(f) for f in r.finding_ids],
             )
             for i, r in enumerate(state.runs.values())
         ],
@@ -584,6 +618,23 @@ def _save(session: Session, state: DemoState) -> None:
             for i, f in enumerate(state.findings.values())
         ],
     )
+    _sync(
+        session,
+        UploadRow,
+        [
+            UploadRow(document_id=u.document_id, seq=i, body=u.model_dump(mode="json"))
+            for i, u in enumerate(state.uploads.values())
+        ],
+    )
+    stored_files = set(session.exec(select(DocumentFileRow.document_id)).all())
+    for document_id in stored_files - set(state.uploads):
+        session.delete(session.get(DocumentFileRow, document_id))
+    session.add_all(
+        DocumentFileRow(document_id=d, content=c)
+        for d, c in state.new_files.items()
+        if d not in stored_files
+    )
+    state.new_files.clear()
 
     existing_keys = {row.key: row for row in session.exec(select(IdempotencyRow)).all()}
     for key, row in existing_keys.items():
@@ -737,3 +788,11 @@ class PostgresStateRepository:
             except BaseException:
                 session.rollback()
                 raise
+
+    def read_file(self, document_id: str) -> bytes | None:
+        try:
+            with Session(self._engine) as session:
+                row = session.get(DocumentFileRow, document_id)
+                return bytes(row.content) if row is not None else None
+        except OperationalError as exc:
+            raise StateNotLoadedError(f"database unavailable: {exc.orig}") from exc

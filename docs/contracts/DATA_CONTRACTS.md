@@ -226,7 +226,7 @@ One line of the agent's visible trace.
 | Field | Type | Description |
 |---|---|---|
 | `seq` | int | 1, 2, … |
-| `kind` | enum | `THINK`, `TOOL_CALL`, `TOOL_RESULT`, `POLICY`, `EXECUTE`, `SUMMARY`, `FALLBACK` |
+| `kind` | enum | `THINK`, `TOOL_CALL`, `TOOL_RESULT`, `POLICY`, `EXECUTE`, `SUMMARY`, `FALLBACK`; Proof runs also `RECEIVE`, `EXTRACT` (the model read the PDF, `source: AGENT`, `data.model`), `CHECK` |
 | `source` | enum | `AGENT` (the AI's own note) or `BACKEND` (tool calls, policy, execution) |
 | `label` | string | Plain-language line, e.g. "Recomputing your cash for the next 91 days" |
 | `tool` | string? | Tool name if it's a tool call |
@@ -279,7 +279,9 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | `VERSION_CONFLICT` | 409 | `expected_financial_version` / `expected_active_version` is stale; `current` has the latest |
 | `STALE_RECOMMENDATION` | 409 | Data changed since the recommendation was made |
 | `NOT_PENDING` | 409 | Recommendation already decided |
-| `RUN_IN_PROGRESS` | 409 | An agent run is still active (only one at a time) |
+| `RUN_IN_PROGRESS` | 409 | An agent run is still active (only one at a time, Cash and Proof together) |
+| `DOCUMENT_ALREADY_PROCESSED` | 409 | An upload of a file Vero already has (same SHA-256) |
+| `FILE_TOO_LARGE` | 413 | An upload above 5 MB |
 | `MANDATE_INVALID` | 422 | e.g. removing a protected category |
 | `IMPORT_INVALID` | 422 | Unreadable statement file |
 | `NOT_FOUND` / `METHOD_NOT_ALLOWED` | 404 / 405 | Unknown path or method |
@@ -326,6 +328,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | 24 | *(Vero Proof)* Changes Vero found | `GET /findings?classification=&status=` | **ProofFinding[]**, by the date they concern, oldest first |
 | 25 | *(Vero Proof)* One finding | `GET /findings/{id}` | **ProofFinding** |
 | 26 | *(Vero Proof)* Owner's tap on a quiet change | `POST /findings/{id}/acknowledge` (`Idempotency-Key`) | **ProofFinding** (`RESOLVED`, out of the digest). `409 NOT_PENDING` unless `quiet` and not yet acknowledged |
+| 27 | *(Vero Proof)* Upload a document | `POST /documents` (multipart `file`, a PDF of at most 5 MB, `Idempotency-Key`) | **202** `{ document_id, run_id, status }`. Poll `GET /runs/{run_id}` (kind `PROOF`): `RECEIVE` → `EXTRACT` (or `FALLBACK`) → `CHECK` → `SUMMARY`; the finding is in `finding_ids`. Errors: `409 RUN_IN_PROGRESS` and `409 DOCUMENT_ALREADY_PROCESSED` before anything is stored, `413 FILE_TOO_LARGE`, `422 VALIDATION_ERROR` (not a PDF, empty). A run that cannot read an unknown document ends `FAILED` with no finding; a demo document falls back to its stored values (`mode: FALLBACK`, reason in the trace) |
 
 ### 2.2 Data types
 
@@ -390,11 +393,14 @@ Statement imports (`POST /imports/bank-statement`) create a `STATEMENT_IMPORTED`
 | Field | Type | Description |
 |---|---|---|
 | `run_id` | UUID | |
+| `kind` | enum | `CASH` (Vero Cash) or `PROOF` (an uploaded document's check) |
+| `document_id` | string? | `PROOF`: the uploaded document |
+| `finding_ids` | UUID[] | `PROOF`: the findings it created |
 | `status` | enum | `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED` |
 | `mode` | enum | `AGENT` or `FALLBACK`. Show it |
 | `trigger` | `{ type, label }` | e.g. "You plan to close 1–30 June" |
 | `trace` | TraceStep[] | Grows while running |
-| `result` | RunResult? | When `SUCCEEDED` |
+| `result` | RunResult? | When finished. `PROOF` runs fill only `headline` (and `forecast_id` is null) |
 | `error` | Problem? | When `FAILED` |
 | `created_at`, `finished_at` | Timestamp, Timestamp? | |
 
@@ -578,6 +584,7 @@ The backend owns data and logic. The AI service runs the agent: it **reads throu
 | 2 | After policy + execution | `POST /v1/explain` with **ExplainRequest** | **ExplainResult** (sync) |
 | 3 | Health | `GET /health/live`, `GET /health/model` | `{ status }` / **ModelHealth** (+ `mode`) |
 | 4 | *(SHOULD)* Rules from a sentence | `POST /v1/mandate/draft` with `{ text, current: Mandate }` | **MandateDraftResult** |
+| 5 | *(Vero Proof)* A document was uploaded | `POST /v1/documents/extract` with **ExtractRequest** (`INTERNAL_TOKEN`, answered within 30 s) | **ExtractResponse**, or `422 { detail: { code, message } }` for an unreadable file (`NO_TEXT_LAYER` and the other codes in `services/ai/src/ai/extraction.py`) |
 
 **AI service → backend** (`http://api:8080/internal/v1` in the cluster)
 
@@ -615,6 +622,13 @@ Every call is **bound to a run** and answered from the state at the run's `finan
 *Phase 2 (Vero Proof) will add document tools here.*
 
 ### 3.3 Data types
+
+#### ExtractRequest / ExtractResponse *(Vero Proof)*
+Request: `{ document_id, filename, content_base64, known_counterparties: [{ id, name, aliases[] }] }`.
+
+Response: `{ document_id, status: "OK" | "FAILED", errors[], pages[{ page, width, height }], doc_type, counterparty, document_number, date, period{ from, to }, effective_from, currency, old_amount, new_amount, frequency, lines[{ description, quantity, unit, unit_price, vat_rate, net, gross }], totals{ net, vat, gross }, model }`. Every value is `{ value, source: { page, text, box } }` (null when not printed); `counterparty` also has `matched_id` (one of `known_counterparties`, or null). Values use §0's conventions: money in cents as a string, quantities and unit prices as Decimal, `vat_rate` in basis points, dates `YYYY-MM-DD`, `frequency` `MONTHLY`; boxes `[x0, y0, x1, y1]` in PDF points from the top-left.
+
+**The backend checks every answer again; its checks decide:** each value's `source.text` must read as the same value; net per line = quantity × unit price (half up); the lines add up to the net total; VAT per rate on the totals, ±1 cent per rate; gross = net + VAT exactly; `matched_id` only if the printed name contains that counterparty's name or an alias (no `matched_id`: stored without a check); the date not after `as_of`; invoices need a number and totals, rent adjustments `new_amount` and `effective_from`. Fallback reasons in the run trace: `AI_UNREACHABLE`, `DEADLINE_PASSED`, `UNREADABLE_DOCUMENT`, `INVALID_ANSWER`, `AGENT_DISABLED` (no `INTERNAL_TOKEN`), `SERVICE_RESTARTED`.
 
 #### AgentRunStart
 

@@ -1,16 +1,22 @@
+import hashlib
 from datetime import UTC, datetime
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Request, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, BackgroundTasks, File, Request, UploadFile, status
+from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel
 
 from api.audit import AuditActor, AuditAgent, record
-from api.deps import RepositoryDep, SettingsDep
+from api.deps import ProofDep, RepositoryDep, SettingsDep
+from api.domain.models import RunStatus
 from api.domain.proof.dataset import Document as FixtureDocument
 from api.domain.proof.findings import Classification, FindingStatus, ProofFinding
+from api.domain.proof.uploads import MAX_UPLOAD_BYTES
 from api.errors import ApiError, ErrorCode
 from api.idempotency import IdempotencyKeyDep, request_hash, run_idempotent
-from api.proof_schemas import CostItem, Document, DocumentSummary
+from api.proof_runs import REASON_DISABLED, Extraction, accept_upload, apply_extraction
+from api.proof_schemas import CostItem, Document, DocumentSummary, UploadAccepted
 from api.state import DemoState
 
 router = APIRouter(tags=["proof"])
@@ -29,8 +35,14 @@ def _visible(state: DemoState) -> list[FixtureDocument]:
     finding cites it (a mailbox attachment found by an investigation, an upload)."""
     if state.proof is None:
         return []
-    cited = _cited(state)
-    return [d for d in state.proof.documents if d.listed or d.id in cited]
+    shown = _cited(state) | set(state.uploads)
+    fixture = [d for d in state.proof.documents if d.listed or d.id in shown]
+    uploaded = [
+        u.document
+        for u in state.uploads.values()
+        if u.fixture_id is None and u.document is not None
+    ]
+    return fixture + uploaded
 
 
 def _find(state: DemoState, document_id: str) -> FixtureDocument:
@@ -75,9 +87,18 @@ def get_document(document_id: str, repository: RepositoryDep) -> Document:
 )
 def get_document_file(
     document_id: str, repository: RepositoryDep, settings: SettingsDep
-) -> FileResponse:
+) -> Response:
     with repository.read() as state:
         document = _find(state, document_id)
+        upload = state.uploads.get(document.id)
+    if upload is not None:
+        content = repository.read_file(document.id)
+        if content is not None:
+            return Response(
+                content,
+                media_type="application/pdf",
+                headers={"Content-Disposition": f'inline; filename="{document.id}.pdf"'},
+            )
     path = settings.proof_dataset_path.parent / "pdf" / f"{document.id}.pdf"
     if not path.is_file():
         raise ApiError(
@@ -155,3 +176,58 @@ def acknowledge_finding(
             return done
 
         return run_idempotent(state, key, request_hash("POST", request.url.path, None), apply)
+
+
+class _UploadFingerprint(BaseModel):
+    filename: str
+    sha256: str
+
+
+@router.post("/documents", status_code=status.HTTP_202_ACCEPTED)
+def upload_document(
+    file: Annotated[UploadFile, File(description="A PDF, at most 5 MB")],
+    key: IdempotencyKeyDep,
+    repository: RepositoryDep,
+    settings: SettingsDep,
+    proof: ProofDep,
+    request: Request,
+    background: BackgroundTasks,
+) -> UploadAccepted:
+    """Upload a document: Vero stores it and starts a Proof run that reads it (the model on
+    OpenShift AI), checks the values and runs CHECK. Poll GET /runs/{run_id}.
+
+    409 RUN_IN_PROGRESS while any run is in progress, 409 DOCUMENT_ALREADY_PROCESSED for a
+    file Vero already has, 413 FILE_TOO_LARGE above 5 MB, 422 for a file that is not a PDF."""
+    content = file.file.read(MAX_UPLOAD_BYTES + 1)
+    filename = (file.filename or "document.pdf").rsplit("/", 1)[-1][:200]
+    fingerprint = request_hash(
+        "POST",
+        request.url.path,
+        _UploadFingerprint(filename=filename, sha256=hashlib.sha256(content).hexdigest()),
+    )
+    started: list[UUID] = []
+    with repository.write() as state:
+
+        def apply() -> UploadAccepted:
+            now = datetime.now(UTC)
+            run = accept_upload(state, filename, content, now, settings.agent_enabled)
+            if settings.agent_enabled:
+                started.append(run.id)
+            else:
+                apply_extraction(
+                    state,
+                    run.id,
+                    Extraction(reason=REASON_DISABLED, detail="no INTERNAL_TOKEN"),
+                    now,
+                )
+            current = state.runs[run.id]
+            return UploadAccepted(
+                document_id=current.document_id or "",
+                run_id=current.id,
+                status="RUNNING" if current.status is RunStatus.RUNNING else current.status.value,
+            )
+
+        accepted = run_idempotent(state, key, fingerprint, apply)
+    for run_id in started:
+        background.add_task(proof.process, run_id)
+    return accepted

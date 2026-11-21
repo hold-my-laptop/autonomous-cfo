@@ -113,7 +113,7 @@ class PriceList(_Model):
 
 
 class RentAdjustment(_Model):
-    old_amount: Money
+    old_amount: Money | None = None
     new_amount: Money
     effective_from: date
     frequency: Literal["MONTHLY"]

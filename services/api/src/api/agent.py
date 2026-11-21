@@ -23,7 +23,7 @@ from api.decisions import (
     fall_back,
     finalize_agent_run,
 )
-from api.domain.models import Run, RunStatus, TraceStep
+from api.domain.models import Run, RunKind, RunStatus, TraceStep
 from api.explain import ExplainResult, settle
 from api.schemas import ModelHealth
 from api.state import DemoState, StateRepository
@@ -33,6 +33,19 @@ logger = logging.getLogger(__name__)
 
 class AgentUnavailableError(Exception):
     pass
+
+
+class AgentTimeoutError(AgentUnavailableError):
+    pass
+
+
+class ExtractionRefusedError(Exception):
+    """The AI service refused the file (422), e.g. NO_TEXT_LAYER."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(f"{code}: {message}")
+        self.code = code
+        self.message = message
 
 
 class RunClosedError(Exception):
@@ -47,6 +60,8 @@ class AgentClient(Protocol):
     def model_health(self) -> ModelHealth: ...
 
     def ask(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+
+    def extract(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
 
 class HttpAgentClient:
@@ -67,6 +82,8 @@ class HttpAgentClient:
             return httpx.post(
                 self._url(path), json=payload, headers=self._headers(), timeout=timeout
             )
+        except httpx.TimeoutException as exc:
+            raise AgentTimeoutError(f"no answer within {timeout:.0f} s") from exc
         except httpx.HTTPError as exc:
             raise AgentUnavailableError(str(exc)) from exc
 
@@ -92,6 +109,28 @@ class HttpAgentClient:
             return response.json()
         except ValueError as exc:
             raise AgentUnavailableError("unusable RAG answer") from exc
+
+    def extract(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """Structured values of a PDF. A 422 (unreadable file) raises ExtractionRefusedError;
+        any other failure AgentUnavailableError."""
+        response = self._post("/v1/documents/extract", payload, self._settings.extract_timeout_s)
+        if response.status_code == 422:
+            try:
+                detail = response.json().get("detail") or {}
+            except ValueError:
+                detail = {}
+            if isinstance(detail, dict) and detail.get("code"):
+                raise ExtractionRefusedError(str(detail["code"]), str(detail.get("message", "")))
+            raise AgentUnavailableError("AI service refused the request (422)")
+        if response.status_code != 200:
+            raise AgentUnavailableError(f"AI service answered {response.status_code}")
+        try:
+            answer = response.json()
+        except ValueError as exc:
+            raise AgentUnavailableError("unusable extraction answer") from exc
+        if not isinstance(answer, dict):
+            raise AgentUnavailableError("unusable extraction answer")
+        return answer
 
     def model_health(self) -> ModelHealth:
         """The AI service's own model check, passed through. When the AI service itself
@@ -173,8 +212,9 @@ class AgentOrchestrator:
         """Runs left RUNNING by a restart have lost their agent; finish them without it.
         Runs left FINALIZING only miss their texts."""
         with self._repository.read() as state:
-            running = [r.id for r in state.runs.values() if r.status is RunStatus.RUNNING]
-            finalizing = [r.id for r in state.runs.values() if r.status is RunStatus.FINALIZING]
+            cash = [r for r in state.runs.values() if r.kind is RunKind.CASH]
+            running = [r.id for r in cash if r.status is RunStatus.RUNNING]
+            finalizing = [r.id for r in cash if r.status is RunStatus.FINALIZING]
         for run_id in running:
             self.fall_back(run_id, FALLBACK_RESTARTED)
         for run_id in finalizing:

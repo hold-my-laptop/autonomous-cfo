@@ -160,6 +160,7 @@ class Outflow:
 class EventType(StrEnum):
     CLOSURE_PLANNED = "CLOSURE_PLANNED"
     RESCHEDULE_REQUESTED = "RESCHEDULE_REQUESTED"
+    DOCUMENT_UPLOADED = "DOCUMENT_UPLOADED"
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +183,13 @@ class RunStatus(StrEnum):
 class RunMode(StrEnum):
     AGENT = "AGENT"
     FALLBACK = "FALLBACK"
+
+
+class RunKind(StrEnum):
+    """CASH: Vero Cash's liquidity runs. PROOF: Vero Proof's document runs."""
+
+    CASH = "CASH"
+    PROOF = "PROOF"
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +224,9 @@ class Run:
     tool_log: dict | None = None
     headline_source: str = "TEMPLATE"
     explain_request: dict | None = None
+    kind: RunKind = RunKind.CASH
+    document_id: str | None = None
+    finding_ids: tuple[UUID, ...] = ()
 
 
 class RecommendationKind(StrEnum):

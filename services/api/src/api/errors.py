@@ -33,6 +33,8 @@ class ErrorCode(StrEnum):
     HTTP_ERROR = "HTTP_ERROR"
     UNAUTHORIZED = "UNAUTHORIZED"
     RUN_CLOSED = "RUN_CLOSED"
+    DOCUMENT_ALREADY_PROCESSED = "DOCUMENT_ALREADY_PROCESSED"
+    FILE_TOO_LARGE = "FILE_TOO_LARGE"
     INTERNAL_ERROR = "INTERNAL_ERROR"
 
 
@@ -53,6 +55,8 @@ _TITLES = {
     ErrorCode.HTTP_ERROR: "Request failed",
     ErrorCode.UNAUTHORIZED: "Missing or invalid internal token",
     ErrorCode.RUN_CLOSED: "The run is no longer running",
+    ErrorCode.DOCUMENT_ALREADY_PROCESSED: "This document was already processed",
+    ErrorCode.FILE_TOO_LARGE: "The file is too large",
     ErrorCode.INTERNAL_ERROR: "Something went wrong on our side",
 }
 

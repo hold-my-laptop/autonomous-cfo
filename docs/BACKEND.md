@@ -381,6 +381,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 - **Rent adjustments:** CHECK takes `new_amount` from `effective_from` as the billed amount for `RENT`.
 - **Preloaded documents** (load and reset) use their fixture values, with no model call: reset stays fast and deterministic.
 - **Model evaluation** (AI team's `test_extract_live.py`, skipped unless `LLM_BASE_URL` is set, plus offline tests with a scripted model): live extraction of every fixture PDF equals its fixture fields, lines, totals and boxes.
+- **As built:** the Proof run stops after CHECK until P10 adds the investigation; an UNEXPLAINED finding stays `CHECKED` with "the investigation looks for the reason next" in the trace. The same counterparty and document number found after extraction ends the run `FAILED` (upload status `DUPLICATE`): only the SHA-256 can be checked before storing. `SCHEMA_VERSION` 7 (tables `uploads`, `document_files`; runs gain `kind`, `document_id`, `finding_ids`).
 - **Done when**, with a fake AI service: a correct extraction of `doc_rent_adjustment_2025_06` (`new_amount` 410400 from 2025-06-01) creates the rent finding and starts the investigation; a value whose source text parses differently, VAT off by 2 cents on one rate, or a `matched_id` the printed name doesn't support is rejected → stored values and `FALLBACK` for the rent adjustment, `EXTRACTION_FAILED` for an unknown PDF; a 422 `NO_TEXT_LAYER` → `EXTRACTION_FAILED`; the same upload twice → 409.
 
 ## Milestone H: investigation

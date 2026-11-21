@@ -7,6 +7,7 @@ import time
 from api.agent import AgentOrchestrator
 from api.domain.importer import StatementImportError
 from api.domain.proof.dataset import ProofDatasetError
+from api.proof_runs import ProofPipeline
 from api.state import StateNotLoadedError, StateRepository
 
 logger = logging.getLogger(__name__)
@@ -19,10 +20,15 @@ class StateLoader:
     API becomes ready on its own when the database comes up after it."""
 
     def __init__(
-        self, repository: StateRepository, agent: AgentOrchestrator, retry_s: float
+        self,
+        repository: StateRepository,
+        agent: AgentOrchestrator,
+        retry_s: float,
+        proof: ProofPipeline | None = None,
     ) -> None:
         self._repository = repository
         self._agent = agent
+        self._proof = proof
         self._retry_s = retry_s
         self._lock = threading.Lock()
         self._loaded = False
@@ -46,6 +52,8 @@ class StateLoader:
             self._loaded = True
             logger.info("demo state loaded")
             self._agent.recover()
+            if self._proof is not None:
+                self._proof.recover()
             return True
 
     def ensure(self) -> None:
