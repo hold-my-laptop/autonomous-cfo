@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     internal_token: SecretStr | None = None
     agent_max_tool_calls: int = 8
     investigation_max_tool_calls: int = 6
+    investigation_agent_enabled: bool = False
     agent_deadline_s: float = 60.0
     agent_start_timeout_s: float = 5.0
     explain_timeout_s: float = 10.0

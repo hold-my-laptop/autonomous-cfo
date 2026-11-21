@@ -131,17 +131,21 @@ def test_correct_extraction_creates_the_rent_finding() -> None:
         assert payload["document_id"] == "doc_rent_adjustment_2025_06"
         assert payload["filename"] == "Mietanpassung.pdf"
         assert {c["id"] for c in payload["known_counterparties"]} >= {"cp_main_street"}
-        assert (run["kind"], run["status"], run["mode"]) == ("PROOF", "SUCCEEDED", "AGENT")
+        assert (run["kind"], run["status"], run["mode"]) == ("PROOF", "SUCCEEDED", "FALLBACK")
         assert run["document_id"] == "doc_rent_adjustment_2025_06"
         extract = next(s for s in run["trace"] if s["kind"] == "EXTRACT")
         assert (extract["source"], extract["data"]) == ("AGENT", {"model": "vero-llm"})
-        assert labels(run)[-2] == "Needs evidence: the investigation looks for the reason next"
+        assert labels(run)[-3:-1] == [
+            "Needs evidence: the investigation looks for the reason next",
+            "The investigation agent is off: no reason found",
+        ]
         finding = rent_finding(client, run)
-        assert (finding["classification"], finding["status"], finding["run_id"]) == (
-            "UNEXPLAINED",
-            "CHECKED",
-            run["run_id"],
-        )
+        assert (
+            finding["classification"],
+            finding["status"],
+            finding["escalated"],
+            finding["run_id"],
+        ) == ("UNEXPLAINED", "CLASSIFIED", True, run["run_id"])
         assert finding["impact"] | {"currency": "EUR"} == {
             "currency": "EUR",
             "expected": "380000",

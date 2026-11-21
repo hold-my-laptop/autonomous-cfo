@@ -1,20 +1,30 @@
-"""Proof runs for uploaded documents: receive → extract → check (docs/PROOF.md §5.2).
+"""Proof runs for uploaded documents: receive → extract → check → investigate (docs/PROOF.md
+§5.2).
 
 The upload is stored and its run starts in one transaction. The AI service reads the PDF
 outside any lock; the backend then validates the answer, falls back to the stored values of a
-demo document when the answer can't be used, and runs CHECK. The investigation of an
-UNEXPLAINED finding comes with the Proof run's next stage (P10)."""
+demo document when the answer can't be used, and runs CHECK. An UNEXPLAINED finding keeps the
+run RUNNING while the AI service's agent investigates it with the Proof tools, within the
+deadline; its answer, a failure, the deadline or a restart ends the investigation through
+`conclude_investigation`. A document gives at most one finding, so a run has at most one
+investigation."""
 
 import base64
 import hashlib
 import logging
+import threading
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import status
 
-from api.agent import AgentTimeoutError, AgentUnavailableError, ExtractionRefusedError
+from api.agent import (
+    AgentTimeoutError,
+    AgentUnavailableError,
+    ExtractionRefusedError,
+    RunClosedError,
+)
 from api.audit import AuditActor, AuditAgent, record
 from api.config import Settings
 from api.domain.models import Event, EventType, Run, RunKind, RunMode, RunStatus, TraceStep
@@ -29,6 +39,7 @@ from api.domain.proof.findings import (
 )
 from api.domain.proof.uploads import MAX_UPLOAD_BYTES, Upload, UploadStatus, ValuesSource
 from api.errors import ApiError, ErrorCode
+from api.proof_schemas import CostItem as CostItemOut
 from api.state import DemoState, StateRepository
 
 logger = logging.getLogger(__name__)
@@ -39,6 +50,8 @@ REASON_DEADLINE = "DEADLINE_PASSED"
 REASON_UNREADABLE = "UNREADABLE_DOCUMENT"
 REASON_INVALID = "INVALID_ANSWER"
 REASON_RESTARTED = "SERVICE_RESTARTED"
+REASON_DATA_CHANGED = "DATA_CHANGED"
+HYPOTHESES = ("NOTICE", "CLAUSE", "REFERENCE_OR_PRICE_LIST", "QUANTITY")
 _REASON_LABELS = {
     REASON_DISABLED: "Reading with the model is off",
     REASON_UNREACHABLE: "The AI service is unavailable",
@@ -46,6 +59,14 @@ _REASON_LABELS = {
     REASON_UNREADABLE: "The PDF cannot be read",
     REASON_INVALID: "The model's reading failed the checks",
     REASON_RESTARTED: "Vero restarted while reading it",
+}
+_INVESTIGATION_LABELS = {
+    REASON_DISABLED: "The investigation agent is off",
+    REASON_UNREACHABLE: "The AI service is unavailable",
+    REASON_DEADLINE: "The agent took too long",
+    REASON_INVALID: "The agent's answer could not be used",
+    REASON_RESTARTED: "Vero restarted during the investigation",
+    REASON_DATA_CHANGED: "Your data changed during the investigation",
 }
 
 
@@ -62,8 +83,16 @@ class _Trace:
     def __init__(self, run: Run) -> None:
         self.steps = list(run.trace)
 
-    def add(self, kind: str, label: str, at: datetime, data: dict | None = None) -> None:
-        source = "AGENT" if kind == "EXTRACT" and data and data.get("model") else "BACKEND"
+    def add(
+        self,
+        kind: str,
+        label: str,
+        at: datetime,
+        data: dict | None = None,
+        source: str | None = None,
+    ) -> None:
+        if source is None:
+            source = "AGENT" if kind == "EXTRACT" and data and data.get("model") else "BACKEND"
         self.steps.append(TraceStep(len(self.steps) + 1, kind, source, label, at, None, data))
 
 
@@ -367,19 +396,137 @@ def apply_extraction(state: DemoState, run_id: UUID, extraction: Extraction, now
     trace.add("CHECK", finding.history[-1].label, now, {"finding_id": str(finding.id)})
     if finding.classification is Classification.UNEXPLAINED:
         trace.add("CHECK", "Needs evidence: the investigation looks for the reason next", now)
+        state.findings[finding.id] = finding.advance(
+            now, FindingStatus.INVESTIGATING, "Looking for the reason"
+        )
+        state.uploads[upload.document_id] = upload
+        state.runs[run.id] = replace(
+            run,
+            mode=mode,
+            trace=tuple(trace.steps),
+            finding_ids=(finding.id,),
+            tool_log={"investigation": {"finding_id": str(finding.id)}},
+        )
+        return
+    _finish(
+        state,
+        run,
+        trace,
+        upload,
+        now,
+        f"{finding.title}: matches",
+        mode=mode,
+        findings=(finding.id,),
+    )
+
+
+def investigating(run: Run | None) -> UUID | None:
+    """The finding a RUNNING Proof run is investigating, if it got that far."""
+    if run is None or run.kind is not RunKind.PROOF or run.status is not RunStatus.RUNNING:
+        return None
+    investigation = (run.tool_log or {}).get("investigation")
+    return UUID(investigation["finding_id"]) if investigation else None
+
+
+def investigation_payload(state: DemoState, run: Run, settings: Settings) -> dict:
+    """What the AI service's investigation loop starts from: the finding as the API shows it,
+    what Cost Memory expects for that cost, the hypotheses in order and the limits."""
+    finding = state.findings[investigating(run)]
+    event = next(e for e in state.events if e.id == run.event_id)
+    cost_item = next((c for c in state.cost_memory if c.cost_ref == finding.cost_ref), None)
+    return {
+        "run_id": str(run.id),
+        "kind": RunKind.PROOF.value,
+        "event": {
+            "type": run.trigger_type.value,
+            "label": run.trigger_label,
+            "payload": event.payload,
+        },
+        "company": {
+            "name": state.company.name,
+            "as_of_date": state.as_of.isoformat(),
+            "currency": state.company.currency,
+        },
+        "limits": {
+            "max_tool_calls": settings.investigation_max_tool_calls,
+            "deadline_s": int(settings.agent_deadline_s),
+        },
+        "investigation": {
+            "finding": finding.model_dump(mode="json"),
+            "cost_item": CostItemOut.from_domain(cost_item).model_dump(mode="json")
+            if cost_item
+            else None,
+            "hypotheses": list(HYPOTHESES),
+        },
+    }
+
+
+def conclude_investigation(
+    state: DemoState,
+    run_id: UUID,
+    now: datetime,
+    completion: dict | None = None,
+    reason: str | None = None,
+) -> None:
+    """End the run's investigation with the agent's completion, or without the agent for
+    `reason`. The backend sets the label: the agent's answer is kept on the run for the
+    grounding check (P11), and until that check exists the finding stays UNEXPLAINED; without
+    the agent it is escalated until the scripted investigation (P12) takes over."""
+    run = state.runs.get(run_id)
+    finding_id = investigating(run)
+    if finding_id is None:
+        return
+    finding = state.findings[finding_id]
+    trace = _Trace(run)
+    upload = state.uploads[run.document_id]
+    if completion is not None:
+        note = " ".join(completion["explanation"].split())[:300]
+        trace.add(
+            "INVESTIGATE",
+            f"Vero's note: {note}",
+            now,
+            {
+                key: completion.get(key)
+                for key in ("classification", "compute_call_id", "evidence_refs", "model")
+            },
+            source="AGENT",
+        )
+        trace.add("INVESTIGATE", "The answer is not confirmed yet: still needs evidence", now)
+        finding = finding.advance(
+            now,
+            FindingStatus.CLASSIFIED,
+            "Investigated: the reason is not confirmed yet",
+            Classification.UNEXPLAINED,
+        )
         headline = f"{finding.title}: needs evidence"
+        mode = run.mode
+        run = replace(run, tool_log=(run.tool_log or {}) | {"completion": completion})
     else:
-        headline = f"{finding.title}: matches"
+        label = _INVESTIGATION_LABELS.get(reason or "", f"The agent stopped ({reason})")
+        trace.add("FALLBACK", f"{label}: no reason found", now, {"reason": reason})
+        finding = finding.advance(
+            now,
+            FindingStatus.CLASSIFIED,
+            "No reason found: needs your review",
+            Classification.UNEXPLAINED,
+            escalated=True,
+        )
+        headline = f"{finding.title}: needs your review"
+        mode = RunMode.FALLBACK
+    state.findings[finding.id] = finding
     _finish(state, run, trace, upload, now, headline, mode=mode, findings=(finding.id,))
 
 
 class ProofPipeline:
-    """Runs the extraction for uploads, outside any transaction."""
+    """Runs the extraction for uploads outside any transaction, then hands an UNEXPLAINED
+    finding to the AI service's investigation loop and watches its deadline."""
 
     def __init__(self, repository: StateRepository, settings: Settings, client) -> None:
         self._repository = repository
         self._settings = settings
         self._client = client
+        self._timers: dict[UUID, threading.Timer] = {}
+        self._lock = threading.Lock()
 
     def process(self, run_id: UUID) -> None:
         with self._repository.read() as state:
@@ -394,6 +541,7 @@ class ProofPipeline:
         extraction = self._extract(payload)
         with self._repository.write() as state:
             apply_extraction(state, run_id, extraction, datetime.now(UTC))
+        self.investigate(run_id)
 
     def _extract(self, payload: dict | None) -> Extraction:
         if payload is None:
@@ -408,8 +556,107 @@ class ProofPipeline:
             logger.warning("extraction unavailable: %s", exc)
             return Extraction(reason=REASON_UNREACHABLE, detail=str(exc))
 
+    def investigate(self, run_id: UUID) -> None:
+        """Start the agent on the run's finding, if CHECK left one to investigate."""
+        with self._repository.read() as state:
+            run = state.runs.get(run_id)
+            if investigating(run) is None:
+                return
+            payload = None
+            if self._settings.agent_enabled and self._settings.investigation_agent_enabled:
+                payload = investigation_payload(state, run, self._settings)
+        if payload is None:
+            self.fall_back(run_id, REASON_DISABLED)
+            return
+        with self._repository.write() as state:
+            run = state.runs.get(run_id)
+            if investigating(run) is None:
+                return
+            trace = _Trace(run)
+            trace.add(
+                "INVESTIGATE",
+                "Vero's agent looks for the reason: letters, contracts, reference values "
+                f"(at most {self._settings.investigation_max_tool_calls} look-ups)",
+                datetime.now(UTC),
+            )
+            state.runs[run_id] = replace(run, trace=tuple(trace.steps))
+        timer = threading.Timer(
+            self._settings.agent_deadline_s, self.fall_back, args=(run_id, REASON_DEADLINE)
+        )
+        timer.daemon = True
+        with self._lock:
+            self._timers[run_id] = timer
+        timer.start()
+        try:
+            self._client.start_run(payload)
+        except AgentUnavailableError as exc:
+            logger.warning("investigation agent unavailable for run %s: %s", run_id, exc)
+            self.fall_back(run_id, REASON_UNREACHABLE)
+
+    def fall_back(self, run_id: UUID, reason: str) -> None:
+        """End the investigation without the agent; a no-op once the run has finished."""
+        logger.warning("investigation of run %s ends without the agent: %s", run_id, reason)
+        with self._repository.write() as state:
+            conclude_investigation(state, run_id, datetime.now(UTC), reason=reason)
+        self._stop_timer(run_id)
+
+    def _callback(self, run_id: UUID, apply) -> None:
+        """Apply an agent callback to a run that is investigating. The deadline stays armed
+        until the change is stored, and a callback that can't be applied falls back."""
+        try:
+            with self._repository.write() as state:
+                run = state.runs.get(run_id)
+                if investigating(run) is None:
+                    raise RunClosedError(f"run {run_id} is not investigating")
+                apply(state, run)
+        except RunClosedError:
+            raise
+        except Exception:
+            logger.exception("could not apply the agent's callback for run %s", run_id)
+            self.fall_back(run_id, REASON_INVALID)
+            return
+
+    def note(self, run_id: UUID, text: str) -> None:
+        def apply(state: DemoState, run: Run) -> None:
+            trace = _Trace(run)
+            trace.add("THINK", text[:500], datetime.now(UTC), source="AGENT")
+            state.runs[run_id] = replace(run, trace=tuple(trace.steps))
+
+        self._callback(run_id, apply)
+
+    def complete(self, run_id: UUID, completion: dict) -> None:
+        def apply(state: DemoState, run: Run) -> None:
+            now = datetime.now(UTC)
+            if state.financial_version != run.started_financial_version:
+                conclude_investigation(state, run_id, now, reason=REASON_DATA_CHANGED)
+            else:
+                conclude_investigation(state, run_id, now, completion=completion)
+
+        self._callback(run_id, apply)
+        self._stop_timer(run_id)
+
+    def fail(self, run_id: UUID, reason: str) -> None:
+        def apply(state: DemoState, run: Run) -> None:
+            conclude_investigation(state, run_id, datetime.now(UTC), reason=reason[:100])
+
+        self._callback(run_id, apply)
+        self._stop_timer(run_id)
+
+    def _stop_timer(self, run_id: UUID) -> None:
+        with self._lock:
+            timer = self._timers.pop(run_id, None)
+        if timer is not None:
+            timer.cancel()
+
+    def close(self) -> None:
+        with self._lock:
+            run_ids = list(self._timers)
+        for run_id in run_ids:
+            self._stop_timer(run_id)
+
     def recover(self) -> None:
-        """Uploads left reading by a restart finish without the model."""
+        """Runs left RUNNING by a restart finish without the model: an upload being read
+        uses the stored values of a demo document, an investigation ends without the agent."""
         with self._repository.read() as state:
             running = [
                 r.id
@@ -418,6 +665,7 @@ class ProofPipeline:
             ]
         for run_id in running:
             with self._repository.write() as state:
-                apply_extraction(
-                    state, run_id, Extraction(reason=REASON_RESTARTED), datetime.now(UTC)
-                )
+                now = datetime.now(UTC)
+                if investigating(state.runs[run_id]) is None:
+                    apply_extraction(state, run_id, Extraction(reason=REASON_RESTARTED), now)
+                conclude_investigation(state, run_id, now, reason=REASON_RESTARTED)

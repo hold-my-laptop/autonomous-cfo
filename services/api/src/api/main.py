@@ -53,6 +53,7 @@ def create_app(
         app.state.loader.load()
         yield
         app.state.agent.close()
+        app.state.proof.close()
         app.state.repository.close()
 
     app = FastAPI(

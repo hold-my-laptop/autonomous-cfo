@@ -3,12 +3,14 @@ from datetime import UTC, date, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, status
-from pydantic import BaseModel, ConfigDict, Field
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, Header, status
+from fastapi.exceptions import RequestValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from api.agent import RunClosedError
-from api.deps import AgentDep, RepositoryDep, SettingsDep
+from api.deps import AgentDep, ProofDep, RepositoryDep, SettingsDep
 from api.domain.models import RunKind
+from api.domain.proof.findings import Classification
 from api.errors import ApiError, ErrorCode
 from api.money import Money
 from api.tools import call_tool, tool_specs
@@ -122,6 +124,24 @@ class CompletionIn(BaseModel):
     tool_calls: int | None = None
 
 
+class InvestigationCompletionIn(BaseModel):
+    """A Proof investigation's answer (`submit_finding`). The label is only a proposal: the
+    backend checks the citations and the `compute` call it names, and sets the label."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    classification: Classification
+    compute_call_id: str | None = Field(default=None, max_length=200)
+    evidence_refs: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        default_factory=list, max_length=20
+    )
+    explanation: str = Field(min_length=1, max_length=2000)
+    letter_draft: str | None = Field(default=None, max_length=5000)
+    model: str | None = Field(default=None, max_length=200)
+    prompt_version: str | None = Field(default=None, max_length=200)
+    tool_calls: int | None = Field(default=None, ge=0)
+
+
 class FailureIn(BaseModel):
     reason: str = Field(min_length=1, max_length=200)
     detail: str | None = Field(default=None, max_length=500)
@@ -131,29 +151,73 @@ def _closed(exc: RunClosedError) -> ApiError:
     return ApiError(status.HTTP_409_CONFLICT, ErrorCode.RUN_CLOSED, str(exc))
 
 
-@router.post("/runs/{run_id}/notes", status_code=status.HTTP_204_NO_CONTENT)
-def add_note(run_id: UUID, body: NoteIn, agent: AgentDep) -> None:
+def _kind(repository, run_id: UUID) -> RunKind:
+    """A callback goes to the orchestrator of its run's kind; an unknown run is answered by
+    the Cash orchestrator with RUN_CLOSED."""
+    with repository.read() as state:
+        run = state.runs.get(run_id)
+    return run.kind if run else RunKind.CASH
+
+
+def _parse[M: BaseModel](model: type[M], body: dict[str, Any]) -> M:
     try:
-        agent.note(run_id, body.text)
+        return model.model_validate(body)
+    except ValidationError as exc:
+        raise RequestValidationError(
+            [e | {"loc": ("body", *e["loc"])} for e in exc.errors(include_url=False)]
+        ) from exc
+
+
+@router.post("/runs/{run_id}/notes", status_code=status.HTTP_204_NO_CONTENT)
+def add_note(
+    run_id: UUID, body: NoteIn, agent: AgentDep, proof: ProofDep, repository: RepositoryDep
+) -> None:
+    try:
+        if _kind(repository, run_id) is RunKind.PROOF:
+            proof.note(run_id, body.text)
+        else:
+            agent.note(run_id, body.text)
     except RunClosedError as exc:
         raise _closed(exc) from exc
 
 
 @router.post("/runs/{run_id}/complete", status_code=status.HTTP_204_NO_CONTENT)
 def complete_run(
-    run_id: UUID, body: CompletionIn, agent: AgentDep, background: BackgroundTasks
+    run_id: UUID,
+    body: Annotated[dict[str, Any], Body()],
+    agent: AgentDep,
+    proof: ProofDep,
+    repository: RepositoryDep,
+    background: BackgroundTasks,
 ) -> None:
-    """The texts are asked for after the response, so the agent is not kept waiting."""
+    """A Cash run sends CompletionIn, a Proof investigation InvestigationCompletionIn; the
+    wrong shape for the run's kind is a 422. A Cash run's texts are asked for after the
+    response, so the agent is not kept waiting."""
     try:
-        agent.complete(run_id, body.model_dump(mode="json"))
+        if _kind(repository, run_id) is RunKind.PROOF:
+            answer = _parse(InvestigationCompletionIn, body)
+            proof.complete(run_id, answer.model_dump(mode="json"))
+            return
+        completion = _parse(CompletionIn, body)
+        agent.complete(run_id, completion.model_dump(mode="json"))
     except RunClosedError as exc:
         raise _closed(exc) from exc
     background.add_task(agent.explain, run_id)
 
 
 @router.post("/runs/{run_id}/fail", status_code=status.HTTP_204_NO_CONTENT)
-def fail_run(run_id: UUID, body: FailureIn, agent: AgentDep, background: BackgroundTasks) -> None:
+def fail_run(
+    run_id: UUID,
+    body: FailureIn,
+    agent: AgentDep,
+    proof: ProofDep,
+    repository: RepositoryDep,
+    background: BackgroundTasks,
+) -> None:
     try:
+        if _kind(repository, run_id) is RunKind.PROOF:
+            proof.fail(run_id, body.reason)
+            return
         agent.fail(run_id, body.reason)
     except RunClosedError as exc:
         raise _closed(exc) from exc
