@@ -111,6 +111,8 @@ class StubLLM:
         if json_schema:  # explain: let the template path do the work
             return LLMReply(content="{}")
         offered = {t["function"]["name"] for t in (tools or [])}
+        if "submit_finding" in offered:  # no stub investigation: the backend's scripted one decides
+            return LLMReply(content="Stub mode does not investigate.")
         names_by_id: dict[str, str] = {}
         results: dict[str, Any] = {}
         for m in messages:

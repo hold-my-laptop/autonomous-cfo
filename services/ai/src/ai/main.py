@@ -3,7 +3,8 @@
 Endpoints
   GET  /health/live, /health  cheap liveness (no model call)
   GET  /health/model          deep check: can we reach the model?
-  POST /v1/agent/runs         start an agent run (202; works in the background)
+  POST /v1/agent/runs         start an agent run (202, background): Cash agent, or with
+                              kind PROOF an investigation of one finding (submit_finding)
   POST /v1/explain            plain-language texts for recommendations
   POST /v1/documents/extract  invoice/notice PDF -> structured fields with sources (internal, token)
   POST /v1/documents/text     PDF / image / text upload -> plain text, OCR for scans (internal, token)
@@ -28,6 +29,7 @@ from .config import Settings, get_settings
 from .documents import MAX_BYTES, DocumentError, read_document_async
 from .extraction import ExtractError, ExtractRequest, ExtractResponse, extract
 from .explain import explain
+from .investigation import run_investigation
 from .llm import LLM, build_llm
 from .rag import AskRequest, AskResponse
 from .rag import answer as rag_answer
@@ -143,8 +145,10 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None, backend
 
 
 async def _guarded(start: AgentRunStart, llm: LLM, backend: Backend, settings: Settings) -> None:
+    """A Proof run investigates one finding; every other run is the Cash agent."""
+    run = run_investigation if start.kind == "PROOF" else run_agent
     try:
-        await run_agent(start, llm, backend, settings)
+        await run(start, llm, backend, settings)
     except Exception:  # noqa: BLE001 - never crash the service; backend deadline -> FALLBACK
         log.exception("run %s crashed", start.run_id)
 

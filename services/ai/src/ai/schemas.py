@@ -29,10 +29,15 @@ class RunLimits(_Open):
 
 
 class AgentRunStart(_Open):
+    """`kind` CASH starts the liquidity agent, PROOF an investigation of one finding (P10);
+    `finding` carries that finding's facts (counterparty, cost_ref, amounts, document, differences)."""
+
     run_id: str
     event: RunEvent
     company: RunCompany = RunCompany()
     limits: RunLimits = RunLimits()
+    kind: Literal["CASH", "PROOF"] = "CASH"
+    finding: dict[str, Any] = {}
 
 
 class ToolSpec(_Open):
@@ -74,6 +79,23 @@ class Proposal(_Open):
 class AgentCompletion(_Open):
     proposals: list[Proposal]
     summary_note: str | None = None
+    model: str
+    prompt_version: str
+    tool_calls: int
+
+
+Classification = Literal["VERIFIED", "UNEXPLAINED", "CONFLICT"]
+
+
+class InvestigationCompletion(_Open):
+    """POST /runs/{id}/complete for an investigation (docs/BACKEND.md P10). The backend checks
+    the citations, recomputes `compute_call_id`'s formula and sets the final label (P11)."""
+
+    classification: Classification
+    compute_call_id: str | None = None
+    evidence_refs: list[str]
+    explanation: str
+    letter_draft: str | None = None
     model: str
     prompt_version: str
     tool_calls: int

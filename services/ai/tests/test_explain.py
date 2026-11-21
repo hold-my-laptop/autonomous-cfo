@@ -68,3 +68,17 @@ def test_broken_json_falls_back(settings):
         async def chat(self, *a, **k):
             return LLMReply(content="not json")
     assert go(Broken({}), settings).source == "TEMPLATE"
+
+
+def test_number_tokens_do_not_merge_across_comma_and_space():
+    from ai.explain import NUMBER
+    assert NUMBER.findall("due on 1 June 2025, 3,800 € to the landlord") == ["1", "2025", "3,800"]
+    assert NUMBER.findall("-3 800,00 € and 22,760.82 € and -5.000 €") == ["3 800,00", "22,760.82", "5.000"]
+    assert NUMBER.findall("in 1 2025 3.80") == ["1", "2025", "3.80"]
+
+
+def test_template_for_an_unknown_kind_does_not_print_none():
+    from ai.explain import ExplainItem, build_facts, template
+    req = ExplainRequest(run_id="r", items=[ExplainItem(recommendation_id="x", kind="SOMETHING_NEW", lane="NEEDS_APPROVAL")])
+    text = template(req, build_facts(req), "test").items[0].text
+    assert "None" not in text and text.startswith("Vero suggests: something new.")

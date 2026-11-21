@@ -5,9 +5,10 @@ import logging
 from typing import Any, Protocol
 
 import httpx
+from pydantic import BaseModel
 
 from .config import Settings
-from .schemas import AgentCompletion, ToolError, ToolResult, ToolSpec
+from .schemas import ToolError, ToolResult, ToolSpec
 
 log = logging.getLogger("ai.backend")
 
@@ -17,10 +18,10 @@ class BackendUnavailable(Exception):
 
 
 class Backend(Protocol):
-    async def list_tools(self) -> list[ToolSpec]: ...
+    async def list_tools(self, run_id: str | None = None) -> list[ToolSpec]: ...
     async def call_tool(self, name: str, run_id: str, arguments: dict[str, Any], call_id: str) -> ToolResult: ...
     async def note(self, run_id: str, text: str) -> None: ...
-    async def complete(self, run_id: str, completion: AgentCompletion) -> None: ...
+    async def complete(self, run_id: str, completion: BaseModel) -> None: ...
     async def fail(self, run_id: str, reason: str, detail: str | None = None) -> None: ...
 
 
@@ -45,8 +46,9 @@ class HttpBackend:
         except httpx.HTTPError as e:
             raise BackendUnavailable(f"{method} {path}: {e}") from e
 
-    async def list_tools(self) -> list[ToolSpec]:
-        r = await self._send("GET", "/tools")
+    async def list_tools(self, run_id: str | None = None) -> list[ToolSpec]:
+        """The tools of that run's kind (Cash or Proof); without a run: the Cash tools."""
+        r = await self._send("GET", "/tools", params={"run_id": run_id} if run_id else None)
         r.raise_for_status()
         return [ToolSpec.model_validate(t) for t in r.json()]
 

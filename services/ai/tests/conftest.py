@@ -31,7 +31,8 @@ class FakeBackend:
         self.failed = None
         self.stale_after: int | None = None
 
-    async def list_tools(self):
+    async def list_tools(self, run_id=None):
+        self.listed_for = run_id
         return [ToolSpec(name=n, description=f"{n} tool", input_schema={"type": "object", "properties": {}})
                 for n in ("get_mandate", "get_forecast", "find_reschedule_options", "simulate_moves",
                           "size_credit_line", "get_fx_exposure", "check_policy")]
