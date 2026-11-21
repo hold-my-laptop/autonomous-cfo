@@ -253,8 +253,8 @@ export function TodayPage() {
         )}
       </section>
 
-      {/* Hero: full-width forecast, then what needs you */}
-      <div className="space-y-4">
+      {/* Hero: full-width forecast */}
+      <div>
         <section aria-labelledby="chart-h" className="liquid-glass liquid-navy min-w-0 rounded-3xl p-5 text-on-hero sm:p-7">
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div>
@@ -284,22 +284,23 @@ export function TodayPage() {
             )}
           </div>
         </section>
-
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          {decisions.isError ? (
-            <p className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load your items. Check that the backend is running.</p>
-          ) : needsOk[0] ? (
-            <NeedsOkSummary d={needsOk[0]} more={needsOk.length - 1} />
-          ) : decisions.data ? (
-            <AllClearSummary suggestion={suggestions[0]} />
-          ) : (
-            <div className="h-28 animate-pulse rounded-3xl bg-sunk" />
-          )}
-          <CheckedCard at={f?.generatedAt} />
-        </div>
       </div>
 
       {f && company && <Summary company={company} f={f} />}
+
+      {/* What needs you, and when Vero last checked */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        {decisions.isError ? (
+          <p className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load your items. Check that the backend is running.</p>
+        ) : needsOk[0] ? (
+          <NeedsOkSummary d={needsOk[0]} more={needsOk.length - 1} />
+        ) : decisions.data ? (
+          <AllClearSummary suggestion={suggestions[0]} />
+        ) : (
+          <div className="h-28 animate-pulse rounded-3xl bg-sunk" />
+        )}
+        <CheckedCard at={f?.generatedAt} />
+      </div>
 
       {/* Needs your OK */}
       {needsOk.length > 0 && (
