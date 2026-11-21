@@ -179,7 +179,7 @@ function Summary({ company, f }: { company: Company; f: Forecast }) {
       alert: negWeeks > 0,
       sub: negWeeks ? `First: week of ${formatDate(f.firstShortDate!)}` : "None in the next 13 weeks",
     },
-    { label: "Safety buffer", value: formatEurWhole(buffer), sub: "The minimum you want to keep (demo value)" },
+    { label: "Safety buffer", value: formatEurWhole(buffer), sub: "Minimum you want to keep" },
     {
       label: "Overdraft facility",
       value: f.overdraftLimitEur ? formatEurWhole(f.overdraftLimitEur) : "None",
@@ -188,17 +188,17 @@ function Summary({ company, f }: { company: Company; f: Forecast }) {
   ];
   return (
     <section aria-labelledby="sum-h">
-      <h2 id="sum-h" className="mb-3 text-[15px] font-semibold">Next 13 weeks</h2>
+      <h2 id="sum-h" className="mb-2 text-[15px] font-semibold">Next 13 weeks</h2>
       <dl className="liquid-glass-strong grid grid-cols-2 rounded-3xl lg:grid-cols-4">
         {cells.map((c, i) => (
           <div
             key={c.label}
-            className={`border-line px-5 py-4 sm:px-6 sm:py-5 ${i % 2 ? "border-l" : ""} ${i > 1 ? "border-t lg:border-t-0" : ""} ${
+            className={`border-line px-5 py-3 sm:px-6 sm:py-4 ${i % 2 ? "border-l" : ""} ${i > 1 ? "border-t lg:border-t-0" : ""} ${
               i === 2 ? "lg:border-l" : ""
             }`}
           >
             <dt className="text-xs text-ink-soft">{c.label}</dt>
-            <dd className={`num tight mt-1 text-2xl font-semibold ${c.alert ? "text-short" : ""}`}>{c.value}</dd>
+            <dd className={`num tight mt-0.5 text-[22px] font-semibold ${c.alert ? "text-short" : ""}`}>{c.value}</dd>
             <dd className="mt-0.5 text-xs text-ink-soft">{c.sub}</dd>
           </div>
         ))}
@@ -232,6 +232,8 @@ export function TodayPage() {
 
   return (
     <div className="space-y-10">
+      {/* First screen: headline, forecast and the 13-week summary, visible together without scrolling */}
+      <div className="space-y-6 [@media(min-width:640px)_and_(max-height:860px)]:space-y-4">
       {/* Headline */}
       <section aria-labelledby="page-h">
         <p className="text-[14px] text-ink-soft">
@@ -239,7 +241,10 @@ export function TodayPage() {
         </p>
         {head ? (
           <>
-            <h1 id="page-h" className="mt-2 max-w-[28ch] text-[32px] font-semibold leading-[1.1] tracking-[-0.025em] sm:text-[44px] lg:text-[48px]">
+            <h1
+              id="page-h"
+              className="mt-2 max-w-[28ch] text-[32px] font-semibold leading-[1.1] tracking-[-0.025em] sm:text-[38px] lg:text-[40px] [@media(min-width:640px)_and_(max-height:860px)]:mt-1 [@media(min-width:640px)_and_(max-height:860px)]:max-w-none [@media(min-width:640px)_and_(max-height:860px)]:text-[30px]"
+            >
               {head.title}
             </h1>
             <p className="mt-2 max-w-[80ch] text-[15px] text-ink-soft">{head.sub}</p>
@@ -255,7 +260,7 @@ export function TodayPage() {
 
       {/* Hero: full-width forecast */}
       <div>
-        <section aria-labelledby="chart-h" className="liquid-glass liquid-navy min-w-0 rounded-3xl p-5 text-on-hero sm:p-7">
+        <section aria-labelledby="chart-h" className="liquid-glass liquid-navy min-w-0 rounded-3xl p-5 text-on-hero sm:px-7 sm:py-6">
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
             <div>
               <h2 id="chart-h" className="text-[14px] font-medium tracking-normal text-on-hero/80">
@@ -287,6 +292,7 @@ export function TodayPage() {
       </div>
 
       {f && company && <Summary company={company} f={f} />}
+      </div>
 
       {/* What needs you, and when Vero last checked */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">

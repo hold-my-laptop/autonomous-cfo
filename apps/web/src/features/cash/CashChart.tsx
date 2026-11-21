@@ -539,7 +539,14 @@ export function CashChart({ days, weeks, bufferEur, today, lowest, height }: Dai
         {" Focus the chart and use the arrow keys to move day by day."}
       </p>
       <div className="-mx-1 overflow-x-auto pb-1 sm:mx-0 sm:overflow-visible">
-        <div className={`min-w-[720px] sm:min-w-0 ${height ? "" : "h-[300px] sm:h-[380px]"}`} style={height ? { height } : undefined}>
+        <div
+          className={`min-w-[720px] sm:min-w-0 ${
+            height
+              ? ""
+              : "h-[300px] sm:h-[clamp(200px,calc(100svh-614px),380px)] [@media(min-width:640px)_and_(max-height:860px)]:h-[clamp(190px,calc(100svh-535px),380px)]"
+          }`}
+          style={height ? { height } : undefined}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 28, right: 12, left: 0, bottom: 4 }} accessibilityLayer>
               <CartesianGrid vertical={false} stroke={GRID} />
