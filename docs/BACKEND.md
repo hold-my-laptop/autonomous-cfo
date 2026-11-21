@@ -266,7 +266,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 
 # Phase 2: Vero Proof
 
-When a recurring cost changes, Vero finds out why, proves whether the change is justified, and updates everything downstream (payment, cash forecast, letter to the supplier) for the owner's approval. Same company, same `as_of` (5 May 2025) and same bank statement as Phase 1.
+When a recurring cost changes, Vero finds out why, proves whether the change is justified, and updates everything downstream (payment, cash forecast, letter to the supplier) for the owner's approval. Same company, same `as_of` (5 May 2025) and same bank statement as Phase 1. Every Phase 2 feature traces back to [`PROOF.md`](PROOF.md) (data, rules, demo numbers).
 
 **Rules that hold for every Phase 2 feature**
 - **The organizer's CSV is never edited.** Phase 2 adds synthetic documents that agree with it: every invoice total equals a real payment, and every outcome matches what the statement shows afterwards. Phase 1's numbers and tests stay as they are.
