@@ -5,7 +5,9 @@ metadata:
   labels:
     app: ai
     app.kubernetes.io/part-of: vero
+    app.openshift.io/runtime: python
   annotations:
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"api"},{"apiVersion":"apps/v1","kind":"Deployment","name":"vero-llm-predictor"},{"apiVersion":"apps/v1","kind":"Deployment","name":"mlflow"}]'
     image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"ai:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"ai\")].image"}]'
 spec:
   replicas: 1  # runs live in this process (background tasks)
