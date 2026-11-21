@@ -2,6 +2,7 @@ import type { Company, Decision, Forecast } from "../../api/types";
 import { useCompany, useDecisions, useForecast } from "../../api/queries";
 import { useLive } from "../../api/live";
 import { Icon } from "../../components/Icon";
+import { scrollBehavior } from "../../lib/a11y";
 import { agentName } from "../../lib/labels";
 import { formatDate, formatEurWhole } from "../../lib/format";
 import { CashChart, ForecastLegend } from "../cash/CashChart";
@@ -63,7 +64,7 @@ const btnStrong = btnPrimary.replace("btn-primary", "btn-strong");
 
 const goTo = (id: string) => {
   const el = document.getElementById(cardId(id));
-  el?.scrollIntoView({ behavior: "smooth", block: "start" });
+  el?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   el?.focus({ preventScroll: true });
 };
 
@@ -274,7 +275,7 @@ export function TodayPage() {
           </div>
           <div className="-mx-1 mt-2">
             {forecast.isError && (
-              <p className="py-10 text-center text-sand">Couldn't load the forecast. Check that the backend is running.</p>
+              <p role="alert" className="py-10 text-center text-sand">Couldn't load the forecast. Check that the backend is running.</p>
             )}
             {f ? (
               <CashChart
@@ -297,7 +298,7 @@ export function TodayPage() {
       {/* What needs you, and when Vero last checked */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
         {decisions.isError ? (
-          <p className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load your items. Check that the backend is running.</p>
+          <p role="alert" className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load your items. Check that the backend is running.</p>
         ) : needsOk[0] ? (
           <NeedsOkSummary d={needsOk[0]} more={needsOk.length - 1} />
         ) : decisions.data ? (

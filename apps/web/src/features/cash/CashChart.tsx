@@ -17,6 +17,7 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import type { ForecastDay, ForecastWeek, RiskLevel } from "../../api/types";
+import { useA11y, useReducedMotion } from "../../lib/a11y";
 import { formatDate, formatEurK1, formatEurShort, formatEurWhole } from "../../lib/format";
 
 /*
@@ -26,10 +27,11 @@ import { formatDate, formatEurK1, formatEurShort, formatEurWhole } from "../../l
   - Dashed white outline = forecast.
   - Sand fill            = below the safety buffer.
   - Solid coral          = below zero (overdraft).
+  The status colours (coral/red, green) come from a palette that follows the "Colour-blind friendly"
+  setting: there, overdraft is orange with stripes and "good" is blue (see index.css for the rest).
 */
 const SOLID = "#7c87d6";
 const SAND = "#f2d9a0";
-const CORAL = "#ef8a74";
 const WHITE_SOFT = "rgba(255,255,255,0.7)";
 const WHITE_DIM = "rgba(255,255,255,0.55)";
 const WHITE_FAINT = "rgba(255,255,255,0.08)";
@@ -37,9 +39,57 @@ const OUTLINE = "rgba(255,255,255,0.35)";
 const COMPARE = "rgba(255,255,255,0.8)";
 const LABEL_INK = "#1b2547";
 const LABEL_MUTED = "#535a6e";
-const LABEL_SHORT = "#b3402b";
-const LABEL_GOOD = "#1f7a4a";
 const TIP_BORDER = "#e6e8ef";
+
+const STRIPES = "vero-cb-stripes";
+const CB_ORANGE = "#f0883e";
+
+/** Status colours, standard or colour-blind friendly. LABEL_* sit on the white tooltip/callout (≥ 4.5:1). */
+const PALETTES = {
+  standard: {
+    CORAL: "#ef8a74",
+    BAR_SHORT: "#ef8a74",
+    OVERDRAFT_FILL: "rgb(230 103 103 / 0.45)",
+    SWATCH_SHORT: "#ef8a74",
+    SWATCH_AREA: "rgb(230 103 103 / 0.45)",
+    LOW_RED: "#e66767",
+    LIGHT_RED: "#f19a9a",
+    LABEL_SHORT: "#b3402b",
+    LABEL_GOOD: "#1f7a4a",
+    stripes: false,
+  },
+  colorBlind: {
+    CORAL: CB_ORANGE,
+    BAR_SHORT: `url(#${STRIPES}-bar)`,
+    OVERDRAFT_FILL: `url(#${STRIPES}-area)`,
+    SWATCH_SHORT: `repeating-linear-gradient(135deg, ${CB_ORANGE} 0 2px, rgb(240 136 62 / 0.45) 2px 4px)`,
+    SWATCH_AREA: `repeating-linear-gradient(135deg, rgb(240 136 62 / 0.75) 0 1.5px, rgb(240 136 62 / 0.2) 1.5px 4px)`,
+    LOW_RED: CB_ORANGE,
+    LIGHT_RED: "#ffb77c",
+    LABEL_SHORT: "#bc4c00",
+    LABEL_GOOD: "#0550ae",
+    stripes: true,
+  },
+};
+type ChartColors = (typeof PALETTES)["standard"];
+
+function useChartColors(): ChartColors {
+  return useA11y().colorBlind ? PALETTES.colorBlind : PALETTES.standard;
+}
+
+/** Stripe patterns for overdraft in colour-blind mode: bars (dense) and the daily area (light). */
+const stripeDefs = (
+  <defs>
+    <pattern id={`${STRIPES}-bar`} width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="6" height="6" fill={CB_ORANGE} fillOpacity={0.5} />
+      <rect width="3" height="6" fill={CB_ORANGE} />
+    </pattern>
+    <pattern id={`${STRIPES}-area`} width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="7" height="7" fill={CB_ORANGE} fillOpacity={0.16} />
+      <rect width="2" height="7" fill={CB_ORANGE} fillOpacity={0.75} />
+    </pattern>
+  </defs>
+);
 
 /** Recharts tooltip settings shared by both charts: no animation, no focus outline, may leave the chart vertically. */
 const TOOLTIP_PROPS = {
@@ -49,7 +99,7 @@ const TOOLTIP_PROPS = {
   wrapperStyle: { outline: "none", zIndex: 30 },
 } as const;
 
-const amountColor = (value: number) => (value < 0 ? LABEL_SHORT : LABEL_INK);
+const amountColor = (value: number, C: ChartColors) => (value < 0 ? C.LABEL_SHORT : LABEL_INK);
 
 /**
  * Tooltip surface. Solid white with fixed colours, like the "Lowest" callout: the charts sit on the
@@ -94,8 +144,8 @@ function niceTicks(values: number[], parts = 4): number[] {
   return ticks;
 }
 
-function barStyle(w: ForecastWeek, index: number) {
-  if (w.status === "red") return { fill: CORAL, stroke: "none" };
+function barStyle(w: ForecastWeek, index: number, C: ChartColors) {
+  if (w.status === "red") return { fill: C.BAR_SHORT, stroke: C.stripes ? C.CORAL : "none", strokeWidth: C.stripes ? 1 : undefined };
   if (w.isActual || index === 0) return { fill: SOLID, stroke: w.status === "yellow" ? SAND : "none", strokeWidth: 1.5 };
   if (w.status === "yellow") return { fill: SAND, stroke: "none" };
   return { fill: "rgba(255,255,255,0.04)", stroke: OUTLINE, strokeDasharray: "4 3", strokeWidth: 1 };
@@ -125,6 +175,7 @@ interface Props {
 type Row = ForecastWeek & { label: string; compare?: number };
 
 function ForecastTooltip({ active, payload, compareLabel }: TooltipContentProps<number, string> & { compareLabel: string }) {
+  const C = useChartColors();
   if (!active || !payload?.length) return null;
   const w = payload[0].payload as Row;
   const gap = w.balanceEur - w.bufferEur;
@@ -140,13 +191,13 @@ function ForecastTooltip({ active, payload, compareLabel }: TooltipContentProps<
       </p>
       <dl className="mt-2 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1" style={{ color: LABEL_MUTED }}>
         <dt>Cash at end of week</dt>
-        <dd className="num text-right font-semibold" style={{ color: amountColor(w.balanceEur) }}>
+        <dd className="num text-right font-semibold" style={{ color: amountColor(w.balanceEur, C) }}>
           {formatEurWhole(w.balanceEur)}
         </dd>
         {w.lowestEur !== undefined && w.lowestEur < w.balanceEur && (
           <>
             <dt>Lowest day</dt>
-            <dd className="num text-right" style={{ color: amountColor(w.lowestEur) }}>
+            <dd className="num text-right" style={{ color: amountColor(w.lowestEur, C) }}>
               {formatEurWhole(w.lowestEur)}
             </dd>
           </>
@@ -164,7 +215,7 @@ function ForecastTooltip({ active, payload, compareLabel }: TooltipContentProps<
           </>
         )}
         <dt>vs safety buffer</dt>
-        <dd className="num text-right font-medium" style={{ color: gap < 0 ? LABEL_SHORT : LABEL_GOOD }}>
+        <dd className="num text-right font-medium" style={{ color: gap < 0 ? C.LABEL_SHORT : C.LABEL_GOOD }}>
           {gap >= 0 ? "+" : ""}
           {formatEurWhole(gap)}
         </dd>
@@ -186,11 +237,12 @@ function ForecastTooltip({ active, payload, compareLabel }: TooltipContentProps<
 }
 
 function Swatch({ kind }: { kind: "solid" | "forecast" | "close" | "short" }) {
+  const C = useChartColors();
   const style =
     kind === "solid"
       ? { background: SOLID }
       : kind === "short"
-        ? { background: CORAL }
+        ? { background: C.SWATCH_SHORT }
         : kind === "close"
           ? { background: SAND }
           : { border: `1px dashed ${OUTLINE}`, background: "rgba(255,255,255,0.04)" };
@@ -215,6 +267,7 @@ export function WeeklyChartLegend({
   actuals?: boolean;
   overdraftLimitEur?: number;
 }) {
+  const C = useChartColors();
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-on-hero/80">
       <li className="inline-flex items-center gap-1.5"><Swatch kind="solid" />{actuals ? "Actual" : "This week"}</li>
@@ -227,7 +280,7 @@ export function WeeklyChartLegend({
       </li>
       {overdraftLimitEur !== undefined && (
         <li className="inline-flex items-center gap-1.5">
-          {lineIcon(CORAL, true)}
+          {lineIcon(C.CORAL, true)}
           Overdraft limit<span className="num text-on-hero/85">&nbsp;{formatEurWhole(-overdraftLimitEur)}</span>
         </li>
       )}
@@ -247,6 +300,8 @@ export function WeeklyCashChart({
   lowest,
   overdraftLimitEur,
 }: Props) {
+  const C = useChartColors();
+  const reduceMotion = useReducedMotion(); // Recharts animates in JS: CSS can't stop it
   const buffer = weeks[0]?.bufferEur ?? 0;
   const ownLine = weeks.some((w) => w.forecastEur !== undefined);
   const data: Row[] = weeks.map((w, i) => ({
@@ -278,7 +333,7 @@ export function WeeklyCashChart({
     const i = payload.index;
     const w = data[i];
     const strong = i === 0 || (annotate && i === lowIdx);
-    const fill = annotate && i === lowIdx && w.status !== "green" ? CORAL : strong ? "#ffffff" : WHITE_SOFT;
+    const fill = annotate && i === lowIdx && w.status !== "green" ? C.CORAL : strong ? "#ffffff" : WHITE_SOFT;
     const top = Number(y ?? 0);
     return (
       <g>
@@ -308,7 +363,7 @@ export function WeeklyCashChart({
       <g pointerEvents="none" style={{ filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.25))" }}>
         <rect x={cx - w / 2} y={top} width={w} height={38} rx={10} fill="#ffffff" />
         <path d={arrow} fill="#ffffff" />
-        <text x={cx} y={top + 17} textAnchor="middle" fontSize={13} fontWeight={700} fill={low.value < 0 ? LABEL_SHORT : LABEL_INK}>
+        <text x={cx} y={top + 17} textAnchor="middle" fontSize={13} fontWeight={700} fill={low.value < 0 ? C.LABEL_SHORT : LABEL_INK}>
           {formatEurWhole(low.value)}
         </text>
         <text x={cx} y={top + 31} textAnchor="middle" fontSize={11} fill={LABEL_MUTED}>
@@ -335,8 +390,9 @@ export function WeeklyCashChart({
         >
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 52, right: 8, left: 0, bottom: 4 }} barCategoryGap="24%">
+              {C.stripes && stripeDefs}
               <CartesianGrid vertical={false} stroke={WHITE_FAINT} />
-              {yMin < 0 && <ReferenceArea y1={yMin} y2={0} fill={CORAL} fillOpacity={0.09} stroke="none" ifOverflow="hidden" />}
+              {yMin < 0 && <ReferenceArea y1={yMin} y2={0} fill={C.CORAL} fillOpacity={0.09} stroke="none" ifOverflow="hidden" />}
               <XAxis dataKey="label" tick={XTick} tickLine={false} axisLine={false} interval={0} height={38} />
               <YAxis
                 ticks={ticks}
@@ -354,11 +410,18 @@ export function WeeklyCashChart({
               />
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.7)" strokeWidth={1.25} />
               {annotate && firstShortIdx > 0 && firstShortIdx !== lowIdx && (
-                <ReferenceLine x={data[firstShortIdx].label} stroke={CORAL} strokeOpacity={0.6} strokeDasharray="2 3" />
+                <ReferenceLine x={data[firstShortIdx].label} stroke={C.CORAL} strokeOpacity={0.6} strokeDasharray="2 3" />
               )}
-              <Bar dataKey="balanceEur" name="Cash at end of week" radius={[6, 6, 6, 6]} maxBarSize={40} animationDuration={600}>
+              <Bar
+                dataKey="balanceEur"
+                name="Cash at end of week"
+                radius={[6, 6, 6, 6]}
+                maxBarSize={40}
+                animationDuration={600}
+                isAnimationActive={!reduceMotion}
+              >
                 {data.map((w, i) => (
-                  <Cell key={w.week} {...barStyle(w, i)} />
+                  <Cell key={w.week} {...barStyle(w, i, C)} />
                 ))}
                 <LabelList dataKey="balanceEur" content={LowestLabel} />
               </Bar>
@@ -367,7 +430,7 @@ export function WeeklyCashChart({
               )}
               <ReferenceLine y={buffer} stroke="white" strokeOpacity={0.5} strokeWidth={1} strokeDasharray="2 3" />
               {overdraftLimitEur !== undefined && (
-                <ReferenceLine y={-overdraftLimitEur} stroke={CORAL} strokeOpacity={0.9} strokeWidth={1.25} strokeDasharray="5 3" />
+                <ReferenceLine y={-overdraftLimitEur} stroke={C.CORAL} strokeOpacity={0.9} strokeWidth={1.25} strokeDasharray="5 3" />
               )}
             </ComposedChart>
           </ResponsiveContainer>
@@ -391,9 +454,7 @@ export function WeeklyCashChart({
 */
 const CREAM = "#f5f1e8";
 const RANGE_FILL = "rgb(245 241 232 / 0.10)";
-const OVERDRAFT_FILL = "rgb(230 103 103 / 0.45)";
-const LOW_RED = "#e66767";
-const LIGHT_RED = "#f19a9a";
+// Overdraft fill, lowest-point dot and its axis label: from the palette (useChartColors).
 const BUFFER_SAND = "#e3c584";
 const CARD = "#1c2748";
 const GRID = "rgb(255 255 255 / 0.07)";
@@ -412,6 +473,7 @@ const rangeText = (low: number, high: number) => {
 };
 
 function DayTooltip({ active, payload }: TooltipContentProps<number, string>) {
+  const C = useChartColors();
   if (!active || !payload?.length) return null;
   const d = payload[0].payload as DayRow;
   return (
@@ -424,7 +486,7 @@ function DayTooltip({ active, payload }: TooltipContentProps<number, string>) {
           </span>
         )}
       </p>
-      <p className="num mt-1 text-[15px] font-semibold" style={{ color: amountColor(d.balanceEur) }}>
+      <p className="num mt-1 text-[15px] font-semibold" style={{ color: amountColor(d.balanceEur, C) }}>
         {formatEurWhole(d.balanceEur)}
       </p>
       {d.lowEur !== undefined && d.highEur !== undefined && (
@@ -440,6 +502,7 @@ const swatch = (style: CSSProperties) => <span className="h-2.5 w-2.5 rounded-[3
 
 /** Legend for the daily forecast. */
 export function ForecastLegend({ bufferEur, range = true }: { bufferEur?: number; range?: boolean }) {
+  const C = useChartColors();
   return (
     <ul className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-on-hero/80">
       <li className="inline-flex items-center gap-1.5">{lineIcon(CREAM, false, 2)}Balance</li>
@@ -448,7 +511,7 @@ export function ForecastLegend({ bufferEur, range = true }: { bufferEur?: number
           {swatch({ background: RANGE_FILL, boxShadow: "inset 0 0 0 1px rgb(245 241 232 / 0.3)" })}Likely range
         </li>
       )}
-      <li className="inline-flex items-center gap-1.5">{swatch({ background: OVERDRAFT_FILL })}Overdraft</li>
+      <li className="inline-flex items-center gap-1.5">{swatch({ background: C.SWATCH_AREA })}Overdraft</li>
       <li className="inline-flex items-center gap-1.5">
         {lineIcon(BUFFER_SAND, true, 1.5)}
         Buffer{bufferEur !== undefined && <span className="num font-semibold text-on-hero">&nbsp;{formatEurWhole(bufferEur)}</span>}
@@ -471,6 +534,7 @@ interface DailyProps {
 
 /** 13-week cash forecast, one point per day. */
 export function CashChart({ days, weeks, bufferEur, today, lowest, height }: DailyProps) {
+  const C = useChartColors();
   const data: DayRow[] = days.map((d) => ({
     ...d,
     range: d.lowEur !== undefined && d.highEur !== undefined ? [d.lowEur, d.highEur] : undefined,
@@ -498,10 +562,10 @@ export function CashChart({ days, weeks, bufferEur, today, lowest, height }: Dai
     const top = Number(y ?? 0);
     return (
       <g>
-        <text x={x} y={top + 13} textAnchor="middle" fontSize={13} fontWeight={500} fill={isLow ? LIGHT_RED : "#ffffff"}>
+        <text x={x} y={top + 13} textAnchor="middle" fontSize={13} fontWeight={500} fill={isLow ? C.LIGHT_RED : "#ffffff"}>
           W{w.week}
         </text>
-        <text x={x} y={top + 28} textAnchor="middle" fontSize={12} fill={isLow ? LIGHT_RED : WHITE_DIM}>
+        <text x={x} y={top + 28} textAnchor="middle" fontSize={12} fill={isLow ? C.LIGHT_RED : WHITE_DIM}>
           {formatDate(w.startDate)}
         </text>
       </g>
@@ -515,11 +579,11 @@ export function CashChart({ days, weeks, bufferEur, today, lowest, height }: Dai
     const top = cy + 14;
     return (
       <g pointerEvents="none">
-        <circle cx={cx} cy={cy} r={5} fill={LOW_RED} stroke={CARD} strokeWidth={2} />
+        <circle cx={cx} cy={cy} r={5} fill={C.LOW_RED} stroke={CARD} strokeWidth={2} />
         <g style={{ filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.25))" }}>
           <rect x={cx - w / 2} y={top} width={w} height={38} rx={10} fill="#ffffff" />
           <path d={`M${cx - 6},${top} L${cx},${top - 6} L${cx + 6},${top} Z`} fill="#ffffff" />
-          <text x={cx} y={top + 17} textAnchor="middle" fontSize={13} fontWeight={700} fill={LABEL_SHORT}>
+          <text x={cx} y={top + 17} textAnchor="middle" fontSize={13} fontWeight={700} fill={C.LABEL_SHORT}>
             {formatEurWhole(lowest.value)}
           </text>
           <text x={cx} y={top + 31} textAnchor="middle" fontSize={11} fill={LABEL_MUTED}>
@@ -549,6 +613,7 @@ export function CashChart({ days, weeks, bufferEur, today, lowest, height }: Dai
         >
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ top: 28, right: 12, left: 0, bottom: 4 }} accessibilityLayer>
+              {C.stripes && stripeDefs}
               <CartesianGrid vertical={false} stroke={GRID} />
               <XAxis dataKey="date" ticks={tickDates} tick={XTick} tickLine={false} axisLine={false} interval={0} height={38} />
               <YAxis
@@ -566,7 +631,7 @@ export function CashChart({ days, weeks, bufferEur, today, lowest, height }: Dai
                 content={(p) => <DayTooltip {...(p as TooltipContentProps<number, string>)} />}
               />
               <Area dataKey="range" type="linear" fill={RANGE_FILL} fillOpacity={1} stroke="none" activeDot={false} isAnimationActive={false} />
-              <Area dataKey="below" type="linear" baseValue={0} fill={OVERDRAFT_FILL} fillOpacity={1} stroke="none" activeDot={false} isAnimationActive={false} />
+              <Area dataKey="below" type="linear" baseValue={0} fill={C.OVERDRAFT_FILL} fillOpacity={1} stroke="none" activeDot={false} isAnimationActive={false} />
               <ReferenceLine y={0} stroke={ZERO} strokeWidth={1} />
               <ReferenceLine y={bufferEur} stroke={BUFFER_SAND} strokeWidth={1.5} strokeDasharray="5 5" />
               {todayRow && (

@@ -511,3 +511,138 @@ h1, h2, h3, .tight {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ───────────── Accessibility settings (src/lib/a11y.ts, avatar → Settings) ─────────────
+   Set on <html> by index.html before the first paint and by lib/a11y.ts afterwards:
+   data-text-size="normal|large|xlarge", data-contrast="high" (absent when off), data-keyboard="on|off".
+   With every setting off nothing here applies, so the app looks exactly as before. */
+
+/* Text size: zoom the whole app. Zoom also scales px sizes (most of ours are px), and the chart's
+   hover still lines up. Fixed panels divide their viewport-based sizes by --ui-zoom. */
+:root { --ui-zoom: 1; }
+:root[data-text-size="large"] { --ui-zoom: 1.125; }
+:root[data-text-size="xlarge"] { --ui-zoom: 1.25; }
+:root:is([data-text-size="large"], [data-text-size="xlarge"]) #root { zoom: var(--ui-zoom); }
+
+/* High contrast, light: darker text, lines and status text, plain white page (no silk photo). */
+:root[data-contrast="high"]:not([data-theme="dark"]) {
+  --text: #0b1220;
+  --text-muted: #1b2547;
+  --text-faint: #1b2547;
+  --line: #4d5468;
+  --line-strong: #1b2547;
+  --lg-solid-border: #4d5468;
+  --ok-text: #0f5e30;
+  --ask-text: #5c4200;
+  --tight: #5c4200;
+  --short: #9c2a16;
+  --bg: #ffffff;
+  --page-bg: #ffffff;
+  --page-filter: none;
+  --page-tint: transparent;
+}
+/* High contrast, dark: near-black page, white text, solid navy surfaces, 60% white lines. */
+:root[data-contrast="high"][data-theme="dark"] {
+  --bg: #000814;
+  --page-bg: #000814;
+  --page-filter: none;
+  --page-tint: transparent;
+  --text: #ffffff;
+  --text-muted: #e8ebf3;
+  --text-faint: #e8ebf3;
+  --line: rgb(255 255 255 / 0.6);
+  --line-strong: rgb(255 255 255 / 0.6);
+  --lg-solid-border: rgb(255 255 255 / 0.6);
+  --surface-solid: #0b1430;
+  --raised: #0b1430;
+  --lg-tint: #0b1430;
+  --lg-solid: #0b1430;
+  --lg-hero-solid: #0b1430;
+}
+/* Every glass surface becomes solid with a 1.5px border; no blur, rim or highlight.
+   The navbar keeps its layout, only its material changes. */
+:root[data-contrast="high"] :is(.liquid-glass, .liquid-glass-strong, .liquid-glass-pill) {
+  background: var(--lgx-solid, var(--lg-solid));
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: inset 0 0 0 1.5px var(--lg-solid-border);
+}
+:root[data-contrast="high"] :is(.liquid-glass, .liquid-glass-strong, .liquid-glass-pill)::before,
+:root[data-contrast="high"] :is(.liquid-glass, .liquid-glass-strong)::after {
+  display: none;
+}
+:root[data-contrast="high"] .liquid-glass-pill.avatar { background: var(--avatar-bg); }
+:root[data-contrast="high"] .nav-glass {
+  background: var(--lg-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: inset 0 0 0 1.5px var(--lg-solid-border);
+}
+:root[data-contrast="high"] .nav-glass::before { display: none; }
+
+/* Keyboard navigation: a strong focus ring with a sand halo. */
+:root[data-keyboard="on"] :focus-visible {
+  outline: 3px solid var(--color-action);
+  outline-offset: 3px;
+  box-shadow: 0 0 0 7px color-mix(in srgb, #e3c584 70%, transparent);
+}
+/* Text-size options: the radio itself is hidden, so its label shows the focus ring. */
+.a11y-seg:has(input:focus-visible) {
+  outline: 2px solid var(--color-action);
+  outline-offset: 2px;
+}
+:root[data-keyboard="on"] .a11y-seg:has(input:focus-visible) {
+  outline-width: 3px;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 7px color-mix(in srgb, #e3c584 70%, transparent);
+}
+/* <main> only takes focus from "Skip to content" and Alt+1–4: no ring around the whole page. */
+#main:focus { outline: none; box-shadow: none; }
+
+@layer base {
+  kbd {
+    display: inline-block;
+    min-width: 1.6em;
+    padding: 1px 5px;
+    border: 1px solid var(--line-strong);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--surface-solid);
+    color: var(--text);
+    font: 600 11px/1.4 var(--font-sans);
+    text-align: center;
+  }
+}
+
+/* Colour-blind friendly: good = blue, problems/overdraft = orange, warnings stay amber (always with a
+   text label). Blue/orange stays distinct for red-green colour blindness (the common types); the charts
+   (CashChart.tsx) add stripes to overdraft so it doesn't rely on colour alone. Placed after high
+   contrast, so with both on these status colours win; the last block keeps them dark enough for it. */
+:root[data-colorblind="on"]:not([data-theme="dark"]) {
+  --ok: #0969da;
+  --ok-text: #0550ae;
+  --ok-tint: #ddf4ff;
+  --short: #bc4c00;
+  --short-tint: #fff1e5;
+}
+:root[data-colorblind="on"][data-theme="dark"] {
+  --ok: #4493f8;
+  --ok-text: #58a6ff;
+  --ok-tint: rgb(56 139 253 / 0.15);
+  --short: #f0883e;
+  --short-tint: rgb(219 109 40 / 0.15);
+}
+:root[data-colorblind="on"][data-contrast="high"]:not([data-theme="dark"]) {
+  --ok-text: #033d8b;
+  --short: #8a3600;
+}
+
+/* Reduce motion (setting): the same as the OS "reduce motion" rule above, for people who can't
+   change it there. Chart animations and scripted smooth scrolling read it in JS (useReducedMotion). */
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}

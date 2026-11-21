@@ -47,7 +47,7 @@ export function ActivityPage() {
       )}
 
       {isLoading && <div className="mt-6 h-48 animate-pulse rounded-3xl bg-line/60" />}
-      {isError && <p className="mt-6 text-short">Couldn't load the activity. Check that the backend is running.</p>}
+      {isError && <p role="alert" className="mt-6 text-short">Couldn't load the activity. Check that the backend is running.</p>}
 
       {data && (
         <ol className="liquid-glass-strong mt-6 divide-y divide-line overflow-hidden rounded-3xl">

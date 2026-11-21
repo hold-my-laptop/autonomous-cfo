@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { announce } from "../lib/announce";
 import { api, USE_MOCK } from "./client";
 import { mockBus } from "./mockBus";
 import { keys } from "./queries";
@@ -62,6 +63,13 @@ function pollRuns(qc: QueryClient, setState: Dispatch<SetStateAction<LiveState>>
         const key = `${run.run_id}:${run.status}`;
         if (!first && key !== seen && !busy) {
           const ids = run.result?.recommendation_ids ?? [];
+          announce(
+            run.status === "FAILED"
+              ? "Vero couldn't finish the check."
+              : ids.length
+                ? `Vero finished checking: ${ids.length} new ${ids.length === 1 ? "item" : "items"} on the Overview.`
+                : "Vero finished checking. Nothing new.",
+          );
           setState((s) => ({ ...s, arrived: new Set([...s.arrived, ...ids]) }));
           qc.invalidateQueries({ queryKey: keys.decisions });
           qc.invalidateQueries({ queryKey: keys.forecast });
@@ -98,6 +106,7 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         case "decision.updated":
           if (ev.type === "decision.created") {
             const id = ev.data.id;
+            announce(`New item: ${ev.data.headline}`);
             setState((s) => ({ ...s, arrived: new Set(s.arrived).add(id) }));
           }
           qc.setQueryData<Decision[]>(keys.decisions, (old = []) => [

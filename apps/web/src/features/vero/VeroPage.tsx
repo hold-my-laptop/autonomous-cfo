@@ -98,7 +98,7 @@ export function VeroPage() {
           )}
         </div>
 
-        {findings.isError && <p className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load the cost checks. Check that the backend is running.</p>}
+        {findings.isError && <p role="alert" className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load the cost checks. Check that the backend is running.</p>}
         {findings.isLoading && <div className="h-40 animate-pulse rounded-3xl bg-sunk" />}
         {findings.data && shown.length === 0 && (
           <div className="liquid-glass flex items-start gap-3 rounded-3xl p-6">

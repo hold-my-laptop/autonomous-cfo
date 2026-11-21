@@ -56,7 +56,7 @@ export function PaperDoc({ doc, showEnglish }: { doc: SourceDoc; showEnglish: bo
         <span className="ml-auto shrink-0 text-ink-muted">p. {doc.page}</span>
       </figcaption>
       <div className="flex-1 space-y-2.5 px-5 py-5 font-serif text-[13px] leading-relaxed sm:px-6">
-        <p className="font-sans text-sm font-semibold">{doc.title}</p>
+        <p className="font-sans text-sm font-semibold" lang="de">{doc.title}</p>
         <p className="font-sans text-[11px] text-ink-muted">{doc.meta}</p>
         <div className="space-y-2 pt-2">
           {doc.lines.map((l, i) =>
@@ -67,12 +67,12 @@ export function PaperDoc({ doc, showEnglish }: { doc: SourceDoc; showEnglish: bo
                 >
                   {l.box.label}
                 </span>
-                <p className="font-semibold">{l.text}</p>
+                <p className="font-semibold" lang="de">{l.text}</p>
                 {showEnglish && l.en && <p className="mt-0.5 font-sans text-[11px] text-ink-soft">{l.en}</p>}
               </div>
             ) : (
               <div key={i}>
-                <p className={l.muted ? "text-ink-soft" : l.strong ? "font-semibold" : ""}>{l.text}</p>
+                <p className={l.muted ? "text-ink-soft" : l.strong ? "font-semibold" : ""} lang="de">{l.text}</p>
                 {showEnglish && l.en && <p className="font-sans text-[11px] text-ink-muted">{l.en}</p>}
               </div>
             ),

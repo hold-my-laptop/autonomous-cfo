@@ -3,6 +3,7 @@ import { ApiError } from "../../api/client";
 import { useChat } from "../../api/queries";
 import type { ChatTurn } from "../../api/types";
 import { Icon } from "../../components/Icon";
+import { scrollBehavior } from "../../lib/a11y";
 
 type Message = ChatTurn & { fallback?: boolean; error?: boolean };
 
@@ -24,15 +25,27 @@ export function ChatPanel() {
   const chat = useChat();
   const listRef = useRef<HTMLOListElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const openButtonRef = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
   const panelId = useId();
 
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
+    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: scrollBehavior() });
   }, [messages, chat.isPending]);
 
+  // Opening focuses the question box; closing puts focus back on "Ask Vero".
   useEffect(() => {
     if (open) inputRef.current?.focus();
+    else if (returnFocus.current) {
+      returnFocus.current = false;
+      openButtonRef.current?.focus();
+    }
   }, [open]);
+
+  const close = () => {
+    returnFocus.current = true;
+    setOpen(false);
+  };
 
   const ask = async (question: string) => {
     const q = question.trim().slice(0, MAX_QUESTION);
@@ -57,6 +70,7 @@ export function ChatPanel() {
   if (!open) {
     return (
       <button
+        ref={openButtonRef}
         type="button"
         onClick={() => setOpen(true)}
         aria-expanded={false}
@@ -73,6 +87,12 @@ export function ChatPanel() {
     <section
       id={panelId}
       aria-label="Ask Vero"
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          close();
+        }
+      }}
       className="liquid-glass liquid-panel fixed bottom-4 right-4 z-40 flex max-h-[min(36rem,calc(100vh-6rem))] w-[min(24rem,calc(100vw-2rem))] flex-col rounded-3xl text-on-hero"
     >
       <header className="flex items-center gap-2 px-4 pb-2 pt-3">
@@ -80,7 +100,7 @@ export function ChatPanel() {
         <h2 className="mr-auto text-sm font-semibold">Ask Vero</h2>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={close}
           aria-label="Close chat"
           className="rounded p-1 text-on-hero/70 hover:text-on-hero"
         >
