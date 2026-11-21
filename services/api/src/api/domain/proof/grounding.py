@@ -11,7 +11,7 @@ used."""
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
 from typing import Any
@@ -28,6 +28,7 @@ from api.domain.proof.findings import (
     FindingDifference,
     FindingInvestigation,
     FindingKind,
+    FindingStatus,
     InvestigationMode,
     ProofFinding,
 )
@@ -227,6 +228,31 @@ class Grounding:
     def escalated(self) -> bool:
         return self.classification is Classification.UNEXPLAINED
 
+    @property
+    def history_label(self) -> str:
+        result = self.investigation
+        if self.classification is Classification.CONFLICT:
+            return (
+                f"Conflict: {format_eur(result.billed)} billed, "
+                f"{format_eur(result.justified)} allowed"
+            )
+        if self.classification is Classification.VERIFIED:
+            return f"Verified: {format_eur(result.justified)} allowed by the evidence"
+        return "No usable evidence: needs your review"
+
+    def apply(self, finding: ProofFinding, at: datetime) -> ProofFinding:
+        """The finding with this label, its investigation and the evidence it cites."""
+        return finding.advance(
+            at,
+            FindingStatus.CLASSIFIED,
+            self.history_label,
+            self.classification,
+            escalated=self.escalated,
+            investigation=self.investigation,
+            differences=self.differences,
+            evidence_refs=tuple(dict.fromkeys((*finding.evidence_refs, *self.evidence))),
+        )
+
 
 def ground(
     finding: ProofFinding,
@@ -264,7 +290,11 @@ def ground(
     call_id = completion.get("compute_call_id")
     call = next((c for c in calls if c.call_id == call_id), None) if call_id else None
     if not call_id:
-        problems.append("the answer names no compute call")
+        problems.append(
+            "the answer names no compute call"
+            if mode is InvestigationMode.AGENT
+            else "no clause and reference value explain the change"
+        )
     elif call is None or call.tool != "compute":
         problems.append(f"no compute call {call_id!r} in this run")
     elif not call.ok:

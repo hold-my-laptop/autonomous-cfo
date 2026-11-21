@@ -9,6 +9,9 @@ from api.domain.proof.findings import EvidenceKind, EvidenceRef, FindingStatus
 from api.main import create_app
 
 settings = get_settings()
+RENT_PDF = (
+    settings.proof_dataset_path.parent / "pdf" / "doc_rent_adjustment_2025_06.pdf"
+).read_bytes()
 pytestmark = pytest.mark.skipif(not settings.statement_path.exists(), reason="sample CSV not found")
 
 
@@ -41,12 +44,12 @@ def test_reset_creates_the_preloaded_findings(client: TestClient) -> None:
     assert [(f["document_id"], f["classification"], f["status"]) for f in listed] == [
         ("inv_AS-72217", "VERIFIED", "CLASSIFIED"),
         ("inv_FLV-94818", "VERIFIED", "CLASSIFIED"),
-        ("inv_AS-11607", "UNEXPLAINED", "CHECKED"),
+        ("inv_AS-11607", "VERIFIED", "CLASSIFIED"),
     ]
     assert [(f["quiet"], f["in_digest"]) for f in listed] == [
         (True, True),
         (True, True),
-        (False, True),
+        (True, True),
     ]
     fattoria = listed[1]
     assert fattoria["impact"] == {
@@ -67,10 +70,13 @@ def test_reset_creates_the_preloaded_findings(client: TestClient) -> None:
 
 
 def test_filters(client: TestClient) -> None:
-    assert [f["document_id"] for f in findings(client, classification="UNEXPLAINED")] == [
-        "inv_AS-11607"
+    assert [f["document_id"] for f in findings(client, classification="VERIFIED")] == [
+        "inv_AS-72217",
+        "inv_FLV-94818",
+        "inv_AS-11607",
     ]
-    assert len(findings(client, status="CLASSIFIED")) == 2
+    assert findings(client, classification="UNEXPLAINED") == []
+    assert len(findings(client, status="CLASSIFIED")) == 3
     assert findings(client, classification="CONFLICT") == []
     assert client.get("/api/v1/findings", params={"status": "DONE"}).status_code == 422
 
@@ -104,8 +110,14 @@ def test_reset_recreates_the_preloaded_findings_identically(client: TestClient) 
 
 
 def test_only_a_quiet_finding_can_be_acknowledged_once(client: TestClient) -> None:
-    surcharge = find(client, "inv_AS-11607")
-    refused = acknowledge(client, surcharge["id"])
+    uploaded = client.post(
+        "/api/v1/documents",
+        files={"file": ("Miete.pdf", RENT_PDF, "application/pdf")},
+        headers={"Idempotency-Key": str(uuid4())},
+    )
+    rent = find(client, "doc_rent_adjustment_2025_06")
+    assert (uploaded.status_code, rent["classification"]) == (202, "CONFLICT")
+    refused = acknowledge(client, rent["id"])
     assert (refused.status_code, refused.json()["code"]) == (409, "NOT_PENDING")
 
     fattoria = find(client, "inv_FLV-94818")

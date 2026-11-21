@@ -1,14 +1,17 @@
 """Shared shapes of the agent tools: arguments, outputs and the registry entry."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict
 
-from api.config import Settings
-from api.domain.models import Run
-from api.state import DemoState
+if TYPE_CHECKING:
+    from api.config import Settings
+    from api.domain.models import Run
+    from api.state import DemoState
 
 
 class ToolError(Exception):

@@ -33,18 +33,16 @@ from api.domain.proof.dataset import Document, DocumentType
 from api.domain.proof.extraction import check_extraction
 from api.domain.proof.findings import (
     Classification,
-    EvidenceRef,
     FindingHistoryEntry,
-    FindingInvestigation,
     FindingStatus,
-    InvestigationMode,
     ProofFinding,
 )
-from api.domain.proof.grounding import Grounding, base_sources, calls_of, ground, searched
+from api.domain.proof.grounding import base_sources, calls_of, ground
 from api.domain.proof.uploads import MAX_UPLOAD_BYTES, Upload, UploadStatus, ValuesSource
 from api.errors import ApiError, ErrorCode
 from api.money import format_eur
 from api.proof_schemas import CostItem as CostItemOut
+from api.scripted_investigation import investigate
 from api.state import DemoState, StateRepository
 
 logger = logging.getLogger(__name__)
@@ -473,21 +471,6 @@ def _documents(state: DemoState) -> dict[str, Document]:
     return fixture | uploaded
 
 
-def _merged(refs: tuple[EvidenceRef, ...], more: tuple[EvidenceRef, ...]) -> tuple:
-    return tuple(dict.fromkeys((*refs, *more)))
-
-
-def _history_label(grounding: Grounding) -> str:
-    result = grounding.investigation
-    if grounding.classification is Classification.CONFLICT:
-        return (
-            f"Conflict: {format_eur(result.billed)} billed, {format_eur(result.justified)} allowed"
-        )
-    if grounding.classification is Classification.VERIFIED:
-        return f"Verified: {format_eur(result.justified)} allowed by the evidence"
-    return "No usable evidence: needs your review"
-
-
 def _headline(finding: ProofFinding) -> str:
     result = finding.investigation
     if finding.classification is Classification.CONFLICT and result and result.disputed:
@@ -505,9 +488,9 @@ def conclude_investigation(
     reason: str | None = None,
 ) -> None:
     """End the run's investigation with the agent's completion, or without the agent for
-    `reason`. The backend sets the label: the completion goes through the grounding check
-    (P11); without the agent the finding is escalated until the scripted investigation (P12)
-    takes over."""
+    `reason`. The backend sets the label: the agent's completion goes through the grounding
+    check (P11); without the agent the scripted investigation (P12) runs the same tools and the
+    same check."""
     run = state.runs.get(run_id)
     finding_id = investigating(run)
     if finding_id is None:
@@ -541,33 +524,16 @@ def conclude_investigation(
         )
         for step in grounding.steps:
             trace.add("GROUND", step, now)
-        finding = finding.advance(
-            now,
-            FindingStatus.CLASSIFIED,
-            _history_label(grounding),
-            grounding.classification,
-            escalated=grounding.escalated,
-            investigation=grounding.investigation,
-            differences=grounding.differences,
-            evidence_refs=_merged(finding.evidence_refs, grounding.evidence),
-        )
+        finding = grounding.apply(finding, now)
         mode = run.mode
         run = replace(run, tool_log=(run.tool_log or {}) | {"completion": completion})
     else:
         label = _INVESTIGATION_LABELS.get(reason or "", f"The agent stopped ({reason})")
-        trace.add("FALLBACK", f"{label}: no reason found", now, {"reason": reason})
-        finding = finding.advance(
-            now,
-            FindingStatus.CLASSIFIED,
-            "No reason found: needs your review",
-            Classification.UNEXPLAINED,
-            escalated=True,
-            investigation=FindingInvestigation(
-                mode=InvestigationMode.FALLBACK,
-                searched=searched(calls),
-                problems=(label,),
-            ),
-        )
+        trace.add("FALLBACK", f"{label}: Vero follows its own steps", now, {"reason": reason})
+        result = investigate(state, finding)
+        for kind, step in result.steps:
+            trace.add(kind, step, now)
+        finding = result.grounding.apply(finding, now)
         mode = RunMode.FALLBACK
     state.findings[finding.id] = finding
     _finish(state, run, trace, upload, now, _headline(finding), mode=mode, findings=(finding.id,))

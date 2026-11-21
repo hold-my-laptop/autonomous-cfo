@@ -120,6 +120,24 @@ def hero(client: TestClient, run_id: str, calls=HERO_CALLS) -> None:
         assert call(client, run_id, call_id, name, arguments)["ok"]
 
 
+def fell_back_because(client: TestClient, run_id: str) -> str:
+    """Why the investigation agent didn't finish, from the run's last fallback step."""
+    label = [s["label"] for s in run(client, run_id)["trace"] if s["kind"] == "FALLBACK"][-1]
+    assert label.endswith(": Vero follows its own steps")
+    return label.removesuffix(": Vero follows its own steps")
+
+
+def assert_scripted_conflict(client: TestClient, run_id: str) -> None:
+    """Without the agent, the scripted investigation gives the hero's label and numbers."""
+    result = finding(client, run_id)
+    assert (result["classification"], result["escalated"]) == ("CONFLICT", False)
+    assert result["investigation"]["mode"] == "FALLBACK"
+    assert (result["investigation"]["justified"], result["investigation"]["disputed"]) == (
+        "380000",
+        "30400",
+    )
+
+
 def wait_until_finished(client: TestClient, run_id: str) -> dict:
     deadline = time.monotonic() + 5
     while run(client, run_id)["status"] == "RUNNING" and time.monotonic() < deadline:
@@ -225,17 +243,11 @@ def test_deadline_falls_back_and_late_callbacks_are_closed() -> None:
         done = wait_until_finished(client, run_id)
 
         assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
-        assert labels(client, run_id)[-2] == "The agent took too long: no reason found"
-        fallback = [s for s in done["trace"] if s["kind"] == "FALLBACK"]
-        assert fallback[-1]["data"] == {"reason": "DEADLINE_PASSED"}
-        result = finding(client, run_id)
-        assert (result["classification"], result["status"], result["escalated"]) == (
-            "UNEXPLAINED",
-            "CLASSIFIED",
-            True,
-        )
-        assert result["history"][-1]["label"] == "No reason found: needs your review"
-        assert done["result"]["headline"]["text"].endswith(": needs your review")
+        assert fell_back_because(client, run_id) == "The agent took too long"
+        steps = [s for s in done["trace"] if s["kind"] == "FALLBACK"]
+        assert steps[-1]["data"] == {"reason": "DEADLINE_PASSED"}
+        assert_scripted_conflict(client, run_id)
+        assert done["result"]["headline"]["text"].endswith(": 304,00 € more than allowed")
 
         for path, body in (
             ("complete", ANSWER),
@@ -256,8 +268,8 @@ def test_agent_failure_falls_back() -> None:
 
         done = run(client, run_id)
         assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
-        assert labels(client, run_id)[-2] == "The agent stopped (MODEL_ERROR): no reason found"
-        assert finding(client, run_id)["escalated"] is True
+        assert fell_back_because(client, run_id) == "The agent stopped (MODEL_ERROR)"
+        assert_scripted_conflict(client, run_id)
 
 
 def test_unreachable_ai_falls_back_at_once() -> None:
@@ -266,7 +278,7 @@ def test_unreachable_ai_falls_back_at_once() -> None:
 
         done = run(client, run_id)
         assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
-        assert labels(client, run_id)[-2] == "The AI service is unavailable: no reason found"
+        assert fell_back_because(client, run_id) == "The AI service is unavailable"
 
 
 def test_investigation_agent_switch_turns_the_agent_off() -> None:
@@ -276,7 +288,7 @@ def test_investigation_agent_switch_turns_the_agent_off() -> None:
 
         assert ai.started == []
         assert run(client, run_id)["status"] == "SUCCEEDED"
-        assert labels(client, run_id)[-2] == "The investigation agent is off: no reason found"
+        assert fell_back_because(client, run_id) == "The investigation agent is off"
     assert Settings().investigation_agent_enabled is True
 
 
@@ -286,8 +298,8 @@ def test_without_internal_token_the_upload_finishes_at_once() -> None:
         response = upload(client, RENT_PDF, "Mietanpassung.pdf")
         assert response.json()["status"] == "SUCCEEDED"
         run_id = response.json()["run_id"]
-        assert labels(client, run_id)[-2] == "The investigation agent is off: no reason found"
-        assert finding(client, run_id)["escalated"] is True
+        assert fell_back_because(client, run_id) == "The investigation agent is off"
+        assert_scripted_conflict(client, run_id)
 
 
 def test_data_change_during_the_investigation_falls_back() -> None:
@@ -301,9 +313,7 @@ def test_data_change_during_the_investigation_falls_back() -> None:
         )
         assert post(client, run_id, "complete", ANSWER).status_code == 204
 
-        assert labels(client, run_id)[-2] == (
-            "Your data changed during the investigation: no reason found"
-        )
+        assert fell_back_because(client, run_id) == "Your data changed during the investigation"
 
 
 def test_restart_during_the_investigation_finishes_without_the_agent() -> None:
@@ -315,9 +325,7 @@ def test_restart_during_the_investigation_finishes_without_the_agent() -> None:
 
         done = run(client, run_id)
         assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
-        assert labels(client, run_id)[-2] == (
-            "Vero restarted during the investigation: no reason found"
-        )
+        assert fell_back_because(client, run_id) == "Vero restarted during the investigation"
         assert len(ai.started) == 1
 
 
@@ -334,9 +342,7 @@ def test_restart_during_extraction_also_ends_the_investigation() -> None:
         done = run(client, run_id)
         assert (done["status"], done["mode"]) == ("SUCCEEDED", "FALLBACK")
         assert labels(client, run_id)[1].startswith("Vero restarted while reading it")
-        assert labels(client, run_id)[-2] == (
-            "Vero restarted during the investigation: no reason found"
-        )
+        assert fell_back_because(client, run_id) == "Vero restarted during the investigation"
         assert (ai.extracted, ai.started) == ([], [])
 
 
