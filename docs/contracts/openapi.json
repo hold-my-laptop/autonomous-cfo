@@ -1978,7 +1978,7 @@
           "assistant"
         ],
         "summary": "Ask",
-        "description": "Answers from at most 12 retrieved records, citing them. Never an error for model\ntrouble: without a usable model answer the matching records are listed instead.",
+        "description": "Answers from at most 12 retrieved records, citing them. Never an error for model\ntrouble: without a usable model answer the matching records are listed instead. Only\nrecords Vero retrieved can be cited; any other id in the model's answer is dropped.",
         "operationId": "ask",
         "requestBody": {
           "content": {
@@ -2082,13 +2082,11 @@
           },
           "sources": {
             "items": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
+              "$ref": "#/components/schemas/AssistantSource"
             },
             "type": "array",
-            "title": "Sources"
+            "title": "Sources",
+            "description": "The records the answer cites"
           },
           "model": {
             "anyOf": [
@@ -2128,6 +2126,69 @@
           "sources"
         ],
         "title": "AskResponse"
+      },
+      "AssistantSource": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "TRANSACTION",
+              "OUTFLOW",
+              "INFLOW"
+            ],
+            "title": "Kind",
+            "description": "TRANSACTION: booked; OUTFLOW / INFLOW: planned"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date",
+            "description": "Booking date, or the planned date"
+          },
+          "amount": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Amount",
+            "description": "Signed: negative leaves the account",
+            "examples": [
+              "125050"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "const": "EUR",
+            "title": "Currency"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "date",
+          "amount",
+          "currency",
+          "category",
+          "counterparty",
+          "description"
+        ],
+        "title": "AssistantSource",
+        "description": "A record the answer rests on."
       },
       "Assumption": {
         "properties": {

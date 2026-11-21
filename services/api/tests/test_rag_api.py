@@ -63,7 +63,7 @@ def test_public_question_route_passes_only_retrieved_records():
             assert [source["id"] for source in payload["sources"]] == [str(rent.id)]
             return {
                 "answer": "The rent was paid on 2025-04-01.",
-                "sources": payload["sources"],
+                "sources": [*payload["sources"], {"id": "not-retrieved", "kind": "outflow"}],
                 "model": "test-model",
             }
 
@@ -74,7 +74,19 @@ def test_public_question_route_passes_only_retrieved_records():
     with TestClient(app) as client:
         response = client.post("/api/v1/assistant/ask", json={"question": "When is the rent paid?"})
     assert response.status_code == 200
-    assert response.json()["sources"][0]["id"] == str(rent.id)
+    assert response.json()["sources"] == [
+        {
+            "id": str(rent.id),
+            "kind": "TRANSACTION",
+            "date": "2025-04-01",
+            "amount": "-380000",
+            "currency": "EUR",
+            "category": "RENT",
+            "counterparty": "Landlord",
+            "description": "RENT PAYMENT April rent",
+        }
+    ]
+    assert response.json()["model"] == "test-model"
 
 
 def test_ai_unavailable_lists_records_instead_of_503():
@@ -111,6 +123,7 @@ def test_ai_unavailable_lists_records_instead_of_503():
     assert body["answer"].startswith("Records matching your question (1):")
     assert "Landlord" in body["answer"] and "-3 800,00 €" in body["answer"]
     assert body["sources"][0]["id"] == str(rent.id)
+    assert (body["sources"][0]["kind"], body["sources"][0]["amount"]) == ("TRANSACTION", "-380000")
 
 
 def test_english_filler_words_do_not_match_other_payments():
@@ -134,3 +147,39 @@ def test_english_filler_words_do_not_match_other_payments():
     )
     state = SimpleNamespace(history=[energy, payroll], outflows=[], inflows=[])
     assert [m["id"] for m in retrieve(state, "How much did I pay City Energy?")] == [str(energy.id)]
+
+
+def test_an_unusable_model_answer_lists_the_records():
+    rent = SimpleNamespace(
+        id=uuid4(),
+        booking_date=date(2025, 4, 1),
+        amount=-380000,
+        category=Category.RENT,
+        counterparty="Landlord",
+        type="RENT PAYMENT",
+        reference="April rent",
+    )
+    state = SimpleNamespace(history=[rent], outflows=[], inflows=[])
+
+    class Repository:
+        @contextmanager
+        def read(self):
+            yield state
+
+    class Agent:
+        def ask(self, payload):
+            return {"answer": "", "sources": payload["sources"]}
+
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    app.dependency_overrides[get_repository] = Repository
+    app.dependency_overrides[get_agent_client] = Agent
+    with TestClient(app) as client:
+        response = client.post("/api/v1/assistant/ask", json={"question": "When is the rent paid?"})
+    body = response.json()
+    assert response.status_code == 200
+    assert (body["answer_source"], body["fallback_reason"]) == (
+        "TEMPLATE",
+        "AI service unavailable: ValidationError",
+    )
+    assert [s["amount"] for s in body["sources"]] == ["-380000"]

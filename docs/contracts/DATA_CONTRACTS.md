@@ -226,7 +226,7 @@ One line of the agent's visible trace.
 | Field | Type | Description |
 |---|---|---|
 | `seq` | int | 1, 2, … |
-| `kind` | enum | `THINK`, `TOOL_CALL`, `TOOL_RESULT`, `POLICY`, `EXECUTE`, `SUMMARY`, `FALLBACK`; Proof runs also `RECEIVE`, `EXTRACT` (the model read the PDF, `source: AGENT`, `data.model`), `CHECK` |
+| `kind` | enum | `THINK`, `TOOL_CALL`, `TOOL_RESULT`, `POLICY`, `EXECUTE`, `SUMMARY`, `FALLBACK`; Cash runs also `DISCARDED` (an agent proposal the backend ignored, with the reason); Proof runs also `RECEIVE`, `EXTRACT` (the model read the PDF, `source: AGENT`, `data.model`), `CHECK`, `INVESTIGATE` (the investigation starts, or the agent's note, `source: AGENT`), `GROUND` (the backend's check of the agent's answer and the final label), `PROPAGATE` (payment decision and forecast effect) |
 | `source` | enum | `AGENT` (the AI's own note) or `BACKEND` (tool calls, policy, execution) |
 | `label` | string | Plain-language line, e.g. "Recomputing your cash for the next 91 days" |
 | `tool` | string? | Tool name if it's a tool call |
@@ -302,7 +302,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 
 | # | When | Frontend sends | Backend returns |
 |---|---|---|---|
-| 1 | Dashboard opens or refreshes | `GET /overview` | **Overview** |
+| 1 | Dashboard opens or refreshes | `GET /overview` (header only: `GET /company`) | **Overview** (**Company**) |
 | 2 | Chart / details | `GET /forecast` (`?weekly=true` optional) | **Forecast** (+ `id`, `label: "CURRENT"`, `financial_version`, `mandate_version`, optional 13 `weeks`: `{ week, start_date, end_date, inflow, outflow, closing, lowest, any_below_floor }`) |
 | 3 | *(demo)* Backtest overlay | `GET /forecast/backtest` | **Backtest** |
 | 4 | Money in and out | `GET /outflows`, `GET /inflows`, `GET /revenue-model` | **Outflow[]**, **Inflow[]**, **RevenueModel** |
@@ -330,6 +330,7 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | 26 | *(Vero Proof)* Owner's tap on a quiet change | `POST /findings/{id}/acknowledge` (`Idempotency-Key`) | **ProofFinding** (`RESOLVED`, out of the digest). `409 NOT_PENDING` unless `quiet` and not yet acknowledged |
 | 27 | *(Vero Proof)* Upload a document | `POST /documents` (multipart `file`, a PDF of at most 5 MB, `Idempotency-Key`) | **202** `{ document_id, run_id, status }`. Poll `GET /runs/{run_id}` (kind `PROOF`): `RECEIVE` → `EXTRACT` (or `FALLBACK`) → `CHECK` → `SUMMARY`; the finding is in `finding_ids`. Errors: `409 RUN_IN_PROGRESS` and `409 DOCUMENT_ALREADY_PROCESSED` before anything is stored, `413 FILE_TOO_LARGE`, `422 VALIDATION_ERROR` (not a PDF, empty). A run that cannot read an unknown document ends `FAILED` with no finding; a demo document falls back to its stored values (`mode: FALLBACK`, reason in the trace) |
 | 28 | *(Vero Proof)* The weekly digest | `GET /digest` | **Digest**: every finding still `in_digest` (no date window) and the latest routine check per fixed cost |
+| 29 | Owner asks a question about the money | `POST /assistant/ask` with `{ question }` (3–500 characters) | **AskResponse**. Never an error for model trouble: with the AI service down, `answer_source: TEMPLATE` lists the matching records and `fallback_reason` says why; no matching record gives a `TEMPLATE` answer with no sources |
 
 ### 2.2 Data types
 
@@ -572,6 +573,19 @@ One difference Vero Proof found and everything it did about it, from `GET /findi
 
 **RoutineCheck**: `{ cost_ref, counterparty, transaction_id, date, paid, expected, currency, eur_amount?, fx_rate?, document_id, clause_id?, matches }`. `paid` and `expected` in `currency` (the CHF tranche in CHF, with `eur_amount` and `fx_rate`); `document_id`/`clause_id` = the contract.
 
+#### AskResponse
+`POST /assistant/ask`: the RAG assistant (read-only). The backend retrieves at most 12 records (booked transactions, planned outflows and inflows) by keyword overlap (`api/rag.py`), the model answers from them only.
+
+| Field | Type | Description |
+|---|---|---|
+| `answer` | string | The answer, citing records |
+| `sources` | AssistantSource[] | The records the answer rests on (only records Vero retrieved) |
+| `model` | string? | The model that answered |
+| `answer_source` | `MODEL` \| `TEMPLATE` | `TEMPLATE`: the records were listed without the model |
+| `fallback_reason` | string? | Why the model's answer was not used |
+
+**AssistantSource**: `{ id, kind: TRANSACTION | OUTFLOW | INFLOW, date: Date, amount: Money (signed, negative leaves the account), currency: "EUR", category, counterparty, description }`. `TRANSACTION` is booked; `OUTFLOW`/`INFLOW` are planned.
+
 #### AuditEntry
 One line of the append-only activity log, from `GET /audit`. Entries are sealed as a hash chain: verify them by recomputing each `hash` in `seq` order.
 
@@ -613,16 +627,17 @@ The backend owns data and logic. The AI service runs the agent: it **reads throu
 | 3 | Health | `GET /health/live`, `GET /health/model` | `{ status }` / **ModelHealth** (+ `mode`) |
 | 4 | *(SHOULD)* Rules from a sentence | `POST /v1/mandate/draft` with `{ text, current: Mandate }` | **MandateDraftResult** |
 | 5 | *(Vero Proof)* A document was uploaded | `POST /v1/documents/extract` with **ExtractRequest** (`INTERNAL_TOKEN`, answered within 30 s) | **ExtractResponse**, or `422 { detail: { code, message } }` for an unreadable file (`NO_TEXT_LAYER` and the other codes in `services/ai/src/ai/extraction.py`) |
+| 6 | Owner asks the assistant | `POST /v1/rag/answer` with `{ question, sources: RagRecord[] (≤ 12) }` (`INTERNAL_TOKEN`, `RAG_TIMEOUT_S` 35 s) | `{ answer, sources: RagRecord[], model?, answer_source: MODEL \| TEMPLATE, fallback_reason? }`. **RagRecord**: `{ id, kind: transaction \| outflow \| inflow, date, amount_cents, currency, category, counterparty, description }` (all strings). This internal shape keeps `amount_cents` and lower-case kinds; the backend translates it to the public **AssistantSource** and keeps only ids it retrieved |
 
 **AI service → backend** (`http://api:8080/internal/v1` in the cluster)
 
 | # | When | AI sends | Backend returns |
 |---|---|---|---|
-| 5 | Agent starts | `GET /tools?run_id=…` | **ToolSpec[]** of that run's kind (without `run_id`: the Cash tools) |
-| 6 | Agent calls a tool | `POST /tools/{name}` with **ToolCall** | **ToolResult** (the backend also writes the trace step) |
-| 7 | *(optional)* Agent note | `POST /runs/{run_id}/notes` with `{ text }` | `204` |
-| 8 | Agent is done | `POST /runs/{run_id}/complete` with **AgentCompletion** (Cash run) or **InvestigationCompletion** (Proof run) | `204` |
-| 9 | Agent gave up | `POST /runs/{run_id}/fail` with `{ reason, detail? }` | `204` (backend runs FALLBACK) |
+| 7 | Agent starts | `GET /tools?run_id=…` | **ToolSpec[]** of that run's kind (without `run_id`: the Cash tools) |
+| 8 | Agent calls a tool | `POST /tools/{name}` with **ToolCall** | **ToolResult** (the backend also writes the trace step) |
+| 9 | *(optional)* Agent note | `POST /runs/{run_id}/notes` with `{ text }` | `204` |
+| 10 | Agent is done | `POST /runs/{run_id}/complete` with **AgentCompletion** (Cash run) or **InvestigationCompletion** (Proof run) | `204` |
+| 11 | Agent gave up | `POST /runs/{run_id}/fail` with `{ reason, detail? }` | `204` (backend runs FALLBACK) |
 
 Callbacks go to the orchestrator of the run's kind (`CASH` or `PROOF`). Callbacks for a run that is no longer running (finished, fell back, or past the deadline) return `409 RUN_CLOSED`; so do callbacks for a Proof run that is still being read, before its investigation started. The completion shape must match the run's kind; the other shape is a `422 VALIDATION_ERROR`. A completion whose proposals have the wrong shape (e.g. `move` not an object `{ outflow_id, to_date }`) returns `422 VALIDATION_ERROR` and the run keeps its deadline. An answer the backend cannot apply falls back ("The model's answer could not be applied"). A missing or wrong token returns `401 UNAUTHORIZED`. Only one agent run is active at a time: a new event meanwhile returns `409 RUN_IN_PROGRESS`.
 
