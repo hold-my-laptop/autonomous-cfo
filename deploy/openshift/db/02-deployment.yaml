@@ -5,6 +5,7 @@ metadata:
   labels:
     app: db
     app.kubernetes.io/part-of: vero
+    app.openshift.io/runtime: postgresql
 spec:
   replicas: 1
   strategy:

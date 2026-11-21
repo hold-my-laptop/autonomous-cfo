@@ -5,6 +5,10 @@ metadata:
   labels:
     app: db
     app.kubernetes.io/part-of: vero
+    opendatahub.io/dashboard: "true"
+  annotations:
+    openshift.io/display-name: Postgres data
+    openshift.io/description: Database of the Vero api
 spec:
   accessModes:
     - ReadWriteOnce

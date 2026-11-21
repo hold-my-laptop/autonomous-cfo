@@ -5,7 +5,9 @@ metadata:
   labels:
     app: api
     app.kubernetes.io/part-of: vero
+    app.openshift.io/runtime: python
   annotations:
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"db"},{"apiVersion":"apps/v1","kind":"Deployment","name":"ai"}]'
     image.openshift.io/triggers: '[{"from":{"kind":"ImageStreamTag","name":"api:latest"},"fieldPath":"spec.template.spec.containers[?(@.name==\"api\")].image"}]'
 spec:
   replicas: 1
@@ -27,8 +29,6 @@ spec:
             - containerPort: 8080
               protocol: TCP
           env:
-            - name: STATEMENT_SOURCE
-              value: db
             - name: STATEMENT_PATH
               value: /opt/app-root/data/pizzeria-amalfi-bank-statement-2025-v6.csv
             - name: DATABASE_URL
@@ -43,6 +43,8 @@ spec:
                 secretKeyRef:
                   name: internal-token
                   key: INTERNAL_TOKEN
+            - name: STATEMENT_SOURCE
+              value: db
           volumeMounts:
             - name: statement
               mountPath: /opt/app-root/data
