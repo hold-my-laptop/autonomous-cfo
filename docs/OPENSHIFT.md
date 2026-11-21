@@ -41,9 +41,9 @@ Every arrow is a connection that a NetworkPolicy allows. Anything not drawn is b
 | web | Deployment + Route (edge TLS) | built from `apps/web`, UBI 9 Node.js 22 build, UBI 9 nginx 1.24 | 50m / 500m | 64Mi / 256Mi | `/health` |
 | vero-llm | KServe InferenceService, vLLM runtime | `registry.redhat.io/rhaii/vllm-cuda-rhel9` + model from the OpenShift AI catalog | 2 / 8 + 1 GPU | 8Gi / 16Gi | KServe |
 | api | Deployment, 1 replica | built from `services/api` on UBI 9 Python 3.12 | 250m / 1 | 512Mi / 1Gi | `/api/v1/health/ready`, `/api/v1/health/live` |
-| ai | Deployment, 1 replica | built from `services/ai` | 100m / 500m | 256Mi / 512Mi | `/health/live` |
+| ai | Deployment, 1 replica | built from `services/ai` | 250m / 2 | 512Mi / 1536Mi | `/health/live` |
 | db | Deployment + PersistentVolumeClaim (gp3-csi, 5Gi) | `registry.redhat.io/rhel9/postgresql-16` | 250m / 1 | 512Mi / 1Gi | `pg_isready` |
-| mlflow | Deployment + PersistentVolumeClaim (gp3-csi, 2Gi), no Route | built in the cluster: UBI 9 Python 3.12 + MLflow 3.18 | 100m / 1 | 1Gi / 2Gi | `/health` |
+| mlflow | Deployment + PersistentVolumeClaim (gp3-csi, 2Gi), no Route | built in the cluster: UBI 9 Python 3.12 + MLflow 3.18 | 100m / 1 | 2Gi / 3Gi | `/health` |
 | cfo-notebook | OpenShift AI workbench | Standard Data Science notebook 3.5 | 2 / 2 | 4Gi / 4Gi | OpenShift AI |
 
 The GPU is only used by the model. The web, api, ai and db pods together ask for less than one CPU.
@@ -160,9 +160,13 @@ make oc-pipeline-run
 
 `make oc-pipeline` creates the Tasks and the Pipeline (once, or after changing them). `make oc-pipeline-run` starts a run,
 waits for it and exits with 1 if a task fails. Parameters: `components` (default `web`, `api`), `branch` (default `main`) and `check` (default `true`).
-The ai is not built by default: the ai code on `main` needs the new ai Deployment (more memory, MLflow settings),
-so apply it first with `make oc-ai-deploy`, then start the pipeline with `components` set to `web`, `api`, `ai`.
+The ai is not built by default. Its Deployment (more memory, MLflow settings) is applied with `make oc-ai-deploy`;
+to rebuild it, start the pipeline with `components` set to `ai` (or `web`, `api`, `ai`).
 The check resets the demo, so do not run the pipeline during a demo.
+
+On GitHub, `.github/workflows/ci.yml` runs the api tests (with Postgres), the ai tests and the web lint and build on every
+pull request and on `main`. The sample statement is not in git, so CI skips the tests that need it; the full suite runs
+locally or in the cluster with the statement present.
 
 How it is set up: the runs use the `pipeline` service account, which has the `edit` role in this project only.
 Every step has CPU and memory requests and limits, the images are UBI 9 Python and the cluster's own `openshift/cli`,
@@ -204,7 +208,8 @@ Tracing: `make oc-mlflow` builds and runs an MLflow tracking server in the proje
 The ai service sends one trace per agent run and chat answer to the experiment `vero-agent` (`MLFLOW_TRACKING_URI=http://mlflow:8080`
 in its Deployment). Only the ai service and the workbench may connect, and there is no Route because the MLflow UI has
 no login. To open the UI: `oc port-forward svc/mlflow 5000:8080 -n autonomous-cfo`, then http://localhost:5000.
-MLflow needs about 850Mi of memory at start, so its limit is 2Gi.
+MLflow uses about 2Gi of memory once it runs (measured on 21 Nov), so it asks for 2Gi and may use up to 3Gi.
+The workbench notebook `agent-evaluation.ipynb` scores the agents and logs the scores to the experiment `vero-agent-eval`.
 
 Everyday commands:
 
