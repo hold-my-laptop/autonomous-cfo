@@ -1,7 +1,8 @@
 """The dashboard: what Vero found, did, proposes and refused."""
 
 from api.domain.forecast import DriverKind
-from api.domain.models import Category, RecommendationStatus
+from api.domain.models import Category, RecommendationStatus, RunKind
+from api.domain.proof.findings import Classification
 from api.money import format_eur
 from api.schemas import (
     Company,
@@ -9,7 +10,9 @@ from api.schemas import (
     Finding,
     ForecastSummary,
     Lanes,
+    OpenFindings,
     Overview,
+    ProofOverview,
     Recommendation,
     RunRef,
 )
@@ -59,13 +62,34 @@ def findings(state: DemoState) -> list[Finding]:
     return result
 
 
+def _latest_run(state: DemoState, kind: RunKind) -> RunRef | None:
+    runs = [r for r in state.runs.values() if r.kind is kind]
+    latest = max(runs, key=lambda r: r.created_at, default=None)
+    return RunRef(run_id=latest.id, status=latest.status) if latest else None
+
+
+def proof_overview(state: DemoState) -> ProofOverview:
+    open_findings = [f for f in state.findings.values() if f.in_digest]
+    return ProofOverview(
+        open_findings=OpenFindings(
+            **{c.value: sum(f.classification is c for f in open_findings) for c in Classification}
+        ),
+        needs_owner=sum(not f.quiet for f in open_findings),
+        latest_run=_latest_run(state, RunKind.PROOF),
+    )
+
+
 def build_overview(state: DemoState) -> Overview:
     forecast = state.forecast()
     recs = sorted(
         (r for r in state.recommendations.values() if r.status not in HIDDEN),
         key=lambda r: r.created_at,
     )
-    latest = max(state.runs.values(), key=lambda r: r.created_at, default=None)
+    latest = max(
+        (r for r in state.runs.values() if r.kind is RunKind.CASH),
+        key=lambda r: r.created_at,
+        default=None,
+    )
     source = "TEMPLATE"
     if latest is not None and latest.headline:
         headline, source = latest.headline, latest.headline_source
@@ -97,4 +121,5 @@ def build_overview(state: DemoState) -> Overview:
             r.status is RecommendationStatus.PENDING for r in state.recommendations.values()
         ),
         latest_run=RunRef(run_id=latest.id, status=latest.status) if latest else None,
+        proof=proof_overview(state),
     )

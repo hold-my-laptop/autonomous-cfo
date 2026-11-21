@@ -1935,6 +1935,43 @@
         }
       }
     },
+    "/api/v1/digest": {
+      "get": {
+        "tags": [
+          "proof"
+        ],
+        "summary": "Get Digest",
+        "description": "The weekly digest: changes handled quietly, changes needing the owner (with the actions\nVero staged) and the latest routine checks. A finding leaves it once acknowledged or once\nits actions are decided; there is no date window.",
+        "operationId": "get_digest",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Digest"
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Error (RFC 9457 problem details)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/assistant/ask": {
       "post": {
         "tags": [
@@ -3087,6 +3124,185 @@
           "AMOUNT_CHANGE"
         ],
         "title": "DifferenceKind"
+      },
+      "Digest": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/DigestCounts"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/DigestChange"
+            },
+            "type": "array",
+            "title": "Changes",
+            "description": "By the date of what they concern"
+          },
+          "routine_checks": {
+            "items": {
+              "$ref": "#/components/schemas/RoutineCheck"
+            },
+            "type": "array",
+            "title": "Routine Checks",
+            "description": "The latest per cost item"
+          }
+        },
+        "type": "object",
+        "required": [
+          "as_of",
+          "counts",
+          "changes",
+          "routine_checks"
+        ],
+        "title": "Digest",
+        "description": "The weekly digest: every finding the owner hasn't acknowledged or decided yet and the\nlatest routine check of each fixed cost with a contract. No date window."
+      },
+      "DigestAction": {
+        "properties": {
+          "recommendation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Recommendation Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/RecommendationKind"
+          },
+          "lane": {
+            "type": "string",
+            "enum": [
+              "DONE_WITHIN_MANDATE",
+              "NEEDS_APPROVAL",
+              "NOT_ALLOWED"
+            ],
+            "title": "Lane"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text",
+            "description": "e.g. 'Keep paying 3 800,00 € for RENT'"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recommendation_id",
+          "kind",
+          "lane",
+          "text"
+        ],
+        "title": "DigestAction",
+        "description": "An action Vero prepared for the finding, waiting for the owner."
+      },
+      "DigestChange": {
+        "properties": {
+          "finding_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Finding Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "cost_ref": {
+            "type": "string",
+            "title": "Cost Ref"
+          },
+          "classification": {
+            "$ref": "#/components/schemas/Classification"
+          },
+          "escalated": {
+            "type": "boolean",
+            "title": "Escalated"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FindingStatus"
+          },
+          "quiet": {
+            "type": "boolean",
+            "title": "Quiet",
+            "description": "Handled quietly; acknowledge it to clear it"
+          },
+          "investigation_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InvestigationMode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when the label came after investigating (AGENT or FALLBACK)"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "description": "Why it has its label, in one line"
+          },
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/DigestAction"
+            },
+            "type": "array",
+            "title": "Actions",
+            "description": "Staged actions waiting for the owner"
+          }
+        },
+        "type": "object",
+        "required": [
+          "finding_id",
+          "title",
+          "counterparty",
+          "cost_ref",
+          "classification",
+          "escalated",
+          "status",
+          "quiet",
+          "investigation_mode",
+          "reason",
+          "actions"
+        ],
+        "title": "DigestChange"
+      },
+      "DigestCounts": {
+        "properties": {
+          "changes": {
+            "type": "integer",
+            "title": "Changes",
+            "description": "Findings in the digest"
+          },
+          "handled_quietly": {
+            "type": "integer",
+            "title": "Handled Quietly",
+            "description": "Verified, nothing to decide"
+          },
+          "needs_owner": {
+            "type": "integer",
+            "title": "Needs Owner",
+            "description": "Waiting for a decision or for evidence"
+          },
+          "routine_checks": {
+            "type": "integer",
+            "title": "Routine Checks",
+            "description": "Latest routine checks that matched the contract"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changes",
+          "handled_quietly",
+          "needs_owner",
+          "routine_checks"
+        ],
+        "title": "DigestCounts"
       },
       "Document": {
         "properties": {
@@ -5659,6 +5875,30 @@
         ],
         "title": "ModelHealth"
       },
+      "OpenFindings": {
+        "properties": {
+          "VERIFIED": {
+            "type": "integer",
+            "title": "Verified"
+          },
+          "UNEXPLAINED": {
+            "type": "integer",
+            "title": "Unexplained"
+          },
+          "CONFLICT": {
+            "type": "integer",
+            "title": "Conflict"
+          }
+        },
+        "type": "object",
+        "required": [
+          "VERIFIED",
+          "UNEXPLAINED",
+          "CONFLICT"
+        ],
+        "title": "OpenFindings",
+        "description": "Vero Proof findings still in the digest, by label."
+      },
       "Outflow": {
         "properties": {
           "id": {
@@ -5815,7 +6055,8 @@
             "$ref": "#/components/schemas/ForecastSummary"
           },
           "headline": {
-            "$ref": "#/components/schemas/Explanation"
+            "$ref": "#/components/schemas/Explanation",
+            "description": "Vero Cash: from the latest Cash run"
           },
           "lanes": {
             "$ref": "#/components/schemas/Lanes"
@@ -5832,7 +6073,11 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The latest Cash run"
+          },
+          "proof": {
+            "$ref": "#/components/schemas/ProofOverview"
           }
         },
         "type": "object",
@@ -5843,7 +6088,8 @@
           "headline",
           "lanes",
           "pending_count",
-          "latest_run"
+          "latest_run",
+          "proof"
         ],
         "title": "Overview"
       },
@@ -6236,6 +6482,36 @@
           "in_digest"
         ],
         "title": "ProofFinding"
+      },
+      "ProofOverview": {
+        "properties": {
+          "open_findings": {
+            "$ref": "#/components/schemas/OpenFindings"
+          },
+          "needs_owner": {
+            "type": "integer",
+            "title": "Needs Owner",
+            "description": "Open findings waiting for a decision or evidence"
+          },
+          "latest_run": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RunRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest Proof run"
+          }
+        },
+        "type": "object",
+        "required": [
+          "open_findings",
+          "needs_owner",
+          "latest_run"
+        ],
+        "title": "ProofOverview"
       },
       "ReadyStatus": {
         "properties": {
@@ -6839,6 +7115,112 @@
           "model_version"
         ],
         "title": "RevenueModel"
+      },
+      "RoutineCheck": {
+        "properties": {
+          "cost_ref": {
+            "type": "string",
+            "title": "Cost Ref"
+          },
+          "counterparty": {
+            "type": "string",
+            "title": "Counterparty"
+          },
+          "transaction_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Transaction Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "paid": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Paid",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "expected": {
+            "type": "string",
+            "pattern": "^-?[0-9]{1,15}$",
+            "title": "Expected",
+            "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+            "examples": [
+              "125050"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "eur_amount": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^-?[0-9]{1,15}$",
+                "description": "Integer cents as a string: \"125050\" = 1 250,50 €, at most 15 digits",
+                "examples": [
+                  "125050"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eur Amount"
+          },
+          "fx_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Rate"
+          },
+          "document_id": {
+            "type": "string",
+            "title": "Document Id"
+          },
+          "clause_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clause Id"
+          },
+          "matches": {
+            "type": "boolean",
+            "title": "Matches"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "cost_ref",
+          "counterparty",
+          "transaction_id",
+          "date",
+          "paid",
+          "expected",
+          "currency",
+          "document_id",
+          "clause_id",
+          "matches"
+        ],
+        "title": "RoutineCheck",
+        "description": "A statement payment of a recurring cost compared with the contract behind it."
       },
       "Run": {
         "properties": {

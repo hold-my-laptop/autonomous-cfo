@@ -825,14 +825,29 @@ class RunRef(BaseModel):
     status: PublicRunStatus
 
 
+class OpenFindings(BaseModel):
+    """Vero Proof findings still in the digest, by label."""
+
+    VERIFIED: int
+    UNEXPLAINED: int
+    CONFLICT: int
+
+
+class ProofOverview(BaseModel):
+    open_findings: OpenFindings
+    needs_owner: int = Field(description="Open findings waiting for a decision or evidence")
+    latest_run: RunRef | None = Field(description="The latest Proof run")
+
+
 class Overview(BaseModel):
     company: Company
     cash_floor: Money
     forecast_summary: ForecastSummary
-    headline: Explanation
+    headline: Explanation = Field(description="Vero Cash: from the latest Cash run")
     lanes: Lanes
     pending_count: int
-    latest_run: RunRef | None
+    latest_run: RunRef | None = Field(description="The latest Cash run")
+    proof: ProofOverview
 
 
 class MandateIn(BaseModel):
