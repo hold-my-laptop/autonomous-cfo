@@ -1,0 +1,513 @@
+@import "@fontsource/plus-jakarta-sans/400.css";
+@import "@fontsource/plus-jakarta-sans/500.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/plus-jakarta-sans/700.css";
+@import "tailwindcss";
+
+/*
+  Vero design tokens, light and dark.
+  - The theme lives on <html data-theme="light|dark"> (index.html sets it before first paint,
+    lib/theme.ts toggles it). Every colour is a variable, so components never need dark: variants.
+  - Spec names (--bg, --text, --surface, --hero, --chip, --primary, --ok, --ask …) are defined per
+    theme below; @theme maps them to the Tailwind names the components use (paper, ink, sand …).
+  - Status colours have two shades where needed: the dot uses the spec colour, the text uses a
+    darker one in light mode so it keeps 4.5:1 (e.g. --ask #d9a43a dot, --ask-text #8a6414 text).
+  - Liquid glass material: `liquid-glass` (panels), `liquid-glass-strong` (text-heavy panels and any
+    panel with small coloured text), `liquid-glass-pill` (nav bar, chips, icon buttons), tinted with
+    `liquid-navy` (forecast card) or `liquid-panel` (presenter controls, toasts). Inside a panel use
+    `glass-inset` (plain tint, no blur, no rim): never glass in glass. Buttons, badges, amounts and
+    chart marks stay solid.
+  - Plus Jakarta Sans, tabular figures for every amount. Cards 24px radius, buttons are pills.
+*/
+@theme inline {
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-paper: var(--bg);
+  --color-surface: var(--surface-solid); /* tooltips, inputs, focus chips */
+  --color-raised: var(--raised);         /* inner sections inside a glass card */
+  --color-sunk: var(--sunk);             /* skeletons */
+  --color-chip: var(--chip);
+  --color-ink: var(--text);
+  --color-ink-soft: var(--text-muted);
+  --color-ink-muted: var(--text-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-on-hero: var(--on-hero);       /* text on the navy forecast card, toasts, presenter panel */
+
+  --color-navy: var(--badge);            /* filled badges with white text */
+  --color-link: var(--link);
+  --color-action: var(--focus);
+  --color-action-tint: var(--action-tint);
+
+  --color-sand: var(--ask);              /* "needs your OK" dot and highlight */
+  --color-cream: var(--ask-tint);
+  --color-ask: var(--ask-text);
+  --color-on-fill: var(--on-fill);
+
+  --color-safe: var(--ok-text);
+  --color-safe-tint: var(--ok-tint);
+  --color-tight: var(--tight);
+  --color-tight-tint: var(--tight-tint);
+  --color-short: var(--short);
+  --color-short-tint: var(--short-tint);
+}
+
+/* ───────────── Light ───────────── */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f4f7;
+  --text: #1b2547;
+  --text-muted: #4d5468;   /* spec #5d6478, darkened: 4.5:1 directly on the darkest silk folds */
+  --text-faint: #4d5468;   /* same as muted: faint text also sits directly on the page */
+  /* The sticky header is stronger than glass-1: the navy forecast card scrolls under it and the
+     menu text must keep 4.5:1 (at 0.45 it dropped to 2.9:1). */
+  --glass-bar-bg: rgb(255 255 255 / 0.8);
+  --nav-glass-bg: rgb(255 255 255 / 0.5); /* spec 0.38; raised: navy text fell to 4.2:1 over the forecast card */
+  --glass-inset: rgb(27 37 71 / 0.06); /* sections inside a panel: navy at 6% */
+  --glass-border: rgb(255 255 255 / 0.85);
+  --glass-highlight: rgb(255 255 255 / 0.9);
+  --glass-shadow: rgb(27 37 71 / 0.07);
+  --surface-solid: #ffffff;
+  /* Liquid glass material: tint, rim light, depth, and the solid fallback. */
+  --lg-tint: #ffffff;
+  --lg-strong-fill: 55%;
+  --lg-rim: linear-gradient(135deg, rgb(255 255 255 / 0.65) 0%, rgb(255 255 255 / 0.15) 35%, rgb(255 255 255 / 0.05) 65%, rgb(27 37 71 / 0.18) 100%);
+  --lg-depth: inset 0 1px 1px rgb(255 255 255 / 0.45), inset 0 -1px 2px rgb(0 0 0 / 0.1), 0 20px 50px rgb(27 37 71 / 0.08);
+  --lg-depth-pill: inset 0 1px 1px rgb(255 255 255 / 0.45), inset 0 -1px 2px rgb(0 0 0 / 0.1), 0 6px 18px rgb(27 37 71 / 0.08);
+  --lg-hero-tint: #1c2748;
+  --lg-hero-fill: 85%;
+  --lg-solid: #ffffff;
+  --lg-solid-border: #e6e8ef;
+  --lg-hero-solid: #1c2748;
+  --chip: rgb(27 37 71 / 0.06);
+  --primary: #1c2748;
+  --primary-ink: #ffffff;
+  --primary-dark: #1c2748;
+  --primary-dark-ink: #ffffff;
+  --ok: #1f8a4c;
+  --ok-text: #18753f;      /* #1f8a4c is 3.8:1 as text on a card */
+  --ok-tint: #e3f2e9;
+  --ask: #d9a43a;
+  --ask-text: #8a6414;     /* #d9a43a is 2:1 as text on white */
+  --ask-tint: #fbf3df;
+
+  --raised: #ffffff;
+  --sunk: #e9ebf0;
+  --line: #e0e2e8;
+  --line-strong: #c8cbd4;
+  --divider: rgb(27 37 71 / 0.08);
+  --on-hero: #ffffff;
+  --badge: #1c2748;
+  --link: #1c2748;
+  --focus: #1c2748; /* = --primary */
+  --action-tint: #e8eaf2;
+  --on-fill: #ffffff;
+  --tight: #8a6414;
+  --tight-tint: #fbf3df;
+  --short: #b3402b;
+  --short-tint: #fbe9e5;
+  --avatar-bg: var(--chip);
+  --avatar-ink: var(--text);
+
+  /* Background: the white silk photo, softened toward the #f3f4f7 base so text over it stays readable. */
+  --page-bg: linear-gradient(rgb(243 244 247 / 0.35), rgb(243 244 247 / 0.35)), url("/bg-silk.webp") center / cover no-repeat, #f3f4f7;
+  --page-filter: none;
+  --page-tint: transparent;
+}
+
+/* ───────────── Dark ───────────── */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0e1a35;
+  --text: #f4f5f9;
+  --text-muted: rgb(244 245 249 / 0.72);
+  --text-faint: rgb(244 245 249 / 0.66);
+  --glass-bar-bg: rgb(14 26 53 / 0.72); /* white text stays readable over the coral bars */
+  --nav-glass-bg: rgb(14 26 53 / 0.55); /* spec white 0.06; white text fell to 3.6:1 over light parts of the page */
+  --glass-inset: rgb(255 255 255 / 0.06); /* sections inside a panel: white at 6% */
+  --glass-border: rgb(255 255 255 / 0.1);
+  --glass-highlight: rgb(255 255 255 / 0.08);
+  --glass-shadow: rgb(0 0 0 / 0.3);
+  --surface-solid: #16244a;
+  --lg-tint: #16244a;
+  --lg-strong-fill: 60%;
+  --lg-rim: linear-gradient(135deg, rgb(255 255 255 / 0.65) 0%, rgb(255 255 255 / 0.15) 35%, rgb(255 255 255 / 0.05) 65%, rgb(255 255 255 / 0.3) 100%);
+  --lg-depth: inset 0 1px 1px rgb(255 255 255 / 0.45), inset 0 -1px 2px rgb(0 0 0 / 0.1), 0 20px 50px rgb(0 0 0 / 0.18);
+  --lg-depth-pill: inset 0 1px 1px rgb(255 255 255 / 0.45), inset 0 -1px 2px rgb(0 0 0 / 0.1), 0 6px 18px rgb(0 0 0 / 0.18);
+  --lg-hero-tint: #16244a;
+  --lg-hero-fill: 14%;
+  --lg-solid: #16244a;
+  --lg-solid-border: rgb(255 255 255 / 0.1);
+  --lg-hero-solid: #16244a;
+  --chip: rgb(255 255 255 / 0.08);
+  --primary: #f5f1e8;
+  --primary-ink: #13224a;
+  --primary-dark: #0b1328;
+  --primary-dark-ink: #ffffff;
+  --ok: #3ccf86;
+  --ok-text: #3ccf86;
+  --ok-tint: rgb(60 207 134 / 0.14);
+  --ask: #f1c44f;
+  --ask-text: #f1c44f;
+  --ask-tint: rgb(241 196 79 / 0.13);
+
+  --raised: #1b2a52;
+  --sunk: #18264b;
+  --line: rgb(255 255 255 / 0.1);
+  --line-strong: rgb(255 255 255 / 0.18);
+  --divider: rgb(255 255 255 / 0.1);
+  --on-hero: #ffffff;
+  --badge: #2c3d6b;
+  --link: #f1c44f;
+  --focus: #f5f1e8; /* = --primary */
+  --action-tint: rgb(255 255 255 / 0.08);
+  --on-fill: #13224a;
+  --tight: #f1c44f;
+  --tight-tint: rgb(241 196 79 / 0.13);
+  --short: #ff9582;
+  --short-tint: rgb(255 138 117 / 0.14);
+  --avatar-bg: #5a4426;
+  --avatar-ink: #f5f1e8;
+
+  /* Background: the same silk, inverted so its folds become soft light streaks, tinted navy above. */
+  --page-bg: url("/bg-silk.webp") center / cover no-repeat;
+  --page-filter: invert(1) brightness(0.5);
+  --page-tint: #0c1834;
+}
+
+/* Shared: radii. Cards use rounded-3xl (24px), buttons rounded-full. */
+
+html {
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Background layer: fixed, so it never moves on scroll (also on iOS). */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--page-bg);
+  filter: var(--page-filter);
+}
+/* A colour layer that tints the background (navy in dark mode, nothing in light mode). */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--page-tint);
+  mix-blend-mode: screen;
+}
+
+/*
+  Liquid glass. One material in three cuts:
+  - liquid-glass         panels: 14% fill, heavy blur, rim light, specular corner, depth
+  - liquid-glass-strong  text-heavy panels: same, with a 55% (light) / 60% (dark) fill
+  - liquid-glass-pill    nav bar, chips, icon buttons: 18% fill, 24px blur
+  Modifiers: liquid-navy (forecast card), liquid-panel (presenter controls, toasts), liquid-hover.
+  The fill is our own surface colour (--lg-tint: white in light, #16244a in dark) mixed with transparency.
+  Blur values are written literally (the minifier drops var() blur values). Radius comes from the
+  element (rounded-3xl / rounded-full). The rim and highlight are pseudo-elements at z-index -1
+  inside an isolated stacking context, so they sit above the fill and below the content.
+*/
+@layer base {
+  :where(.liquid-glass, .liquid-glass-strong, .liquid-glass-pill) {
+    position: relative; /* zero specificity: fixed / sticky classes on the element still win */
+    isolation: isolate;
+  }
+}
+@utility liquid-glass {
+  background: color-mix(in srgb, var(--lgx-tint, var(--lg-tint)) var(--lgx-fill, 14%), transparent);
+  -webkit-backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
+  backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
+  box-shadow: var(--lg-depth);
+  transition: background-color 160ms ease;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: var(--lg-rim);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: var(--lgx-rim, 0.85);
+    transition: opacity 160ms ease;
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(120% 80% at 0% 0%, rgb(255 255 255 / 0.18), transparent 55%);
+  }
+}
+@utility liquid-glass-strong {
+  background: color-mix(in srgb, var(--lgx-tint, var(--lg-tint)) var(--lgx-fill, var(--lg-strong-fill)), transparent);
+  -webkit-backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
+  backdrop-filter: blur(32px) saturate(180%) brightness(1.05);
+  box-shadow: var(--lg-depth);
+  transition: background-color 160ms ease;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: var(--lg-rim);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: var(--lgx-rim, 0.85);
+    transition: opacity 160ms ease;
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    background: radial-gradient(120% 80% at 0% 0%, rgb(255 255 255 / 0.18), transparent 55%);
+  }
+}
+@utility liquid-glass-pill {
+  background: color-mix(in srgb, var(--lgx-tint, var(--lg-tint)) var(--lgx-fill, 18%), transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(180%) brightness(1.05);
+  backdrop-filter: blur(24px) saturate(180%) brightness(1.05);
+  box-shadow: var(--lg-depth-pill);
+  transition: background-color 160ms ease;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    padding: 1px;
+    pointer-events: none;
+    background: var(--lg-rim);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask-composite: exclude;
+    opacity: var(--lgx-rim, 0.85);
+    transition: opacity 160ms ease;
+  }
+  &:where(a, button, label):hover {
+    --lgx-fill: 24%;
+    --lgx-rim: 1;
+  }
+}
+/* Interactive panel: fill +6%, rim brighter on hover. */
+@utility liquid-hover {
+  &:hover {
+    --lgx-fill: 20%;
+    --lgx-rim: 1;
+  }
+}
+/* Forecast card: navy tint (85% in light, keeps its navy look; 14% in dark). */
+@utility liquid-navy {
+  --lgx-tint: var(--lg-hero-tint);
+  --lgx-fill: var(--lg-hero-fill);
+  --lgx-solid: var(--lg-hero-solid);
+}
+/* Presenter controls and toasts: navy glass in both themes (they carry white text). */
+@utility liquid-panel {
+  --lgx-tint: #0e1a35;
+  --lgx-fill: 78%;
+  --lgx-solid: #0e1a35;
+}
+/* Active tab inside a glass bar: the primary colour, recessed. */
+@utility pill-recessed {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.25);
+}
+/* The sticky header (unchanged): glass with only a bottom border. */
+@utility glass-1-bar {
+  background: var(--glass-bar-bg);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  backdrop-filter: blur(16px) saturate(150%);
+  border-bottom: 1px solid var(--glass-border);
+  box-shadow: inset 0 1px 0 var(--glass-highlight), 0 12px 40px var(--glass-shadow);
+}
+/* Sections inside a panel: a plain tint, no blur, no rim. */
+@utility glass-inset {
+  background: var(--glass-inset);
+}
+/* Never glass on glass: pills inside a panel or the header keep fill and rim, but no blur of their own. */
+:is(.liquid-glass, .liquid-glass-strong, .glass-1-bar, .nav-glass) .liquid-glass-pill {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* Floating header island: frosted glass with a bright top-left rim. */
+@utility nav-glass {
+  position: relative;
+  isolation: isolate;
+  border-radius: 22px;
+  background: var(--nav-glass-bg);
+  -webkit-backdrop-filter: blur(26px) saturate(180%);
+  backdrop-filter: blur(26px) saturate(180%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.9),
+    inset 0 -1px 1px rgb(27 37 71 / 0.05),
+    0 10px 30px rgb(27 37 71 / 0.1);
+}
+.nav-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background: linear-gradient(135deg,
+    rgb(255 255 255 / 1), rgb(255 255 255 / 0.35) 40%,
+    rgb(27 37 71 / 0.1) 70%, rgb(255 255 255 / 0.8));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+[data-theme="dark"] .nav-glass {
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  backdrop-filter: blur(26px) saturate(160%);
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.12), 0 12px 36px rgb(0 0 0 / 0.35);
+}
+[data-theme="dark"] .nav-glass::before {
+  background: linear-gradient(135deg,
+    rgb(255 255 255 / 0.45), rgb(255 255 255 / 0.08) 40%,
+    rgb(255 255 255 / 0.03) 65%, rgb(255 255 255 / 0.22));
+}
+.nav-active { box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.25); }
+[data-theme="dark"] .nav-active { box-shadow: inset 0 -1px 2px rgb(0 0 0 / 0.12); }
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .nav-glass { background: #ffffff; }
+  [data-theme="dark"] .nav-glass { background: #16244a; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .nav-glass, [data-theme="dark"] .nav-glass { background: #ffffff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  [data-theme="dark"] .nav-glass { background: #16244a; }
+}
+
+/* The avatar keeps its own colour inside the pill material. */
+.liquid-glass-pill.avatar {
+  background: var(--avatar-bg);
+}
+
+/* Pill buttons: primary (navy / cream) and strong (navy / near-black, e.g. "See suggestion"). */
+@utility btn-primary {
+  background: var(--primary);
+  color: var(--primary-ink);
+  transition: filter 150ms ease;
+  &:hover { filter: brightness(1.08); }
+}
+@utility btn-strong {
+  background: var(--primary-dark);
+  color: var(--primary-dark-ink);
+  transition: filter 150ms ease;
+  &:hover { filter: brightness(1.15); }
+}
+@utility avatar {
+  background: var(--avatar-bg);
+  color: var(--avatar-ink);
+}
+
+/* No blur support, or "Reduce transparency": solid surfaces in the theme colours, same radius,
+   a plain 1px border, no rim or highlight. The background photo stays. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .liquid-glass, .liquid-glass-strong, .liquid-glass-pill {
+    background: var(--lgx-solid, var(--lg-solid));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: inset 0 0 0 1px var(--lg-solid-border); /* a plain 1px border that doesn't change the size */
+  }
+  .liquid-glass::before, .liquid-glass::after, .liquid-glass-strong::before, .liquid-glass-strong::after, .liquid-glass-pill::before {
+    display: none;
+  }
+  .liquid-glass-pill.avatar { background: var(--avatar-bg); }
+  :root { --glass-bar-bg: #ffffff; --glass-border: #e6e8ef; }
+  :root[data-theme="dark"] { --glass-bar-bg: #16244a; --glass-border: rgb(255 255 255 / 0.1); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-glass, .liquid-glass-strong, .liquid-glass-pill {
+    background: var(--lgx-solid, var(--lg-solid));
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    box-shadow: inset 0 0 0 1px var(--lg-solid-border); /* a plain 1px border that doesn't change the size */
+  }
+  .liquid-glass::before, .liquid-glass::after, .liquid-glass-strong::before, .liquid-glass-strong::after, .liquid-glass-pill::before {
+    display: none;
+  }
+  .liquid-glass-pill.avatar { background: var(--avatar-bg); }
+  :root { --glass-bar-bg: #ffffff; --glass-border: #e6e8ef; }
+  :root[data-theme="dark"] { --glass-bar-bg: #16244a; --glass-border: rgb(255 255 255 / 0.1); }
+  .glass-1-bar { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 0.9375rem; /* 15px body */
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+h1, h2, h3, .tight {
+  letter-spacing: -0.02em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* The one motion moment: a new item arrives because something happened. */
+@keyframes arrive {
+  from { background-color: var(--color-action-tint); }
+  to   { background-color: color-mix(in srgb, var(--lg-tint) var(--lg-strong-fill), transparent); }
+}
+.arrive { animation: arrive 2.4s ease-out; }
+
+/* Nav bar: the active pill slides (with a slight stretch) and tabs press in a touch. */
+.nav-pill.nav-pill-ready {
+  transition: transform 380ms cubic-bezier(0.3, 1.3, 0.5, 1), width 300ms cubic-bezier(0.3, 0.8, 0.3, 1), opacity 200ms ease;
+}
+.nav-tab {
+  transition: color 220ms ease, background-color 200ms ease, transform 140ms ease;
+}
+.nav-tab:active { transform: scale(0.96); }
+@keyframes icon-in {
+  from { opacity: 0; transform: rotate(-90deg) scale(0.6); }
+  to   { opacity: 1; transform: rotate(0) scale(1); }
+}
+.icon-in { animation: icon-in 360ms cubic-bezier(0.3, 1.3, 0.5, 1); }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.toast-in { animation: toast-in 0.2s ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
