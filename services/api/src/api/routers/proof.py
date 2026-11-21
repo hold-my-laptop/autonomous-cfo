@@ -1,21 +1,36 @@
-from fastapi import APIRouter, status
+from datetime import UTC, datetime
+from uuid import UUID
+
+from fastapi import APIRouter, Request, status
 from fastapi.responses import FileResponse
 
+from api.audit import AuditActor, AuditAgent, record
 from api.deps import RepositoryDep, SettingsDep
 from api.domain.proof.dataset import Document as FixtureDocument
+from api.domain.proof.findings import Classification, FindingStatus, ProofFinding
 from api.errors import ApiError, ErrorCode
+from api.idempotency import IdempotencyKeyDep, request_hash, run_idempotent
 from api.proof_schemas import CostItem, Document, DocumentSummary
 from api.state import DemoState
 
 router = APIRouter(tags=["proof"])
 
 
+def _cited(state: DemoState) -> set[str]:
+    cited: set[str] = set()
+    for finding in state.findings.values():
+        cited |= {d for d in (finding.document_id, finding.previous_document_id) if d}
+        cited |= {r.document_id for r in finding.evidence_refs if r.document_id}
+    return cited
+
+
 def _visible(state: DemoState) -> list[FixtureDocument]:
-    """The documents the owner can see: their own documents. Mailbox attachments stay hidden
-    until a finding cites them, and the rent adjustment until it is uploaded."""
+    """The documents the owner can see: their own documents, and any other document once a
+    finding cites it (a mailbox attachment found by an investigation, an upload)."""
     if state.proof is None:
         return []
-    return [d for d in state.proof.documents if d.listed]
+    cited = _cited(state)
+    return [d for d in state.proof.documents if d.listed or d.id in cited]
 
 
 def _find(state: DemoState, document_id: str) -> FixtureDocument:
@@ -74,3 +89,69 @@ def get_document_file(
         filename=f"{document.id}.pdf",
         content_disposition_type="inline",
     )
+
+
+def _finding(state: DemoState, finding_id: UUID) -> ProofFinding:
+    finding = state.findings.get(finding_id)
+    if finding is None:
+        raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, f"no finding {finding_id}")
+    return finding
+
+
+@router.get("/findings")
+def list_findings(
+    repository: RepositoryDep,
+    classification: Classification | None = None,
+    status: FindingStatus | None = None,
+) -> list[ProofFinding]:
+    """Vero Proof findings, by the date of what they concern (oldest first)."""
+    with repository.read() as state:
+        return sorted(
+            (
+                f
+                for f in state.findings.values()
+                if (classification is None or f.classification is classification)
+                and (status is None or f.status is status)
+            ),
+            key=lambda f: (f.period_from or f.created_at.date(), f.created_at, str(f.id)),
+        )
+
+
+@router.get("/findings/{finding_id}")
+def get_finding(finding_id: UUID, repository: RepositoryDep) -> ProofFinding:
+    with repository.read() as state:
+        return _finding(state, finding_id)
+
+
+@router.post("/findings/{finding_id}/acknowledge")
+def acknowledge_finding(
+    finding_id: UUID, key: IdempotencyKeyDep, repository: RepositoryDep, request: Request
+) -> ProofFinding:
+    """The owner's one tap on a change Vero handled quietly: it leaves the digest. A finding
+    that is not quiet (it needs evidence or a decision) or was already acknowledged gives
+    NOT_PENDING."""
+    with repository.write() as state:
+
+        def apply() -> ProofFinding:
+            finding = _finding(state, finding_id)
+            if not finding.quiet or finding.acknowledged_at is not None:
+                raise ApiError(
+                    status.HTTP_409_CONFLICT,
+                    ErrorCode.NOT_PENDING,
+                    "only a verified finding with nothing to decide can be acknowledged",
+                )
+            now = datetime.now(UTC)
+            done = finding.advance(
+                now, FindingStatus.RESOLVED, "You acknowledged it", acknowledged_at=now
+            )
+            state.findings[finding_id] = done
+            record(
+                state,
+                now,
+                AuditActor.OWNER,
+                f"Acknowledged: {finding.title}",
+                agent=AuditAgent.PROOF,
+            )
+            return done
+
+        return run_idempotent(state, key, request_hash("POST", request.url.path, None), apply)

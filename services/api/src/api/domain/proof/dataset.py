@@ -251,12 +251,50 @@ class InvoiceLineCheck:
     previous_unit_price: Decimal | None
     unit_price: Decimal
     price_list_id: str | None = None
+    price_list_item_id: str | None = None
+
+
+def compare_invoice(
+    previous: Document, current: Document, price_lists: list[Document]
+) -> list[InvoiceLineCheck]:
+    """The lines of `current` whose unit price is new: different from `previous` (the same
+    supplier's invoice before it), or not on it. A price list valid on the invoice date that
+    gives exactly that price explains the line; otherwise it is unexplained."""
+    before = {line.description: line.unit_price for line in previous.lines}
+    checks: list[InvoiceLineCheck] = []
+    for line in current.lines:
+        previous_price = before.get(line.description)
+        if previous_price == line.unit_price:
+            continue
+        explained = next(
+            (
+                (pl.id, item.id)
+                for pl in price_lists
+                if pl.price_list is not None and pl.price_list.valid_on(current.date)
+                for item in pl.price_list.items
+                if item.description == line.description and item.unit_price == line.unit_price
+            ),
+            None,
+        )
+        checks.append(
+            InvoiceLineCheck(
+                counterparty_id=current.counterparty_id,
+                document_id=current.id,
+                previous_document_id=previous.id,
+                line_id=line.id,
+                description=line.description,
+                result=LineCheck.PRICE_LIST if explained else LineCheck.UNEXPLAINED,
+                previous_unit_price=previous_price,
+                unit_price=line.unit_price,
+                price_list_id=explained[0] if explained else None,
+                price_list_item_id=explained[1] if explained else None,
+            )
+        )
+    return checks
 
 
 def invoice_line_checks(dataset: ProofDataset) -> list[InvoiceLineCheck]:
-    """Every line of each supplier's invoices in date order whose unit price is new: different
-    from the previous invoice, or not on it. A price list valid on the invoice date that gives
-    exactly that price explains it; otherwise it is unexplained."""
+    """compare_invoice for each supplier's preloaded invoices in date order."""
     invoices: dict[str, list[Document]] = defaultdict(list)
     price_lists: dict[str, list[Document]] = defaultdict(list)
     for document in dataset.documents:
@@ -269,38 +307,7 @@ def invoice_line_checks(dataset: ProofDataset) -> list[InvoiceLineCheck]:
     for supplier, documents in invoices.items():
         ordered = sorted(documents, key=lambda d: (d.date, d.id))
         for previous, current in zip(ordered, ordered[1:], strict=False):
-            before = {line.description: line.unit_price for line in previous.lines}
-            for line in current.lines:
-                previous_price = before.get(line.description)
-                if previous_price == line.unit_price:
-                    continue
-                explained_by = next(
-                    (
-                        pl.id
-                        for pl in price_lists[supplier]
-                        if pl.price_list is not None
-                        and pl.price_list.valid_on(current.date)
-                        and any(
-                            item.description == line.description
-                            and item.unit_price == line.unit_price
-                            for item in pl.price_list.items
-                        )
-                    ),
-                    None,
-                )
-                checks.append(
-                    InvoiceLineCheck(
-                        counterparty_id=supplier,
-                        document_id=current.id,
-                        previous_document_id=previous.id,
-                        line_id=line.id,
-                        description=line.description,
-                        result=LineCheck.PRICE_LIST if explained_by else LineCheck.UNEXPLAINED,
-                        previous_unit_price=previous_price,
-                        unit_price=line.unit_price,
-                        price_list_id=explained_by,
-                    )
-                )
+            checks += compare_invoice(previous, current, price_lists[supplier])
     return checks
 
 

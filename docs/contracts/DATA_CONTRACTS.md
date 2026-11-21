@@ -323,6 +323,9 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | 21 | *(Vero Proof)* The owner's documents | `GET /documents` | **DocumentSummary[]**, oldest first. Mailbox attachments are listed once a finding cites them, an upload once it is uploaded |
 | 22 | *(Vero Proof)* One document, side by side | `GET /documents/{id}` | **Document**; `404 NOT_FOUND` for an unknown or not yet visible document |
 | 23 | *(Vero Proof)* The PDF itself | `GET /documents/{id}/file` | `application/pdf`, shown inline; same `404` rules |
+| 24 | *(Vero Proof)* Changes Vero found | `GET /findings?classification=&status=` | **ProofFinding[]**, by the date they concern, oldest first |
+| 25 | *(Vero Proof)* One finding | `GET /findings/{id}` | **ProofFinding** |
+| 26 | *(Vero Proof)* Owner's tap on a quiet change | `POST /findings/{id}/acknowledge` (`Idempotency-Key`) | **ProofFinding** (`RESOLVED`, out of the digest). `409 NOT_PENDING` unless `quiet` and not yet acknowledged |
 
 ### 2.2 Data types
 
@@ -507,6 +510,34 @@ A Vero Proof document, from `GET /documents`.
 | `rent_adjustment` | `{ old_amount, new_amount, effective_from, frequency }`? | Rent adjustments |
 | `highlights` | `{ ref, page, text, box }[]` | Where each value is printed: `ref` is e.g. `date`, `counterparty`, `lines.l1.unit_price`, `totals.gross`, `rent_adjustment.new_amount`, `price_list.p1`; `text` exactly as printed |
 
+#### ProofFinding
+One difference Vero Proof found and everything it did about it, from `GET /findings`. Schema name `ProofFinding` (Phase 1's `Finding` is an overview fact). At load and reset, CHECK creates the preloaded findings with fixed ids and times, so every reset gives the same findings.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | UUID | |
+| `title` | string | One line, e.g. "Fattoria La Vino GmbH: new prices on FLV-94818" |
+| `kind` | enum | `INVOICE_PRICES` (unit prices on an invoice) or `RECURRING_AMOUNT` (a fixed cost's amount) |
+| `classification` | enum | `VERIFIED` (✅ Matches), `UNEXPLAINED` (🔍 Needs evidence), `CONFLICT` (⚠️ Conflicts with contract) |
+| `escalated` | bool | `UNEXPLAINED` after an investigation that found no reason |
+| `status` | enum | `INGESTED`, `EXTRACTED`, `CHECKED`, `INVESTIGATING`, `CLASSIFIED`, `PENDING_APPROVAL`, `RESOLVED` |
+| `counterparty`, `counterparty_id` | string, string? | |
+| `cost_ref` | string | The CostItem it belongs to |
+| `period_from`, `period_to` | Date? | The invoice date, or when a new amount starts |
+| `document_id`, `previous_document_id` | string? | The billing document, and the invoice it was compared with |
+| `transaction_id` | UUID? | For a statement payment that differs from its contract |
+| `differences` | FindingDifference[] | `{ kind: PRICE_CHANGE \| NEW_ITEM \| NEW_CHARGE \| AMOUNT_CHANGE, description, line_id?, previous_unit_price?, unit_price?, quantity? (Decimal), expected_amount?, billed_amount? (Money), delta (Money), bps?, explained, evidence: EvidenceRef[] }` |
+| `impact` | FindingImpact | `{ currency, expected?, billed?, delta, bps? }` (Money). Rent: per month. Invoices: net, `expected` at the previous prices |
+| `evidence_refs` | EvidenceRef[] | `{ kind: DOCUMENT \| INVOICE_LINE \| PRICE_LIST_ITEM \| CLAUSE \| TRANSACTION \| EMAIL \| COST_ITEM, document_id?, item_id?, transaction_id?, cost_ref? }`. A document cited here becomes visible in `GET /documents` |
+| `propagation` | object? | Set by propagation (P13) |
+| `recommendation_ids` | UUID[] | Its actions (P14) |
+| `run_id` | UUID? | The Proof run that checked or investigated it (P10) |
+| `acknowledged_at` | Timestamp? | When the owner acknowledged a quiet finding |
+| `created_at`, `updated_at` | Timestamp | |
+| `history` | `{ at, status, classification?, label }[]` | Every transition, oldest first, in plain words |
+| `quiet` | bool | Computed: `VERIFIED`, `CLASSIFIED`, no actions; can be acknowledged |
+| `in_digest` | bool | Computed: not acknowledged and not `RESOLVED` |
+
 #### AuditEntry
 One line of the append-only activity log, from `GET /audit`. Entries are sealed as a hash chain: verify them by recomputing each `hash` in `seq` order.
 
@@ -515,7 +546,7 @@ One line of the append-only activity log, from `GET /audit`. Entries are sealed 
 | `seq` | int | 1, 2, 3, … with no gaps |
 | `timestamp` | string | UTC with milliseconds, e.g. `2025-05-05T08:00:00.000Z`; hashed exactly as sent |
 | `actor` | enum | `OWNER`, `AGENT` (the model ran it), `RULES` (the policy acted), `SYSTEM` (the backend) |
-| `agent` | enum? | `CASH` (Phase 2 adds `PROOF`); null for company-wide entries such as mandate changes |
+| `agent` | enum? | `CASH` or `PROOF`; null for company-wide entries such as mandate changes |
 | `action` | string | What happened, in plain English, e.g. "Approved: a credit line of 20 000,00 € from 27 Jun (simulated)" |
 | `run_id`, `recommendation_id` | UUID? | The run and recommendation it belongs to |
 | `lane` | enum? | The recommendation's lane |
