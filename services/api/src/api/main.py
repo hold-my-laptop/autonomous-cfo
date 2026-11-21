@@ -17,6 +17,7 @@ from api.routers import (
     internal,
     mandate,
     recommendations,
+    rag,
     runs,
 )
 from api.startup import StateLoader
@@ -95,6 +96,7 @@ def create_app(
     api.include_router(events.router)
     api.include_router(runs.router)
     api.include_router(recommendations.router)
+    api.include_router(rag.router)
     api.include_router(demo.router)
     app.include_router(api)
     app.include_router(internal.router)

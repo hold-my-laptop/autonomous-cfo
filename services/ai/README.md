@@ -19,6 +19,7 @@ backend ──POST /v1/explain──▶ ai (texts checked against facts, else te
 | GET | `/health/model` | Deep check: `{ok, model, mode, latency_ms, error}` |
 | POST | `/v1/agent/runs` | `AgentRunStart` → `202 {accepted: true}`, runs in the background |
 | POST | `/v1/explain` | `ExplainRequest` → `ExplainResult` (`MODEL` or `TEMPLATE`) |
+| POST | `/v1/rag/answer` | Internal (token): answer from records the backend retrieved, with citations; see `docs/RAG_HANDOFF.md` |
 | POST | `/v1/chat` | `{question, language?, history?}` → `{answer, source, tools_used, fallback_reason}` |
 
 `/v1/agent/runs` and `/v1/explain` need `Authorization: Bearer $INTERNAL_TOKEN` when `INTERNAL_TOKEN` is set.

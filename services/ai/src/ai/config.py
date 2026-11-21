@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     default_max_tool_calls: int = 8
     default_deadline_s: int = 60
     explain_timeout_s: float = 9.0  # backend gives up at 10 s
+    rag_timeout_s: float = 30.0  # backend gives up at 35 s
 
     prompt_version: str = "agent-prompt-1.0.0"
 

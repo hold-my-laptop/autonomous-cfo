@@ -6,6 +6,7 @@ Endpoints
   POST /v1/agent/runs         start an agent run (202; works in the background)
   POST /v1/explain            plain-language texts for recommendations
   POST /v1/documents/extract  PDF / image / text upload -> plain text (text layer, OCR for scans)
+  POST /v1/rag/answer         answer from records the backend retrieved (internal, token)
   POST /v1/chat               owner questions, answered with read-only tools (no token: the
                               web app calls it through nginx; it cannot change any data)
 """
@@ -26,6 +27,8 @@ from .config import Settings, get_settings
 from .documents import MAX_BYTES, DocumentError, read_document_async
 from .explain import explain
 from .llm import LLM, build_llm
+from .rag import AskRequest, AskResponse
+from .rag import answer as rag_answer
 from .schemas import AgentRunStart, ExplainRequest, ExplainResult, ModelHealth
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -96,6 +99,11 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None, backend
     @app.post("/v1/explain", response_model=ExplainResult, dependencies=[Depends(require_token)])
     async def explain_route(req: ExplainRequest, request: Request):
         return await explain(req, request.app.state.llm, settings)
+
+    @app.post("/v1/rag/answer", response_model=AskResponse, dependencies=[Depends(require_token)])
+    async def rag_route(req: AskRequest, request: Request):
+        """Never fails on model trouble: falls back to listing the retrieved records."""
+        return await rag_answer(req, request.app.state.llm, settings)
 
     @app.post("/v1/documents/extract")
     async def extract_route(file: UploadFile = File(...), force_ocr: bool = Form(False)):
