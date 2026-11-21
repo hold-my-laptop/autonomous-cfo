@@ -81,10 +81,10 @@ def test_plain_text_upload():
 def test_extract_endpoint():
     app = create_app(Settings(llm_mode="stub"), llm=StubLLM(), backend=FakeBackend())
     with TestClient(app) as c:
-        r = c.post("/v1/documents/extract",
+        r = c.post("/v1/documents/text",
                    files={"file": ("lease.pdf", (FIX / "lease_text.pdf").read_bytes(), "application/pdf")})
         assert r.status_code == 200
         body = r.json()
         assert body["kind"] == "pdf" and body["ocr_pages"] == 0 and "EUR 3,500.00" in body["text"]
-        bad = c.post("/v1/documents/extract", files={"file": ("x.docx", b"PK\x03\x04", "application/zip")})
+        bad = c.post("/v1/documents/text", files={"file": ("x.docx", b"PK\x03\x04", "application/zip")})
         assert bad.status_code == 422 and "Unsupported" in bad.json()["detail"]

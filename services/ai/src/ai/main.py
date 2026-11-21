@@ -5,7 +5,8 @@ Endpoints
   GET  /health/model          deep check: can we reach the model?
   POST /v1/agent/runs         start an agent run (202; works in the background)
   POST /v1/explain            plain-language texts for recommendations
-  POST /v1/documents/extract  PDF / image / text upload -> plain text (text layer, OCR for scans)
+  POST /v1/documents/extract  invoice/notice PDF -> structured fields with sources (internal, token)
+  POST /v1/documents/text     PDF / image / text upload -> plain text, OCR for scans (internal, token)
   POST /v1/rag/answer         answer from records the backend retrieved (internal, token)
   POST /v1/chat               owner questions, answered with read-only tools (no token: the
                               web app calls it through nginx; it cannot change any data)
@@ -25,6 +26,7 @@ from .chat import answer as chat_answer
 from .backend_client import Backend, HttpBackend
 from .config import Settings, get_settings
 from .documents import MAX_BYTES, DocumentError, read_document_async
+from .extraction import ExtractError, ExtractRequest, ExtractResponse, extract
 from .explain import explain
 from .llm import LLM, build_llm
 from .rag import AskRequest, AskResponse
@@ -105,8 +107,19 @@ def create_app(settings: Settings | None = None, llm: LLM | None = None, backend
         """Never fails on model trouble: falls back to listing the retrieved records."""
         return await rag_answer(req, request.app.state.llm, settings)
 
-    @app.post("/v1/documents/extract")
-    async def extract_route(file: UploadFile = File(...), force_ocr: bool = Form(False)):
+    @app.post("/v1/documents/extract", response_model=ExtractResponse, response_model_by_alias=True,
+              dependencies=[Depends(require_token)])
+    async def extract_route(req: ExtractRequest, request: Request):
+        """Contract DATA_CONTRACTS §3. 422 {code, message} for unreadable input; model trouble
+        and failed checks come back as status FAILED with errors (backend uses its fallback)."""
+        try:
+            return await extract(req, request.app.state.llm, settings)
+        except ExtractError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                                detail={"code": e.code, "message": e.message}) from e
+
+    @app.post("/v1/documents/text", dependencies=[Depends(require_token)])
+    async def text_route(file: UploadFile = File(...), force_ocr: bool = Form(False)):
         """Text of an uploaded contract. Read-only and stateless: nothing is stored."""
         data = await file.read(MAX_BYTES + 1)
         try:

@@ -19,15 +19,44 @@ backend ──POST /v1/explain──▶ ai (texts checked against facts, else te
 | GET | `/health/model` | Deep check: `{ok, model, mode, latency_ms, error}` |
 | POST | `/v1/agent/runs` | `AgentRunStart` → `202 {accepted: true}`, runs in the background |
 | POST | `/v1/explain` | `ExplainRequest` → `ExplainResult` (`MODEL` or `TEMPLATE`) |
+| POST | `/v1/documents/extract` | Internal (token): invoice/notice PDF → structured fields, each with its printed text and box; see below |
+| POST | `/v1/documents/text` | Internal (token): PDF/image/TXT → plain text, OCR for scans |
 | POST | `/v1/rag/answer` | Internal (token): answer from records the backend retrieved, with citations; see `docs/RAG_HANDOFF.md` |
 | POST | `/v1/chat` | `{question, language?, history?}` → `{answer, source, tools_used, fallback_reason}` |
 
 `/v1/agent/runs` and `/v1/explain` need `Authorization: Bearer $INTERNAL_TOKEN` when `INTERNAL_TOKEN` is set.
 `/v1/chat` needs no token: the web app calls it as `/api/v1/chat` through nginx, and it only reads.
 
+## Structured extraction (invoices, rent adjustments, notices)
+
+`POST /v1/documents/extract` — contract in `docs/contracts/DATA_CONTRACTS.md` §3. The backend sends
+`{document_id, filename, content_base64, known_counterparties}` and waits up to 30 s (we answer within 27 s).
+
+The model never writes numbers or boxes. The PDF text layer (pypdfium2, a box per character) is shown to it
+as numbered lines; for each field it returns the line id and the value **exactly as printed**. Code then
+finds that text (whole-value match, left to right within a line item), takes the union of its character
+boxes (PDF points, top-left origin) and parses the value from the printed text: money → integer cents
+string, quantity/unit price → Decimal string, VAT rate → basis points, dates → `YYYY-MM-DD`
+(`src/ai/parsing.py`, German formats first). The document is untrusted data: it sits in a `<document>`
+block, the output is schema-bound JSON, and an injected value can only be text that is printed anyway.
+
+Before answering, the same checks as the backend run: quantity × unit price = net per line (half-up),
+lines sum to the net total, VAT per rate ±1 cent, net + VAT = gross exactly, required fields per
+`doc_type`, counterparty matched only if the printed name contains a known name or alias. Failures get
+one correction round; what is still wrong comes back as `status: "FAILED"` with `errors` (HTTP 200).
+
+Unreadable input is HTTP 422 `{"detail": {"code", "message"}}`: `INVALID_BASE64`, `EMPTY_FILE`,
+`FILE_TOO_LARGE` (> 15 MB), `NOT_A_PDF`, `PDF_UNREADABLE` (encrypted/damaged), `TOO_MANY_PAGES` (> 20),
+`NO_TEXT_LAYER` (scans are out of scope here; `/v1/documents/text` can OCR them).
+
+Tests: `tests/test_extraction.py` (scripted model, fixtures in `tests/fixtures/extract`, regenerate with
+`make_pdfs.py`) and `tests/test_extract_live.py` against the real model (skipped without `LLM_BASE_URL`;
+`EXTRACT_FIXTURES` points it at another folder of PDFs + `expected.json`). With Qwen3,
+`LLM_ENABLE_THINKING=false` makes answers much faster.
+
 ## Reading contracts (PDF, scans, photos)
 
-`POST /v1/documents/extract` (multipart `file`, optional `force_ocr`) returns the text of a PDF, PNG/JPEG or TXT
+`POST /v1/documents/text` (internal, token; multipart `file`, optional `force_ocr`) returns the text of a PDF, PNG/JPEG or TXT
 and, per page, whether it came from the PDF text layer or OCR (with a confidence). Pages with a text layer are
 exact (pypdfium2); scans and photos go through OCR (RapidOCR + PP-OCRv6 small ONNX models, CPU, inside the pod —
 no document leaves the cluster). Limits: 15 MB, 20 pages, one OCR job at a time, 90 s.

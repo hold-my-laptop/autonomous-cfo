@@ -87,6 +87,8 @@ class LiveLLM:
                 "type": "json_schema",
                 "json_schema": {"name": "result", "schema": json_schema},
             }
+        if self._settings.llm_enable_thinking is not None:
+            kwargs["extra_body"] = {"chat_template_kwargs": {"enable_thinking": self._settings.llm_enable_thinking}}
         resp = await self._client.chat.completions.create(**kwargs)
         msg = resp.choices[0].message
         calls = [
