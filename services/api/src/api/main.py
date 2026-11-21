@@ -9,6 +9,7 @@ from api.agent import AgentClient, AgentOrchestrator, HttpAgentClient
 from api.config import Settings, get_settings
 from api.errors import Problem, install_error_handlers
 from api.routers import (
+    audit,
     data,
     demo,
     events,
@@ -16,8 +17,8 @@ from api.routers import (
     health,
     internal,
     mandate,
-    recommendations,
     rag,
+    recommendations,
     runs,
 )
 from api.startup import StateLoader
@@ -96,6 +97,7 @@ def create_app(
     api.include_router(events.router)
     api.include_router(runs.router)
     api.include_router(recommendations.router)
+    api.include_router(audit.router)
     api.include_router(rag.router)
     api.include_router(demo.router)
     app.include_router(api)

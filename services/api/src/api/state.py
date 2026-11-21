@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, time
 from typing import Any, Protocol
 from uuid import UUID, uuid5
 
+from api.audit import AuditActor, AuditEntry, record
 from api.config import Settings
 from api.dates import window_end
 from api.domain.backtest import Backtest, compute_backtest
@@ -92,6 +93,7 @@ class DemoState:
     recommendations: dict[UUID, Recommendation] = field(default_factory=dict)
     receipts: dict[UUID, Receipt] = field(default_factory=dict)
     idempotency: dict[str, StoredResponse] = field(default_factory=dict)
+    audit: list[AuditEntry] = field(default_factory=list)
 
     @classmethod
     def from_base(cls, base: BaseData, mandates: list[Mandate], **changes: Any) -> "DemoState":
@@ -216,7 +218,17 @@ def initial_mandates(as_of: date) -> list[Mandate]:
 
 
 def fresh_state(base: BaseData) -> DemoState:
-    return DemoState.from_base(base, initial_mandates(base.as_of))
+    """The demo company as loaded, with a new activity log that starts at the load."""
+    mandates = initial_mandates(base.as_of)
+    state = DemoState.from_base(base, mandates)
+    record(
+        state,
+        mandates[0].created_at,
+        AuditActor.SYSTEM,
+        f"Loaded {base.company.name}: {len(state.history)} statement lines up to "
+        f"{state.statement_until:%d %b %Y}, mandate v1 active",
+    )
+    return state
 
 
 def build_demo_state(settings: Settings) -> DemoState:

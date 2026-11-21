@@ -1450,6 +1450,62 @@
         }
       }
     },
+    "/api/v1/audit": {
+      "get": {
+        "tags": [
+          "audit"
+        ],
+        "summary": "List Audit Entries",
+        "description": "The activity log, oldest first: what the owner, the agent, the rules and the system did.\nEach entry is sealed to the one before it (see AuditEntry), so the browser can verify that\nnothing was changed.",
+        "operationId": "list_audit_entries",
+        "parameters": [
+          {
+            "name": "after_seq",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Only entries after this seq",
+              "default": 0,
+              "title": "After Seq"
+            },
+            "description": "Only entries after this seq"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditEntry"
+                  },
+                  "title": "Response List Audit Entries"
+                }
+              }
+            }
+          },
+          "default": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Error (RFC 9457 problem details)"
+          }
+        }
+      }
+    },
     "/api/v1/assistant/ask": {
       "post": {
         "tags": [
@@ -1624,6 +1680,128 @@
           "text"
         ],
         "title": "Assumption"
+      },
+      "AuditEntry": {
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "title": "Seq"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "description": "UTC with milliseconds, exactly as hashed"
+          },
+          "actor": {
+            "type": "string",
+            "enum": [
+              "AGENT",
+              "RULES",
+              "OWNER",
+              "SYSTEM"
+            ],
+            "title": "Actor"
+          },
+          "agent": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "CASH"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "recommendation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommendation Id"
+          },
+          "lane": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lane"
+          },
+          "execution": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "SIMULATED"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Execution"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "prev_hash": {
+            "type": "string",
+            "title": "Prev Hash"
+          },
+          "hash": {
+            "type": "string",
+            "title": "Hash"
+          }
+        },
+        "type": "object",
+        "required": [
+          "seq",
+          "timestamp",
+          "actor",
+          "agent",
+          "action",
+          "run_id",
+          "recommendation_id",
+          "lane",
+          "execution",
+          "model",
+          "prev_hash",
+          "hash"
+        ],
+        "title": "AuditEntry",
+        "description": "One sealed line of the activity log. `hash` is the SHA-256 (hex) of\n`prev_hash|seq|timestamp|actor|agent|run_id|recommendation_id|lane|execution|model|action`,\nwith absent values as empty text; the first entry's `prev_hash` is 64 zeros."
       },
       "Backtest": {
         "properties": {

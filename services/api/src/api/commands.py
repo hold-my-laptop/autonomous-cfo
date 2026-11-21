@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 
 from fastapi import status
 
+from api.audit import AuditActor, AuditAgent, record
 from api.decisions import request_reschedule, run_fallback
 from api.domain.models import (
     Category,
@@ -20,7 +21,7 @@ from api.domain.models import (
     RunStatus,
 )
 from api.errors import ApiError, ErrorCode
-from api.money import Cents
+from api.money import Cents, format_eur
 from api.state import DemoState
 
 MAX_CLOSURE_DAYS = 366
@@ -105,6 +106,19 @@ def plan_closure(
         started_financial_version=state.financial_version,
     )
     state.runs[run.id] = run
+    span = (
+        _day_month(date_from)
+        if date_from == date_to
+        else (f"{_day_month(date_from)} – {_day_month(date_to)}")
+    )
+    record(
+        state,
+        now,
+        AuditActor.OWNER,
+        f"Planned a closure: {span}",
+        agent=AuditAgent.CASH,
+        run_id=run.id,
+    )
     if agent:
         return run
     return run_fallback(state, run, now, credit_until, credit_rounding)
@@ -134,6 +148,15 @@ def request_outflow_reschedule(
         created_at=now,
     )
     state.runs[run.id] = run
+    record(
+        state,
+        now,
+        AuditActor.OWNER,
+        f"Asked to move {outflow.counterparty} ({format_eur(outflow.amount)}) "
+        f"to {_day_month(to_date)}",
+        agent=AuditAgent.CASH,
+        run_id=run.id,
+    )
     return request_reschedule(state, run, outflow, to_date, now)
 
 
@@ -178,6 +201,7 @@ def create_mandate_draft(
         note=note,
     )
     state.mandates.append(draft)
+    record(state, now, AuditActor.OWNER, f"Saved mandate v{draft.version} as a draft")
     return draft
 
 
@@ -202,11 +226,28 @@ def activate_mandate(state: DemoState, version: int, now: datetime) -> Mandate:
         else m
         for m in state.mandates
     ]
+    acting = (
+        "Vero may act alone within your limits"
+        if activated.act_alone_enabled
+        else "Vero asks before acting"
+    )
+    record(
+        state,
+        now,
+        AuditActor.OWNER,
+        f"Activated mandate v{version}: floor {format_eur(activated.cash_floor)}, {acting}",
+    )
     return activated
 
 
-def set_paused(state: DemoState, paused: bool) -> Mandate:
+def set_paused(state: DemoState, paused: bool, now: datetime) -> Mandate:
     active = state.active_mandate
     updated = replace(active, paused=paused)
     state.mandates = [updated if m.version == active.version else m for m in state.mandates]
+    action = (
+        "Paused Vero: everything now needs your approval"
+        if paused
+        else "Resumed Vero within your mandate"
+    )
+    record(state, now, AuditActor.OWNER, action)
     return updated

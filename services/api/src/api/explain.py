@@ -8,6 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from api.audit import audit_run_finished
 from api.domain.forecast import ForecastSummary as DomainSummary
 from api.domain.models import Recommendation as DomainRecommendation
 from api.domain.models import Run, RunStatus
@@ -77,7 +78,7 @@ def settle(state: DemoState, run_id: UUID, result: ExplainResult | None, now: da
                 state.recommendations[rec_id] = replace(
                     rec, details=rec.details | {"explanation": explanation}
                 )
-    state.runs[run_id] = replace(
+    finished = replace(
         run,
         status=RunStatus.SUCCEEDED,
         finished_at=now,
@@ -85,3 +86,5 @@ def settle(state: DemoState, run_id: UUID, result: ExplainResult | None, now: da
         headline_source=source,
         explain_request=None,
     )
+    state.runs[run_id] = finished
+    audit_run_finished(state, finished, now)

@@ -16,8 +16,9 @@ from uuid import UUID
 from sqlalchemy import JSON, BigInteger, DateTime
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from sqlmodel import Field, Session, SQLModel, create_engine, delete, select
 
+from api.audit import AuditActor, AuditAgent, AuditEntry
 from api.config import Settings
 from api.domain.models import (
     Category,
@@ -48,7 +49,7 @@ from api.state import (
 from api.statement_db import read_statement_table
 
 COMPANY_ROW_ID = 1
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 class SchemaMetaRow(SQLModel, table=True):
@@ -185,6 +186,25 @@ class ReceiptRow(SQLModel, table=True):
     body: dict[str, Any] = Field(sa_type=JSON)
 
 
+class AuditRow(SQLModel, table=True):
+    """One activity log entry. Rows are only inserted, never updated."""
+
+    __tablename__ = "audit_log"
+
+    seq: int = Field(primary_key=True)
+    timestamp: str
+    actor: str
+    agent: str | None = None
+    action: str
+    run_id: UUID | None = None
+    recommendation_id: UUID | None = None
+    lane: str | None = None
+    execution: str | None = None
+    model: str | None = None
+    prev_hash: str
+    hash: str
+
+
 class IdempotencyRow(SQLModel, table=True):
     __tablename__ = "idempotency_keys"
 
@@ -203,6 +223,7 @@ _CHANGEABLE_TABLES = (
     OutflowChangeRow,
     RecommendationRow,
     ReceiptRow,
+    AuditRow,
 )
 _ALL_TABLES = (SchemaMetaRow, CompanyStateRow, *_CHANGEABLE_TABLES)
 
@@ -330,6 +351,7 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
     changes = {r.outflow_id: r for r in session.exec(select(OutflowChangeRow)).all()}
     recommendations = session.exec(select(RecommendationRow).order_by(RecommendationRow.seq)).all()
     receipts = session.exec(select(ReceiptRow).order_by(ReceiptRow.seq)).all()
+    audit = session.exec(select(AuditRow).order_by(AuditRow.seq)).all()
     state = DemoState.from_base(
         base,
         [_mandate(r) for r in mandates],
@@ -383,6 +405,23 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
         receipts={
             r.id: Receipt(r.id, r.recommendation_id, r.kind, r.created_at, r.body) for r in receipts
         },
+        audit=[
+            AuditEntry(
+                seq=r.seq,
+                timestamp=r.timestamp,
+                actor=AuditActor(r.actor),
+                action=r.action,
+                prev_hash=r.prev_hash,
+                hash=r.hash,
+                agent=AuditAgent(r.agent) if r.agent else None,
+                run_id=r.run_id,
+                recommendation_id=r.recommendation_id,
+                lane=r.lane,
+                execution=r.execution,
+                model=r.model,
+            )
+            for r in audit
+        ],
     )
     state.outflows = [
         replace(o, scheduled_date=changes[o.id].scheduled_date, version=changes[o.id].version)
@@ -522,6 +561,8 @@ def _save(session: Session, state: DemoState) -> None:
         if r.id not in existing_receipts
     )
 
+    _save_audit(session, state.audit)
+
     existing_keys = {row.key: row for row in session.exec(select(IdempotencyRow)).all()}
     for key, row in existing_keys.items():
         if key not in state.idempotency:
@@ -534,6 +575,33 @@ def _save(session: Session, state: DemoState) -> None:
                 response=value.response,
             )
         )
+
+
+def _save_audit(session: Session, entries: list[AuditEntry]) -> None:
+    """Insert the new entries. Stored entries are never rewritten; a reset, which starts a new
+    log, removes the old one."""
+    stored = {row.seq: row.hash for row in session.exec(select(AuditRow)).all()}
+    if any(stored.get(e.seq, e.hash) != e.hash for e in entries) or len(stored) > len(entries):
+        session.exec(delete(AuditRow))
+        stored = {}
+    session.add_all(
+        AuditRow(
+            seq=e.seq,
+            timestamp=e.timestamp,
+            actor=e.actor.value,
+            agent=e.agent.value if e.agent else None,
+            action=e.action,
+            run_id=e.run_id,
+            recommendation_id=e.recommendation_id,
+            lane=e.lane,
+            execution=e.execution,
+            model=e.model,
+            prev_hash=e.prev_hash,
+            hash=e.hash,
+        )
+        for e in entries
+        if e.seq not in stored
+    )
 
 
 def _sync(session: Session, table: type[SQLModel], desired: list[SQLModel]) -> None:
