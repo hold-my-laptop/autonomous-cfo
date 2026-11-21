@@ -1,5 +1,5 @@
-from datetime import date
 from contextlib import contextmanager
+from datetime import date
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -13,12 +13,24 @@ from api.routers.rag import router
 
 
 def test_retrieve_rent_question_and_amount():
-    rent = SimpleNamespace(id=uuid4(), booking_date=date(2025, 4, 1), amount=-380000,
-                           category=Category.RENT, counterparty="Main Street Real Estate",
-                           type="RENT PAYMENT", reference="April rent")
-    utility = SimpleNamespace(id=uuid4(), booking_date=date(2025, 4, 10), amount=-65000,
-                              category=Category.UTILITIES, counterparty="Energy",
-                              type="DIRECT DEBIT", reference="Electricity")
+    rent = SimpleNamespace(
+        id=uuid4(),
+        booking_date=date(2025, 4, 1),
+        amount=-380000,
+        category=Category.RENT,
+        counterparty="Main Street Real Estate",
+        type="RENT PAYMENT",
+        reference="April rent",
+    )
+    utility = SimpleNamespace(
+        id=uuid4(),
+        booking_date=date(2025, 4, 10),
+        amount=-65000,
+        category=Category.UTILITIES,
+        counterparty="Energy",
+        type="DIRECT DEBIT",
+        reference="Electricity",
+    )
     state = SimpleNamespace(history=[rent, utility], outflows=[], inflows=[])
 
     matches = retrieve(state, "When is the rent of 3800 euro due?")
@@ -29,9 +41,15 @@ def test_retrieve_rent_question_and_amount():
 
 
 def test_public_question_route_passes_only_retrieved_records():
-    rent = SimpleNamespace(id=uuid4(), booking_date=date(2025, 4, 1), amount=-380000,
-                           category=Category.RENT, counterparty="Landlord",
-                           type="RENT PAYMENT", reference="April rent")
+    rent = SimpleNamespace(
+        id=uuid4(),
+        booking_date=date(2025, 4, 1),
+        amount=-380000,
+        category=Category.RENT,
+        counterparty="Landlord",
+        type="RENT PAYMENT",
+        reference="April rent",
+    )
     state = SimpleNamespace(history=[rent], outflows=[], inflows=[])
 
     class Repository:
@@ -43,8 +61,11 @@ def test_public_question_route_passes_only_retrieved_records():
         def ask(self, payload):
             assert payload["question"] == "When is the rent paid?"
             assert [source["id"] for source in payload["sources"]] == [str(rent.id)]
-            return {"answer": "The rent was paid on 2025-04-01.",
-                    "sources": payload["sources"], "model": "test-model"}
+            return {
+                "answer": "The rent was paid on 2025-04-01.",
+                "sources": payload["sources"],
+                "model": "test-model",
+            }
 
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
@@ -59,9 +80,15 @@ def test_public_question_route_passes_only_retrieved_records():
 def test_ai_unavailable_lists_records_instead_of_503():
     from api.agent import AgentUnavailableError
 
-    rent = SimpleNamespace(id=uuid4(), booking_date=date(2025, 4, 1), amount=-380000,
-                           category=Category.RENT, counterparty="Landlord",
-                           type="RENT PAYMENT", reference="April rent")
+    rent = SimpleNamespace(
+        id=uuid4(),
+        booking_date=date(2025, 4, 1),
+        amount=-380000,
+        category=Category.RENT,
+        counterparty="Landlord",
+        type="RENT PAYMENT",
+        reference="April rent",
+    )
     state = SimpleNamespace(history=[rent], outflows=[], inflows=[])
 
     class Repository:
@@ -87,11 +114,23 @@ def test_ai_unavailable_lists_records_instead_of_503():
 
 
 def test_english_filler_words_do_not_match_other_payments():
-    energy = SimpleNamespace(id=uuid4(), booking_date=date(2025, 4, 10), amount=-65000,
-                             category=Category.UTILITIES, counterparty="City Energy & Utilities AG",
-                             type="DIRECT DEBIT", reference="Electricity April")
-    payroll = SimpleNamespace(id=uuid4(), booking_date=date(2025, 4, 28), amount=-860000,
-                              category=Category.PAYROLL, counterparty="Payroll (4 people)",
-                              type="SEPA TRANSFER", reference="Salaries, did pay April")
+    energy = SimpleNamespace(
+        id=uuid4(),
+        booking_date=date(2025, 4, 10),
+        amount=-65000,
+        category=Category.UTILITIES,
+        counterparty="City Energy & Utilities AG",
+        type="DIRECT DEBIT",
+        reference="Electricity April",
+    )
+    payroll = SimpleNamespace(
+        id=uuid4(),
+        booking_date=date(2025, 4, 28),
+        amount=-860000,
+        category=Category.PAYROLL,
+        counterparty="Payroll (4 people)",
+        type="SEPA TRANSFER",
+        reference="Salaries, did pay April",
+    )
     state = SimpleNamespace(history=[energy, payroll], outflows=[], inflows=[])
     assert [m["id"] for m in retrieve(state, "How much did I pay City Energy?")] == [str(energy.id)]
