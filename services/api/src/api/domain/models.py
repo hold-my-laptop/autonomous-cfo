@@ -162,6 +162,14 @@ class EventType(StrEnum):
     RESCHEDULE_REQUESTED = "RESCHEDULE_REQUESTED"
 
 
+class RunKind(StrEnum):
+    """Which agent a run belongs to: Vero Cash (closures, reschedules) or Vero Proof
+    (documents and cost changes). Each kind has its own tools (docs/BACKEND.md P09)."""
+
+    CASH = "CASH"
+    PROOF = "PROOF"
+
+
 @dataclass(frozen=True, slots=True)
 class Event:
     id: UUID
@@ -216,6 +224,7 @@ class Run:
     tool_log: dict | None = None
     headline_source: str = "TEMPLATE"
     explain_request: dict | None = None
+    kind: RunKind = RunKind.CASH
 
 
 class RecommendationKind(StrEnum):

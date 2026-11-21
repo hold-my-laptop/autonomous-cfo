@@ -3,11 +3,12 @@ from datetime import UTC, date, datetime
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.agent import RunClosedError
 from api.deps import AgentDep, RepositoryDep, SettingsDep
+from api.domain.models import RunKind
 from api.errors import ApiError, ErrorCode
 from api.money import Money
 from api.tools import call_tool, tool_specs
@@ -63,8 +64,19 @@ class ToolResult(BaseModel):
 
 
 @router.get("/tools")
-def list_tools() -> list[ToolSpec]:
-    return [ToolSpec(**spec) for spec in tool_specs()]
+def list_tools(
+    repository: RepositoryDep, run_id: Annotated[UUID | None, Query()] = None
+) -> list[ToolSpec]:
+    """The tools of that run's kind (Cash or Proof). Without `run_id`: the Cash tools, which is
+    what an agent started before run kinds existed expects."""
+    kind = RunKind.CASH
+    if run_id is not None:
+        with repository.read() as state:
+            run = state.runs.get(run_id)
+            if run is None:
+                raise ApiError(status.HTTP_404_NOT_FOUND, ErrorCode.NOT_FOUND, f"no run {run_id}")
+            kind = run.kind
+    return [ToolSpec(**spec) for spec in tool_specs(kind)]
 
 
 @router.post("/tools/{name}")

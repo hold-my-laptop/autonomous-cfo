@@ -53,6 +53,7 @@ def test_model_sees_formatted_amounts_and_dates():
     records = json.loads(m.seen[0][1]["content"])["records"]
     assert records[0]["amount"] == "-3,800 €" and records[0]["date"] == "1 April 2025"
     assert "in English" in m.seen[0][0]["content"]
+    assert "planned, so say they are due or expected" in m.seen[0][0]["content"]
 
 
 def test_natural_spellings_of_cited_numbers_pass():

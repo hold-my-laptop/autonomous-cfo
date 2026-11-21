@@ -4,7 +4,7 @@ import asyncio
 
 from fastapi.testclient import TestClient
 
-from ai.chat import ChatRequest, answer, readable
+from ai.chat import ChatRequest, ChatTurn, answer, facts, readable
 from ai.llm import StubLLM
 from ai.main import create_app
 
@@ -54,7 +54,7 @@ def test_readable_formats_money_and_dates_and_drops_ids():
 def test_answer_with_numbers_from_tools_is_accepted():
     llm = ScriptedLLM([("get_overview", {}), "Your cash is lowest on 3 July 2025 at -22,760.82 €."])
     r = ask(llm)
-    assert r.source == "MODEL" and r.tools_used == ["get_overview"]
+    assert r.source == "MODEL" and r.tools_used == ["get_overview", "get_overview"]
     assert "-22,760.82 €" in r.answer
 
 
@@ -91,7 +91,7 @@ def test_unknown_tool_and_backend_error_do_not_crash():
 
     llm = ScriptedLLM([("nope", {}), ("get_overview", {}), "I cannot see your numbers right now."])
     r = ask(llm, api=Down())
-    assert r.source == "MODEL" and r.tools_used == ["nope", "get_overview"]
+    assert r.source == "MODEL" and r.tools_used == ["get_overview", "nope", "get_overview"]
 
 
 def test_chat_endpoint_in_stub_mode_needs_no_token():
@@ -104,3 +104,35 @@ def test_chat_endpoint_in_stub_mode_needs_no_token():
         body = r.json()
         assert body["source"] == "FALLBACK" and "-22,760.82 €" in body["answer"]
         assert c.post("/v1/chat", json={"question": ""}).status_code == 422
+
+
+NO_BREACH = {**OVERVIEW, "forecast_summary": {"first_breach": None, "lowest": {"date": "2025-06-01", "closing": "-39630"},
+                                              "days_below_floor": 0, "end_balance": "239220"}, "pending_count": 0}
+
+
+def test_facts_say_above_the_floor_when_the_lowest_point_is_negative_but_not_a_breach():
+    f = facts(NO_BREACH, "en")
+    assert f[0] == ("The balance never goes below the cash floor of -5,000 € in the forecast. "
+                    "The lowest point is -396.30 € on 1 June 2025, which is above the floor.")
+    assert "overdrawn" in f[1] and f[2] == "No recommendations wait for the owner's approval."
+    assert facts(OVERVIEW, "en")[0].startswith("The balance goes below the cash floor of -5,000 € for the first time "
+                                               "on 15 June 2025")
+    assert "Mindestliquidität" in facts(NO_BREACH, "de")[0]
+
+
+def test_every_turn_starts_with_the_overview_so_follow_ups_can_use_its_numbers():
+    class NoBreach(FakePublic):
+        async def get(self, path, params=None):
+            self.paths.append(path)
+            return NO_BREACH if path == "/overview" else {}
+
+    from ai.config import Settings
+    llm = ScriptedLLM(["Yes. Your lowest point is -396.30 € on 1 June 2025, which is above your -5,000 € floor."])
+    req = ChatRequest(question="Really?", history=[
+        ChatTurn(role="user", content="When does my cash get tight?"),
+        ChatTurn(role="assistant", content="Your lowest point is -396.30 € on 1 June 2025.")])
+    api = NoBreach()
+    r = asyncio.run(answer(req, llm, api, Settings(llm_mode="live", llm_base_url="http://unused/v1")))
+    assert r.source == "MODEL" and r.tools_used == ["get_overview"] and api.paths == ["/overview"]
+    tool_msg = llm.seen_messages[0][-1]
+    assert tool_msg["role"] == "tool" and "never goes below the cash floor" in tool_msg["content"]

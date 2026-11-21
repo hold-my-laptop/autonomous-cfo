@@ -2,41 +2,30 @@
 
 Every call is bound to a RUNNING run and the financial version it started on, is idempotent per
 `call_id`, counts towards the run's limit and adds a plain-language step to the run's trace.
-Tools never change financial data."""
+Tools never change financial data. Each tool belongs to one run kind: a Cash run sees only the
+Cash tools below, a Proof run only the investigation tools in proof_tools.py (P09)."""
 
 import json
-from collections.abc import Callable
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from datetime import date, timedelta
-from typing import Any, Literal
+from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import Field, ValidationError
 
 from api.config import Settings
 from api.decisions import Tracer, moved_alone_today
 from api.domain.credit import size_credit_line
 from api.domain.forecast import ForecastInput, compute_forecast
-from api.domain.models import Category, CreditLine, Run, RunStatus
+from api.domain.models import Category, CreditLine, Run, RunKind, RunStatus
 from api.domain.policy import evaluate_credit, evaluate_move
 from api.money import Money, format_eur
+from api.proof_tools import PROOF_TOOLS
 from api.schemas import Driver, ForecastSummary, Mandate, Outflow, PlannedEvent, RevenueModel
 from api.state import DemoState
+from api.tool_base import NoArgs, Tool, ToolError, ToolOutput, _Args
 
-
-class ToolError(Exception):
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-
-
-class _Args(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class NoArgs(_Args):
-    pass
+__all__ = ["TOOLS", "ToolError", "call_tool", "tool_specs"]
 
 
 class ExplainArgs(_Args):
@@ -77,22 +66,6 @@ class ProposalArg(_Args):
 
 class CheckPolicyArgs(_Args):
     proposal: ProposalArg
-
-
-@dataclass(frozen=True)
-class ToolOutput:
-    result: Any
-    label: str
-    result_label: str | None = None
-    log: dict | None = None
-
-
-@dataclass(frozen=True)
-class Tool:
-    name: str
-    description: str
-    args: type[_Args]
-    handler: Callable[[DemoState, Run, Any, Settings], ToolOutput]
 
 
 def _day(d: date) -> str:
@@ -416,6 +389,7 @@ TOOLS: dict[str, Tool] = {
             CheckPolicyArgs,
             _check_policy,
         ),
+        *PROOF_TOOLS,
     )
 }
 
@@ -436,7 +410,8 @@ def _inline(schema: dict) -> dict:
     return resolve(schema)
 
 
-def tool_specs() -> list[dict]:
+def tool_specs(kind: RunKind = RunKind.CASH) -> list[dict]:
+    """The tools a run of this kind may call (the Cash tools when no run is given)."""
     return [
         {
             "name": t.name,
@@ -444,7 +419,14 @@ def tool_specs() -> list[dict]:
             "input_schema": _inline(t.args.model_json_schema()),
         }
         for t in TOOLS.values()
+        if t.kind is kind
     ]
+
+
+def tool_limit(run: Run, settings: Settings) -> int:
+    if run.kind is RunKind.PROOF:
+        return settings.investigation_max_tool_calls
+    return settings.agent_max_tool_calls
 
 
 def _error(code: str, message: str, state: DemoState, used: int) -> dict:
@@ -491,13 +473,11 @@ def call_tool(
         )
 
     tool = TOOLS.get(name)
-    if used >= settings.agent_max_tool_calls:
-        response = _error(
-            "TOOL_LIMIT_REACHED",
-            f"limit of {settings.agent_max_tool_calls} calls reached",
-            state,
-            used,
-        )
+    if tool is not None and tool.kind is not run.kind:
+        tool = None  # another kind's tool does not exist for this run
+    limit = tool_limit(run, settings)
+    if used >= limit:
+        response = _error("TOOL_LIMIT_REACHED", f"limit of {limit} calls reached", state, used)
     elif state.financial_version != run.started_financial_version:
         response = _error("STALE_RUN", "the data changed since this run started; stop", state, used)
     else:

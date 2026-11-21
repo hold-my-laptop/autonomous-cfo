@@ -2,23 +2,78 @@
 
 Retrieval is deliberately deterministic and local. The model sees only the selected
 records; it cannot query the database or run SQL supplied by a user.
+
+The term handling and `rank()` are shared with Vero Proof's investigation tools
+(`search_inbox`, `search_documents`): German words in letters and emails map to the same
+English terms as the owner's questions, so an English query finds a German email.
 """
 
 import re
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from api.state import DemoState
 
 STOP = {"a", "an", "and", "are", "for", "how", "in", "is", "of", "on", "the", "to",
         "what", "when", "which", "with", "did", "do", "does", "i", "my", "me", "we", "our",
-        "much", "many", "pay", "paid", "was", "were", "it", "payment", "payments"}
-ALIASES = {"salary": "payroll", "salaries": "payroll", "wages": "payroll", "taxes": "tax",
-           "electricity": "utilities", "landlord": "rent", "transfers": "transfer"}
+        "much", "many", "pay", "paid", "was", "were", "it", "payment", "payments",
+        # German function words, so they never make an email match on their own
+        "der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "einer", "und",
+        "oder", "zu", "zum", "zur", "im", "am", "auf", "aus", "bei", "mit", "von",
+        "vom", "für", "fuer", "ab", "bis", "ist", "sind", "wir", "sie", "ihr", "ihre",
+        "ihnen", "ich", "es", "nicht", "auch", "wie", "dass", "als", "sehr", "geehrter",
+        "geehrte", "herr", "frau", "grüße", "gruesse", "viele", "freundlichen"}
+ALIASES = {
+    "salary": "payroll", "salaries": "payroll", "wages": "payroll", "taxes": "tax",
+    "electricity": "utilities", "landlord": "rent", "transfers": "transfer",
+    "increase": "increase", "increased": "increase", "raise": "increase",
+    "surcharges": "surcharge", "fee": "surcharge", "prices": "price", "letters": "letter",
+    # German → the same English terms
+    "miete": "rent", "mieten": "rent", "mieterhöhung": "rent", "mieterhoehung": "rent",
+    "mietanpassung": "rent", "mietvertrag": "lease", "gewerbemietvertrag": "lease",
+    "erhöhung": "increase", "erhoehung": "increase", "anpassung": "increase",
+    "nebenkosten": "utilities", "betriebskosten": "utilities", "abschlag": "utilities",
+    "logistikzuschlag": "surcharge", "zuschlag": "surcharge",
+    "preisliste": "price", "preis": "price", "preise": "price",
+    "lieferbedingungen": "terms", "bedingungen": "terms",
+    "schreiben": "letter", "brief": "letter", "rechnung": "invoice",
+}
+_WORD = re.compile(r"[^\W_]+")
 
 
-def _terms(text: str) -> set[str]:
-    return {ALIASES.get(word, word) for word in re.findall(r"[^\W_]+", text.casefold())
+def terms(text: str) -> set[str]:
+    """Lower-cased words without stop words, with aliases mapped to one English term."""
+    return {ALIASES.get(word, word) for word in _WORD.findall(text.casefold())
             if len(word) > 1 and word not in STOP}
+
+
+def rank[T](
+    query: str | set[str],
+    items: Iterable[T],
+    text_of: Callable[[T], str],
+    *,
+    bonus: Callable[[T, set[str]], int] | None = None,
+    order: Callable[[T], Any] | None = None,
+    limit: int | None = None,
+) -> list[T]:
+    """Items that share at least one term with the query, best first.
+
+    Score: 3 per shared term of `text_of(item)`, plus an optional `bonus` (exact amounts,
+    dates). Ties are broken by `order` (higher first), then by input order. An item with no
+    overlap is never returned."""
+    wanted = query if isinstance(query, set) else terms(query)
+    if not wanted:
+        return []
+    scored = []
+    for index, item in enumerate(items):
+        score = 3 * len(wanted & terms(text_of(item)))
+        if bonus is not None:
+            score += bonus(item, wanted)
+        if score:
+            scored.append((score, order(item) if order else 0, -index, item))
+    scored.sort(key=lambda row: row[:3], reverse=True)
+    picked = [row[3] for row in scored]
+    return picked[:limit] if limit is not None else picked
 
 
 def _record(kind: str, identifier: Any, date: Any, amount: int, category: str,
@@ -26,6 +81,12 @@ def _record(kind: str, identifier: Any, date: Any, amount: int, category: str,
     return {"id": str(identifier), "kind": kind, "date": str(date),
             "amount_cents": str(amount), "currency": "EUR", "category": category,
             "counterparty": counterparty, "description": description[:500]}
+
+
+def _money_and_date_bonus(record: dict[str, str], query: set[str]) -> int:
+    amount = abs(int(record["amount_cents"]))
+    return 2 * len(query & terms(record["date"])) + 4 * len(query & {str(amount),
+                                                                      str(amount // 100)})
 
 
 def retrieve(state: DemoState, question: str, limit: int = 12) -> list[dict[str, str]]:
@@ -49,19 +110,11 @@ def retrieve(state: DemoState, question: str, limit: int = 12) -> list[dict[str,
                 i.counterparty, i.ref)
         for i in state.inflows
     ]
-    query = _terms(question)
-    if not query:
-        return []
-    ranked = []
-    for record in records:
-        subject = _terms(" ".join((record["category"], record["counterparty"],
-                                   record["description"])))
-        date_terms = _terms(record["date"])
-        amount = abs(int(record["amount_cents"]))
-        amount_terms = {str(amount), str(amount // 100)}
-        score = 3 * len(query & subject) + 2 * len(query & date_terms)
-        score += 4 * len(query & amount_terms)
-        if score:
-            ranked.append((score, record["date"], record))
-    ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
-    return [record for _, _, record in ranked[:limit]]
+    return rank(
+        question,
+        records,
+        lambda r: " ".join((r["category"], r["counterparty"], r["description"])),
+        bonus=_money_and_date_bonus,
+        order=lambda r: r["date"],
+        limit=limit,
+    )

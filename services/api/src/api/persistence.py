@@ -34,6 +34,7 @@ from api.domain.models import (
     RecommendationKind,
     RecommendationStatus,
     Run,
+    RunKind,
     RunMode,
     RunStatus,
     TraceStep,
@@ -49,7 +50,7 @@ from api.state import (
 from api.statement_db import read_statement_table
 
 COMPANY_ROW_ID = 1
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 class SchemaMetaRow(SQLModel, table=True):
@@ -139,6 +140,7 @@ class RunRow(SQLModel, table=True):
     tool_log: dict[str, Any] | None = Field(default=None, sa_type=JSON)
     headline_source: str = "TEMPLATE"
     explain_request: dict[str, Any] | None = Field(default=None, sa_type=JSON)
+    kind: str = "CASH"
 
 
 class OutflowChangeRow(SQLModel, table=True):
@@ -397,6 +399,7 @@ def _load(session: Session, base: BaseData, company: CompanyStateRow) -> DemoSta
                 tool_log=r.tool_log,
                 headline_source=r.headline_source,
                 explain_request=r.explain_request,
+                kind=RunKind(r.kind),
             )
             for r in runs
         },
@@ -527,6 +530,7 @@ def _save(session: Session, state: DemoState) -> None:
                 tool_log=r.tool_log,
                 headline_source=r.headline_source,
                 explain_request=r.explain_request,
+                kind=r.kind.value,
             )
             for i, r in enumerate(state.runs.values())
         ],

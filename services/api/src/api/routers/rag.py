@@ -28,8 +28,11 @@ def _listing(sources: list[dict[str, str]], reason: str) -> AskResponse:
     """Used when the AI service cannot be reached: the retrieved records, by relevance."""
     items = sources[:5]
     head = f"Records matching your question ({len(items)}):"
-    lines = [f"• {s['date']} · {s['counterparty']} · {format_eur(int(s['amount_cents']))} ({s['category']})"
-             for s in items]
+    lines = [
+        f"• {s['date']} · {s['counterparty']} · {format_eur(int(s['amount_cents']))} "
+        f"({s['category']})"
+        for s in items
+    ]
     return AskResponse(answer="\n".join([head, *lines]), sources=items,
                        answer_source="TEMPLATE", fallback_reason=reason)
 

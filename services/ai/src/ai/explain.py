@@ -19,7 +19,10 @@ from .schemas import ExplainItem, ExplainRequest, ExplainResult, ExplainText
 log = logging.getLogger("ai.explain")
 
 FORBIDDEN = re.compile(r"\b(transferred|sent|guaranteed|approved by the bank|überwiesen|garantiert)\b", re.I)
-NUMBER = re.compile(r"\d[\d.,   ]*\d|\d")
+# A number with optional thousands groups ("3,800", "3.800", "3 800") and decimals (",00", ".82").
+# A separator must be a single character followed by exactly three digits, so "2025, 3,800" stays
+# two numbers ("2025" and "3,800") and "1 2025" never becomes one.
+NUMBER = re.compile(r"\d+(?:[.,\u00a0\u202f ]\d{3}(?!\d))*(?:[.,]\d+)?")
 MONTHS = {
     "en": ["January", "February", "March", "April", "May", "June", "July", "August",
            "September", "October", "November", "December"],
@@ -163,9 +166,12 @@ def _item_text(it: ExplainItem, f: dict[str, Any], en: bool) -> str:
     if it.kind == "RESCHEDULE_PAYMENT":
         what = (f"Pay {s.get('to', 'this payment')} ({s.get('amount')}) on {s.get('new_date')} instead of {s.get('from_date')}."
                 if en else f"{s.get('to', 'Zahlung')} ({s.get('amount')}) am {s.get('new_date')} statt am {s.get('from_date')} zahlen.")
-    else:
+    elif it.kind == "CREDIT_LINE":
         what = (f"A short-term credit line of {s.get('credit_line_amount')} from {s.get('available_from')} (illustrative, not a bank offer)."
                 if en else f"Ein kurzfristiger Kreditrahmen von {s.get('credit_line_amount')} ab {s.get('available_from')} (Beispiel, kein Bankangebot).")
+    else:
+        label = it.kind.replace("_", " ").lower()
+        what = f"Vero suggests: {label}." if en else f"Vero empfiehlt: {label}."
     rule = f["rules_not_met"][0] if f["rules_not_met"] else ""
     lane = {
         "DONE_WITHIN_MANDATE": "Done within your rules (simulated)." if en else "Im Rahmen Ihrer Regeln erledigt (simuliert).",
