@@ -39,6 +39,10 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 10
             failureThreshold: 3
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
           resources:
             requests:
               cpu: 50m
