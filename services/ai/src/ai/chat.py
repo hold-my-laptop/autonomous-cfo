@@ -88,12 +88,61 @@ def readable(value: Any, lang: str, key: str = "") -> Any:
     return value
 
 
-async def _overview(api: PublicApi, args: dict[str, Any]) -> Any:
+FACTS = {
+    "en": {
+        "breach": "The balance goes below the cash floor of {floor} for the first time on {date} (closing {closing}). "
+                  "It is below the floor on {days} day(s) of the forecast.",
+        "no_breach": "The balance never goes below the cash floor of {floor} in the forecast. "
+                     "The lowest point is {low} on {low_date}, which is above the floor.",
+        "overdrawn": "At its lowest point the balance is negative, so the account would be overdrawn then, "
+                     "but it stays above the cash floor.",
+        "pending": "{n} recommendation(s) wait for the owner's approval.",
+        "no_pending": "No recommendations wait for the owner's approval.",
+    },
+    "de": {
+        "breach": "Der Kontostand fällt am {date} zum ersten Mal unter die Mindestliquidität von {floor} "
+                  "(Schlussstand {closing}). Er liegt an {days} Tag(en) der Prognose darunter.",
+        "no_breach": "Der Kontostand fällt in der Prognose nie unter die Mindestliquidität von {floor}. "
+                     "Der Tiefstand ist {low} am {low_date} und liegt damit über der Grenze.",
+        "overdrawn": "Am Tiefstand ist der Kontostand negativ, das Konto wäre dann überzogen, "
+                     "bleibt aber über der Mindestliquidität.",
+        "pending": "{n} Empfehlung(en) warten auf die Freigabe des Inhabers.",
+        "no_pending": "Keine Empfehlungen warten auf die Freigabe des Inhabers.",
+    },
+}
+
+
+def facts(o: dict[str, Any], lang: str) -> list[str]:
+    """Comparisons a small model gets wrong (negative amounts against a negative floor), done in code."""
+    t, out = FACTS[lang], []
+    s = o.get("forecast_summary") or {}
+    floor, low = o.get("cash_floor"), s.get("lowest") or {}
+    breach = s.get("first_breach")
+    if breach:
+        out.append(t["breach"].format(floor=money(floor, lang), date=day(breach.get("date"), lang),
+                                      closing=money(breach.get("closing"), lang), days=s.get("days_below_floor")))
+    elif floor is not None and low.get("closing") is not None:
+        out.append(t["no_breach"].format(floor=money(floor, lang), low=money(low["closing"], lang),
+                                         low_date=day(low.get("date"), lang)))
+        try:
+            if int(str(low["closing"])) < 0:
+                out.append(t["overdrawn"])
+        except ValueError:
+            pass
+    pending = o.get("pending_count")
+    if isinstance(pending, int):
+        out.append(t["pending"].format(n=pending) if pending else t["no_pending"])
+    return out
+
+
+async def _overview(api: PublicApi, args: dict[str, Any], lang: str = "en") -> Any:
     o = await api.get("/overview")
-    return {k: o.get(k) for k in ("company", "cash_floor", "forecast_summary", "headline", "lanes", "pending_count")}
+    out = {k: o.get(k) for k in ("company", "cash_floor", "forecast_summary", "headline", "lanes", "pending_count")}
+    out["facts"] = facts(o, lang)
+    return out
 
 
-async def _weekly_forecast(api: PublicApi, args: dict[str, Any]) -> Any:
+async def _weekly_forecast(api: PublicApi, args: dict[str, Any], lang: str = "en") -> Any:
     f = await api.get("/forecast", {"weekly": "true"})
     weeks = [{k: w[k] for k in ("week", "start_date", "end_date", "inflow", "outflow", "closing", "lowest",
                                 "any_below_floor")} for w in f.get("weeks") or []]
@@ -102,7 +151,7 @@ async def _weekly_forecast(api: PublicApi, args: dict[str, Any]) -> Any:
             "drivers": f.get("drivers"), "assumptions": f.get("assumptions"), "credit_lines": f.get("credit_lines")}
 
 
-async def _days_around(api: PublicApi, args: dict[str, Any]) -> Any:
+async def _days_around(api: PublicApi, args: dict[str, Any], lang: str = "en") -> Any:
     try:
         center = date.fromisoformat(str(args.get("date")))
     except ValueError:
@@ -113,7 +162,7 @@ async def _days_around(api: PublicApi, args: dict[str, Any]) -> Any:
     return {"days": days} if days else {"error": f"no forecast days near {center} (horizon starts {f.get('as_of_date')})"}
 
 
-async def _recommendations(api: PublicApi, args: dict[str, Any]) -> Any:
+async def _recommendations(api: PublicApi, args: dict[str, Any], lang: str = "en") -> Any:
     recs = await api.get("/recommendations")
     out = []
     for r in recs:
@@ -124,7 +173,7 @@ async def _recommendations(api: PublicApi, args: dict[str, Any]) -> Any:
     return {"recommendations": out}
 
 
-async def _payments(api: PublicApi, args: dict[str, Any]) -> Any:
+async def _payments(api: PublicApi, args: dict[str, Any], lang: str = "en") -> Any:
     rows = await api.get("/outflows")
     keep = ("ref", "counterparty", "category", "amount", "scheduled_date", "due_date", "latest_allowed_date",
             "protected", "original_amount", "original_currency")
@@ -134,11 +183,11 @@ async def _payments(api: PublicApi, args: dict[str, Any]) -> Any:
     return {"payments": out}
 
 
-async def _rules(api: PublicApi, args: dict[str, Any]) -> Any:
+async def _rules(api: PublicApi, args: dict[str, Any], lang: str = "en") -> Any:
     return await api.get("/mandate")
 
 
-async def _latest_run(api: PublicApi, args: dict[str, Any]) -> Any:
+async def _latest_run(api: PublicApi, args: dict[str, Any], lang: str = "en") -> Any:
     runs = await api.get("/runs", {"limit": 1})
     if not runs:
         return {"error": "no runs yet"}
@@ -155,7 +204,8 @@ def _tool(name: str, description: str, props: dict[str, Any] | None = None, requ
 TOOLS = {
     "get_overview": (_overview, _tool(
         "get_overview", "Today's cash balance, the owner's cash floor, the forecast summary (first day below "
-        "the floor, lowest point), what Vero analysed and how many recommendations wait for approval.")),
+        "the floor, lowest point), what Vero analysed, how many recommendations wait for approval, and "
+        "'facts': exact statements about the cash floor.")),
     "get_weekly_forecast": (_weekly_forecast, _tool(
         "get_weekly_forecast", "The 13-week cash forecast: closing and lowest balance per week, the drivers "
         "(why) and the assumptions behind it.")),
@@ -183,6 +233,9 @@ Rules:
 - Amounts in tool results are already formatted in euros; copy them as written.
 - You only explain and look things up. You cannot execute, approve, transfer or change anything. All execution in this app is simulated, and credit lines are illustrative, not bank offers.
 - If the owner asks "what if" about a recommendation, use its impact (after_if_executed). For changes that are not a recommendation, say you can only show the planner's options, and do not invent results.
+- The overview is already loaded for you. Its "facts" are exact statements about the cash floor and pending approvals. Use them for any comparison with the cash floor; never decide yourself whether an amount is above or below the floor.
+- For follow-up questions, look the numbers up again. Do not repeat numbers from earlier answers unless they appear in this turn's tool results.
+- If the question is unclear, ask one short clarifying question.
 - If the tools do not contain the answer, say so plainly.
 - Answer in at most 5 short sentences, plain language, no tables, no markdown headings."""
 
@@ -233,7 +286,7 @@ async def answer(req: ChatRequest, llm: LLM, api: PublicApi, settings: Settings)
 
 async def _stub_answer(req: ChatRequest, api: PublicApi) -> ChatResponse:
     """LLM_MODE=stub: a fixed template from the overview, so the UI can be built without a GPU."""
-    o = readable(await _overview(api, {}), req.language)
+    o = readable(await _overview(api, {}, req.language), req.language)
     s = o.get("forecast_summary") or {}
     low = s.get("lowest") or {}
     text = (f"(Stub, not a model.) Your cash today is {(o.get('company') or {}).get('balance')}. "
@@ -256,8 +309,17 @@ async def _answer(req: ChatRequest, llm: LLM, api: PublicApi, settings: Settings
     used: list[str] = []
     corrections = 0
 
+    # Every turn starts with the overview, so follow-ups ("really?") have checked numbers to work with.
+    overview = await _run_tool("get_overview", "{}", api, lang)
+    text = json.dumps(overview, ensure_ascii=False)
+    evidence.append(text)
+    used.append("get_overview")
+    messages.append({"role": "assistant", "content": "", "tool_calls": [
+        {"id": "overview", "type": "function", "function": {"name": "get_overview", "arguments": "{}"}}]})
+    messages.append({"role": "tool", "tool_call_id": "overview", "content": text})
+
     for _ in range(settings.chat_max_tool_calls + 3):
-        offered = tools if len(used) < settings.chat_max_tool_calls else None
+        offered = tools if len(used) - 1 < settings.chat_max_tool_calls else None
         with tracing.span("llm_call", "CHAT_MODEL", {"messages": tracing.tail(messages)}) as sp:
             reply = await llm.chat(messages, offered)
             sp.set_outputs({"content": reply.content,
@@ -302,7 +364,7 @@ async def _run_tool(name: str, raw_args: str, api: PublicApi, lang: str) -> Any:
                 args = json.loads(raw_args or "{}")
                 if not isinstance(args, dict):
                     raise ValueError("arguments must be an object")
-                result = readable(await TOOLS[name][0](api, args), lang)
+                result = readable(await TOOLS[name][0](api, args, lang), lang)
             except (ValueError, json.JSONDecodeError) as e:
                 result = {"error": f"bad arguments: {e}"}
             except httpx.HTTPError as e:

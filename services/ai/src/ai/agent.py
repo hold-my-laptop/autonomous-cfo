@@ -130,7 +130,7 @@ async def _run(start: AgentRunStart, llm: LLM, backend: Backend, settings: Setti
 
 async def _loop(start: AgentRunStart, llm: LLM, backend: Backend, settings: Settings) -> AgentCompletion:
     run_id, max_calls = start.run_id, start.limits.max_tool_calls
-    specs = await backend.list_tools()
+    specs = await backend.list_tools(run_id)
     tools = [_openai_tool(s) for s in specs] + [SUBMIT_TOOL]
     known = {s.name for s in specs}
     messages: list[dict[str, Any]] = [
