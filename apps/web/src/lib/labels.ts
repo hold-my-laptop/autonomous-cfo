@@ -40,7 +40,8 @@ export const executionLabel: Record<ExecutionMode, string> = {
 export function modelLine(m: ModelInfo): string {
   const v = m.name.match(/^([a-z]+)-(\d+(?:\.\d+)?)/i);
   const name = v ? `${v[1][0].toUpperCase()}${v[1].slice(1)} ${v[2]}` : m.name;
-  const parts = [name, m.servedBy.replace("Red Hat ", "")];
+  const parts = [name];
+  if (m.servedBy) parts.push(m.servedBy.replace("Red Hat ", ""));
   if (m.traceId) parts.push(`trace ${m.traceId}`);
   if (m.guardrails) parts.push(`guardrails ${m.guardrails}`);
   return parts.join(" · ");

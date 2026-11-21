@@ -1,5 +1,5 @@
 import type {
-  AuditEntry,
+  AuditLog,
   ChatRequest,
   ChatResponse,
   Company,
@@ -16,8 +16,31 @@ import type {
   RecommendedAction,
   SourceDoc,
 } from "./types";
-import type { BeCompany, BeDecisionResult, BeForecast, BeMandate, BeOverview, BeRun, BeRunAccepted } from "./backend";
-import { toCompany, toDecision, toDecisions, toForecast, toPolicy } from "./adapters";
+import type {
+  BeAuditEntry,
+  BeCompany,
+  BeCostItem,
+  BeDecisionResult,
+  BeDocument,
+  BeDocumentSummary,
+  BeForecast,
+  BeMandate,
+  BeOverview,
+  BeRun,
+  BeRunAccepted,
+} from "./backend";
+import {
+  toAuditEntry,
+  toCompany,
+  toCostMemoryRow,
+  toDecision,
+  toDecisions,
+  toForecast,
+  toKnownDocument,
+  toPolicy,
+  toSourceDoc,
+} from "./adapters";
+import { verifyBackendChain, verifyMockChain } from "../lib/hashChain";
 /** The in-browser mock backend, loaded only in mock mode (it bundles the sample bank statement). */
 const mock = () => import("./mock");
 
@@ -126,8 +149,16 @@ export const api = {
   policy: (): Promise<Policy> => (USE_MOCK ? mock().then((m) => m.getPolicy()) : live.policy()),
   decisions: (): Promise<Decision[]> => (USE_MOCK ? mock().then((m) => m.getDecisions()) : live.decisions()),
   forecast: (): Promise<Forecast> => (USE_MOCK ? mock().then((m) => m.getForecast()) : live.forecast()),
-  // Not in the backend yet: in live mode this fails and the Activity page shows its error state.
-  audit: (): Promise<AuditEntry[]> => (USE_MOCK ? mock().then((m) => m.getAudit()) : http("/audit")),
+  /** The activity log, its hash chain verified on the raw data before it is converted for display. */
+  audit: async (): Promise<AuditLog> => {
+    if (USE_MOCK) {
+      const entries = await mock().then((m) => m.getAudit());
+      return { entries, chain: await verifyMockChain(entries) };
+    }
+    const raw = await http<BeAuditEntry[]>("/audit");
+    const chain = await verifyBackendChain(raw);
+    return { entries: raw.map(toAuditEntry), chain };
+  },
 
   act: (id: string, action: DecisionAction): Promise<Decision> =>
     USE_MOCK ? mock().then((m) => m.actOnDecision(id, action)) : live.act(id, action),
@@ -136,14 +167,17 @@ export const api = {
   uploadContract: (file: File): Promise<ContractCheckResult> =>
     USE_MOCK ? mock().then((m) => m.uploadContract(file)) : upload("/contracts", file),
 
-  // Vero: cost check. Documents arrive by themselves (bank feed, e-mail, Contract check); no upload here.
-  // Not in the backend yet (Phase 2 plans /findings, /cost-memory, /documents, /digest).
-  findings: (): Promise<Finding[]> => (USE_MOCK ? mock().then((m) => m.getFindings()) : http("/costs/findings")),
-  costMemory: (): Promise<CostMemoryRow[]> => (USE_MOCK ? mock().then((m) => m.getCostMemory()) : http("/costs/memory")),
-  costDocuments: (): Promise<KnownDocument[]> => (USE_MOCK ? mock().then((m) => m.getCostDocuments()) : http("/costs/documents")),
-  digest: (): Promise<DigestRow[]> => (USE_MOCK ? mock().then((m) => m.getDigest()) : http("/costs/digest")),
-  document: (docId: string): Promise<SourceDoc> =>
-    USE_MOCK ? mock().then((m) => m.getDocument(docId)) : http(`/documents/${encodeURIComponent(docId)}`),
+  // Vero: cost check. Documents arrive by themselves (bank feed, e-mail, upload); no upload here.
+  // Live: cost memory and documents are real; findings (P07), digest (P15) and upload (P08) are coming,
+  // until then those calls fail and the page shows its error/empty states.
+  findings: (): Promise<Finding[]> => (USE_MOCK ? mock().then((m) => m.getFindings()) : http("/findings")),
+  costMemory: async (): Promise<CostMemoryRow[]> =>
+    USE_MOCK ? mock().then((m) => m.getCostMemory()) : (await http<BeCostItem[]>("/cost-memory")).map(toCostMemoryRow),
+  costDocuments: async (): Promise<KnownDocument[]> =>
+    USE_MOCK ? mock().then((m) => m.getCostDocuments()) : (await http<BeDocumentSummary[]>("/documents")).map(toKnownDocument),
+  digest: (): Promise<DigestRow[]> => (USE_MOCK ? mock().then((m) => m.getDigest()) : http("/digest")),
+  document: async (docId: string): Promise<SourceDoc> =>
+    USE_MOCK ? mock().then((m) => m.getDocument(docId)) : toSourceDoc(await http<BeDocument>(`/documents/${encodeURIComponent(docId)}`)),
   approveFinding: (findingId: string, actions: RecommendedAction["type"][]): Promise<Finding> =>
     USE_MOCK ? mock().then((m) => m.approveFinding(findingId, actions)) : postJson(`/costs/findings/${findingId}/approve`, { actions }),
 

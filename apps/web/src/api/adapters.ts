@@ -4,8 +4,13 @@
  */
 import { formatDate, formatEurWhole } from "../lib/format";
 import type {
+  BeAuditEntry,
   BeCategory,
   BeCompany,
+  BeCostItem,
+  BeDocument,
+  BeDocumentSummary,
+  BeDocumentType,
   BeForecast,
   BeImpactState,
   BeMandate,
@@ -14,8 +19,15 @@ import type {
   Cents,
 } from "./backend";
 import type {
+  AgentId,
+  AuditActor,
+  AuditEntry,
   AutonomyLevel,
   Company,
+  CostMemoryRow,
+  DocLine,
+  KnownDocument,
+  SourceDoc,
   Decision,
   DecisionStatus,
   Fact,
@@ -240,6 +252,163 @@ const findingTitle = {
   FX_EXPOSURE: "Swiss franc exposure",
   BACKTEST: "Forecast check",
 } as const;
+
+// ───────────────────────── Activity log ─────────────────────────
+
+const auditActor: Record<BeAuditEntry["actor"], AuditActor> = { OWNER: "owner", AGENT: "agent", RULES: "rules", SYSTEM: "system" };
+const auditAgent: Record<NonNullable<BeAuditEntry["agent"]>, AgentId> = { CASH: "liquidity", PROOF: "costs" };
+
+/** For display only: verify the raw entry first (lib/hashChain.ts verifyBackendChain). */
+export function toAuditEntry(e: BeAuditEntry): AuditEntry {
+  return {
+    seq: e.seq,
+    timestamp: e.timestamp,
+    actor: auditActor[e.actor],
+    agent: e.agent ? auditAgent[e.agent] : undefined,
+    autonomy: e.lane ? autonomy[e.lane] : undefined,
+    execution: e.execution ? "simulated" : undefined,
+    action: e.action,
+    decisionId: e.recommendation_id ?? undefined,
+    model: e.model ? { name: e.model } : undefined,
+    prevHash: e.prev_hash,
+    hash: e.hash,
+  };
+}
+
+// ───────────────────────── Vero Proof: documents and cost memory ─────────────────────────
+
+const documentKind: Record<BeDocumentType, KnownDocument["kind"]> = {
+  LEASE: "lease",
+  CONTRACT: "contract",
+  PAYMENT_PLAN: "contract",
+  PRICE_LIST: "contract",
+  INVOICE: "invoice",
+  RENT_ADJUSTMENT: "notice",
+  NOTICE: "notice",
+};
+const documentSource: Record<BeDocumentSummary["source"], KnownDocument["source"]> = {
+  DOCUMENTS: "history",
+  MAILBOX: "inbox",
+  UPLOAD: "upload",
+};
+
+export function toKnownDocument(d: BeDocumentSummary): KnownDocument {
+  return {
+    doc_id: d.id,
+    kind: documentKind[d.type],
+    label: d.title_en,
+    note: [d.counterparty.name, d.document_number].filter(Boolean).join(" · "),
+    source: documentSource[d.source],
+    added_at: `${d.date}T00:00:00Z`,
+  };
+}
+
+const viewerKind: Record<BeDocumentType, SourceDoc["kind"]> = {
+  LEASE: "Lease",
+  CONTRACT: "Contract",
+  PAYMENT_PLAN: "Contract",
+  PRICE_LIST: "Contract",
+  INVOICE: "Invoice",
+  RENT_ADJUSTMENT: "Notice",
+  NOTICE: "Notice",
+};
+
+const deEur = (cents: Cents) => (Number(cents) / 100).toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+
+/**
+ * The document as text lines for the viewer, in page and reading order (by each part's box):
+ * text blocks and clauses (German, with the English gloss), invoice lines and totals, and a rent
+ * adjustment. Values use the exact printed text from `highlights`. What is billed (invoice total,
+ * new rent) is boxed as "billed", the old rent as the "basis". Boxes are PDF points with the origin
+ * top-left; a rendered PDF would scale them by rendered width ÷ page.width.
+ */
+export function toSourceDoc(d: BeDocument): SourceDoc {
+  const printed = (ref: string) => d.highlights.find((h) => h.ref === ref);
+  const at = (ref: string, fallbackPage = 1): [number, number] => {
+    const h = printed(ref);
+    return h ? [h.page, h.box[1]] : [fallbackPage, Number.MAX_SAFE_INTEGER];
+  };
+  const gloss = (text: string, en: string) => (en && en !== text ? en : undefined);
+  const parts: { page: number; y: number; line: DocLine }[] = [];
+
+  for (const p of d.pages) {
+    for (const b of p.blocks) {
+      parts.push({ page: p.page, y: b.box?.[1] ?? 0, line: { text: b.text, en: gloss(b.text, b.text_en), muted: b.id === "letterhead" } });
+    }
+  }
+  for (const c of d.clauses) {
+    parts.push({
+      page: c.page,
+      y: c.box?.[1] ?? Number.MAX_SAFE_INTEGER,
+      line: { text: `${c.section} ${c.title}: ${c.text}`, en: gloss(c.text, c.text_en) },
+    });
+  }
+  for (const l of d.lines) {
+    const [page, y] = at(`lines.${l.id}.description`);
+    const v = (field: string, fallback: string) => printed(`lines.${l.id}.${field}`)?.text ?? fallback;
+    parts.push({
+      page,
+      y,
+      line: { text: `${l.description} · ${v("quantity", l.quantity)} ${v("unit", l.unit)} × ${v("unit_price", l.unit_price)} = ${v("net", deEur(l.net))}` },
+    });
+  }
+  if (d.totals) {
+    const t = d.totals;
+    const [page, y] = at("totals.net");
+    parts.push({ page, y, line: { text: `Summe netto ${printed("totals.net")?.text ?? deEur(t.net)} · MwSt. ${printed("totals.vat")?.text ?? deEur(t.vat)}`, en: "Net total · VAT" } });
+    const [gp, gy] = at("totals.gross");
+    parts.push({ page: gp, y: gy, line: { text: `Gesamtbetrag ${printed("totals.gross")?.text ?? deEur(t.gross)}`, en: "Total", strong: true, box: { label: "Billed", tone: "billed" } } });
+  }
+  if (d.rent_adjustment) {
+    const r = d.rent_adjustment;
+    const [op, oy] = at("rent_adjustment.old_amount");
+    parts.push({ page: op, y: oy, line: { text: `Bisherige Miete ${printed("rent_adjustment.old_amount")?.text ?? deEur(r.old_amount)}`, en: "Rent so far", box: { label: "Basis", tone: "basis" } } });
+    const [np, ny] = at("rent_adjustment.new_amount");
+    parts.push({ page: np, y: ny, line: { text: `Neue Miete ab ${formatDate(r.effective_from)}: ${printed("rent_adjustment.new_amount")?.text ?? deEur(r.new_amount)}`, en: "New rent", strong: true, box: { label: "Billed", tone: "billed" } } });
+  }
+
+  const lines = parts.sort((a, b) => a.page - b.page || a.y - b.y).map((x) => x.line);
+  return {
+    doc_id: d.id,
+    kind: viewerKind[d.type],
+    title: d.title,
+    meta: `${d.title_en} · ${d.counterparty.name} · ${formatDate(d.date)}${d.page_count > 1 ? ` · ${d.page_count} pages` : ""}`,
+    page: 1,
+    lines,
+    file_url: d.file_url,
+  };
+}
+
+const costLabel: Record<string, string> = {
+  RENT: "Rent",
+  UTIL: "Energy & utilities",
+  XFER: "CHF transfer",
+  PAY: "Payroll",
+  SOC: "Social security",
+  WTAX: "Wage tax",
+};
+const costSource: Record<BeCostItem["sources"][number]["kind"], CostMemoryRow["sources"][number]> = {
+  STATEMENT: "statement",
+  CONTRACT: "contract",
+  PRICE_LIST: "price_list",
+  INVOICE: "invoice",
+};
+
+export function toCostMemoryRow(c: BeCostItem): CostMemoryRow {
+  return {
+    cost_ref: c.cost_ref,
+    label: costLabel[c.cost_ref] ?? (c.kind === "SUPPLIER" ? "Supplier" : c.cost_ref),
+    vendor: c.counterparty,
+    kind: c.kind === "FIXED" ? "fixed" : "supplier",
+    expected:
+      c.expected_amount !== null
+        ? { amount: eur(c.expected_amount), currency: c.currency, eur_amount: c.eur_amount !== null ? eur(c.eur_amount) : undefined }
+        : undefined,
+    due_day: c.due_day ?? undefined,
+    prices: c.prices.length,
+    sources: [...new Set(c.sources.map((s) => costSource[s.kind]))],
+  };
+}
 
 /** All lanes of GET /overview as one list; ANALYSED findings become analysis-only items. */
 export function toDecisions(o: BeOverview): Decision[] {

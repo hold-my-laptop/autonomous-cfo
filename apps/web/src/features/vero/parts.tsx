@@ -54,6 +54,11 @@ export function PaperDoc({ doc, showEnglish }: { doc: SourceDoc; showEnglish: bo
         <span className="font-semibold">{doc.kind}</span>
         <span className="truncate font-mono text-[11px] text-ink-soft">{doc.doc_id}</span>
         <span className="ml-auto shrink-0 text-ink-muted">p. {doc.page}</span>
+        {doc.file_url && (
+          <a href={doc.file_url} target="_blank" rel="noreferrer" className="shrink-0 font-medium text-link hover:underline">
+            Open PDF<span className="sr-only"> (opens in a new tab)</span>
+          </a>
+        )}
       </figcaption>
       <div className="flex-1 space-y-2.5 px-5 py-5 font-serif text-[13px] leading-relaxed sm:px-6">
         <p className="font-sans text-sm font-semibold" lang="de">{doc.title}</p>

@@ -1,7 +1,7 @@
 /** Shared plumbing for the in-browser mock backend: clock, audit chain, live events, model info. */
 import type { AgentId, AuditActor, AuditEntry, ModelInfo } from "../types";
 import { mockBus } from "../mockBus";
-import { GENESIS_HASH, hashInput, sha256Hex } from "../../lib/hashChain";
+import { GENESIS_HASH, mockHashInput, sha256Hex } from "../../lib/hashChain";
 
 export const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** The demo time machine: timestamps use the demo date with today's clock time. */
@@ -57,7 +57,7 @@ export function log(
   const run = async () => {
     const prevHash = audit.length ? audit[audit.length - 1].hash : GENESIS_HASH;
     const entryBase = { seq: audit.length + 1, timestamp: nowIso(), actor, action, prevHash, ...extra };
-    const entry: AuditEntry = { ...entryBase, hash: await sha256Hex(hashInput(entryBase)) };
+    const entry: AuditEntry = { ...entryBase, hash: await sha256Hex(mockHashInput(entryBase)) };
     audit = [...audit, entry];
     mockBus.emit({ type: "audit.appended", data: entry });
   };

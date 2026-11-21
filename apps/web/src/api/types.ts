@@ -40,7 +40,7 @@ export type ExecutionMode = "simulated" | "permitted";
  */
 export interface ModelInfo {
   name: string;              // "granite-3.3-8b-instruct"
-  servedBy: string;          // "vLLM on Red Hat OpenShift AI"
+  servedBy?: string;         // "vLLM on Red Hat OpenShift AI" (the real backend only sends the name)
   traceId?: string;          // MLflow trace id
   guardrails?: "passed" | "blocked";
 }
@@ -278,8 +278,9 @@ export type ContractCheckResult = ContractSimulation | LeaseCheck;
 export type AuditActor = "agent" | "rules" | "owner" | "system";
 
 /**
- * Append-only, hash-chained entry.
- * hash = sha256(`${prevHash}|${seq}|${timestamp}|${actor}|${action}|${decisionId ?? ""}`)
+ * Append-only, hash-chained entry, as displayed. The seal is checked on the raw data before
+ * conversion (lib/hashChain.ts): the real backend hashes every field of its snake_case entry
+ * (DATA_CONTRACTS §2.2), the mock hashes `${prevHash}|${seq}|${timestamp}|${actor}|${action}|${decisionId ?? ""}`.
  * First entry: prevHash = "0".repeat(64).
  */
 export interface AuditEntry {
@@ -294,6 +295,12 @@ export interface AuditEntry {
   model?: ModelInfo;
   prevHash: string;
   hash: string;
+}
+
+/** The activity log for display, and whether its hash chain checked out (on the raw response). */
+export interface AuditLog {
+  entries: AuditEntry[];
+  chain: { valid: true } | { valid: false; brokenAtSeq: number };
 }
 
 // ───────────────────────── Vero: cost check (snake_case) ─────────────────────────
@@ -396,7 +403,7 @@ export interface KnownDocument {
   kind: "invoice" | "contract" | "lease" | "notice" | "statement";
   label: string;        // "Lease, Main Street Real Estate"
   note: string;         // "§5 index rent (CPI)"
-  source: "history" | "contract_check" | "inbox";
+  source: "history" | "contract_check" | "inbox" | "upload";
   added_at: ISODateTime;
 }
 
@@ -417,6 +424,8 @@ export interface SourceDoc {
   meta: string;
   page: number;
   lines: DocLine[];
+  /** The original PDF, when the backend has one (GET /documents/{id}/file). */
+  file_url?: string;
 }
 
 /** A recurring cost that changed and was explained without bothering the owner. */
@@ -429,10 +438,17 @@ export interface DigestRow {
   calc?: string[];
 }
 
+/** What Vero expects a recurring cost to be, and the evidence it rests on (GET /cost-memory). */
 export interface CostMemoryRow {
-  label: string;
-  vendor: string;
-  months: { period: string; value: number; partial?: boolean }[];
+  cost_ref: string;          // RENT, UTIL, XFER, … or a supplier
+  label: string;             // "Rent"
+  vendor: string;            // "Main Street Real Estate GmbH"
+  kind: "fixed" | "supplier";
+  /** Fixed costs: the expected monthly amount (CHF costs also in EUR at the last rate). */
+  expected?: { amount: number; currency: "EUR" | "CHF"; eur_amount?: number };
+  due_day?: number;          // day of the month
+  prices: number;            // list-price items on file (suppliers)
+  sources: ("statement" | "contract" | "price_list" | "invoice")[];
 }
 
 // ───────────────────────── Live events (SSE: GET /api/v1/events) ─────────────────────────
@@ -486,7 +502,11 @@ export interface ChatResponse {
 // live      ← polls GET /runs?limit=1 (the backend has no event stream)
 // demo      → POST /demo/reset, POST /events (CLOSURE_PLANNED)
 // chat      → POST /chat (AI service)
-// Not in the backend yet (Phase 2 or undecided): audit, contracts, costs/*, documents/{id}.
+// audit     ← GET /audit (chain verified on the raw response, then converted)
+// costMemory    ← GET /cost-memory
+// costDocuments ← GET /documents
+// document      ← GET /documents/{id} (text blocks + highlights; the PDF at /documents/{id}/file)
+// Not in the backend yet: findings (P07), digest (P15), upload (P08: POST /documents); contracts undecided.
 // The mapping lives in adapters.ts; the wire shapes in backend.ts.
 //
 // ───────────────────────── Mock API endpoints (all under /api/v1) ─────────────────────────

@@ -1,11 +1,10 @@
 import { Link, useSearchParams } from "react-router-dom";
+import { ApiError } from "../../api/client";
 import { useCompany, useCostDocuments, useCostMemory, useDigest, useFindings } from "../../api/queries";
-import type { Finding, KnownDocument } from "../../api/types";
+import type { CostMemoryRow, Finding, KnownDocument } from "../../api/types";
 import { Icon } from "../../components/Icon";
 import { FindingView, isWorking } from "./Investigation";
 import { ClassificationBadge, eur } from "./parts";
-
-const monthShort = (period: string) => new Date(`${period}-01T00:00:00Z`).toLocaleDateString("en-GB", { month: "short", timeZone: "UTC" });
 
 const cites = (f: Finding, docId: string) => f.source_doc_id === docId || f.evidence_refs.some((e) => e.doc_id === docId);
 
@@ -39,6 +38,8 @@ export function VeroPage() {
     .reduce((s, f) => s + (f.financial_impact?.disputed_amount_annual ?? 0), 0);
   const quiet = digest.data?.length ?? 0;
   const filterDoc = docs.data?.find((d) => d.doc_id === docFilter);
+  // GET /findings answers 404 until the backend ships it (P07): not an outage.
+  const notBuiltYet = findings.error instanceof ApiError && findings.error.status === 404;
 
   return (
     <div className="space-y-10">
@@ -48,7 +49,7 @@ export function VeroPage() {
           {company ? `${company.name}${company.city ? `, ${company.city}` : ""}` : " "}
         </p>
         <h1 id="vero-h" className="mt-2 max-w-[30ch] text-[32px] font-semibold leading-[1.1] tracking-[-0.025em] sm:text-[44px] lg:text-[48px]">
-          {findings.data ? headline(all) : "Checking your costs…"}
+          {findings.data ? headline(all) : findings.isError ? "Your recurring costs, and what Vero expects them to be." : "Checking your costs…"}
         </h1>
         <p className="mt-2 max-w-[80ch] text-[15px] text-ink-soft">
           Vero checks every recurring cost against your bank history, contracts and leases. Bills reach it by themselves:
@@ -98,7 +99,14 @@ export function VeroPage() {
           )}
         </div>
 
-        {findings.isError && <p role="alert" className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load the cost checks. Check that the backend is running.</p>}
+        {findings.isError &&
+          (notBuiltYet ? (
+            <p className="liquid-glass-strong rounded-3xl p-5 text-[13px] text-ink-soft">
+              Cost checks aren't available on this backend yet. Your documents and Cost Memory are already loaded.
+            </p>
+          ) : (
+            <p role="alert" className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load the cost checks. Check that the backend is running.</p>
+          ))}
         {findings.isLoading && <div className="h-40 animate-pulse rounded-3xl bg-sunk" />}
         {findings.data && shown.length === 0 && (
           <div className="liquid-glass flex items-start gap-3 rounded-3xl p-6">
@@ -132,6 +140,7 @@ const sourceBadge: Record<KnownDocument["source"], { label: string; cls: string 
   history: null,
   contract_check: { label: "From contract check", cls: "bg-action-tint text-link" },
   inbox: { label: "From your inbox", cls: "bg-cream text-ask" },
+  upload: { label: "Uploaded", cls: "bg-action-tint text-link" },
 };
 
 function KnownDocuments({ docs, highlight }: { docs: KnownDocument[]; highlight: string | null }) {
@@ -210,46 +219,71 @@ function Digest() {
   );
 }
 
-/** What Vero already knows, from the bank statement. */
+const sourceName: Record<CostMemoryRow["sources"][number], string> = {
+  statement: "Bank statement",
+  contract: "Contract",
+  price_list: "Price list",
+  invoice: "Invoices",
+};
+
+const chf = new Intl.NumberFormat("en-GB", { style: "currency", currency: "CHF" });
+
+/** "1" → "1st", "10" → "10th" */
+const ordinal = (n: number) => `${n}${n % 10 === 1 && n !== 11 ? "st" : n % 10 === 2 && n !== 12 ? "nd" : n % 10 === 3 && n !== 13 ? "rd" : "th"}`;
+
+/** What Vero expects each recurring cost to be, and the evidence behind it. */
 function CostMemory() {
   const { data } = useCostMemory();
   if (!data?.length) return null;
-  const months = data[0].months;
   return (
     <section aria-labelledby="mem-h">
       <div className="mb-3">
         <h2 id="mem-h" className="text-[20px] font-semibold">Cost Memory</h2>
-        <p className="text-[13px] text-ink-soft">Monthly totals from your bank statement since January. April runs to the 13th.</p>
+        <p className="text-[13px] text-ink-soft">What Vero expects each recurring cost to be, from your bank statement, contracts and price lists.</p>
       </div>
       <div className="liquid-glass-strong overflow-x-auto rounded-3xl">
         <table className="w-full min-w-[600px] text-[13px]">
           <thead className="glass-inset border-b border-line text-xs text-ink-soft">
             <tr>
               <th scope="col" className="px-5 py-2 text-left font-medium">Cost</th>
-              {months.map((m) => (
-                <th key={m.period} scope="col" className="px-3 py-2 text-right font-medium">
-                  {monthShort(m.period)}
-                  {m.partial && <span className="font-normal text-ink-muted"> (to 13th)</span>}
-                </th>
-              ))}
+              <th scope="col" className="px-3 py-2 text-right font-medium">Expected each month</th>
+              <th scope="col" className="px-3 py-2 text-right font-medium">Due</th>
+              <th scope="col" className="px-5 py-2 text-left font-medium">Based on</th>
             </tr>
           </thead>
-          <tbody className="num">
+          <tbody>
             {data.map((row) => (
-              <tr key={row.label} className="border-t border-line first:border-t-0">
+              <tr key={row.cost_ref} className="border-t border-line first:border-t-0">
                 <th scope="row" className="px-5 py-3 text-left font-normal">
                   <span className="block font-medium">{row.label}</span>
                   <span className="block text-[11px] text-ink-muted">{row.vendor}</span>
                 </th>
-                {row.months.map((m, i) => {
-                  const prev = row.months[i - 1];
-                  const changed = i > 0 && !m.partial && m.value !== prev.value;
-                  return (
-                    <td key={m.period} className={`px-3 py-3 text-right ${m.partial ? "text-ink-muted" : changed ? "font-semibold text-ink" : "text-ink-soft"}`}>
-                      {m.value === 0 ? "—" : eur(m.value)}
-                    </td>
-                  );
-                })}
+                <td className="num px-3 py-3 text-right">
+                  {row.expected ? (
+                    <>
+                      <span className="font-medium">
+                        {row.expected.currency === "CHF" ? chf.format(row.expected.amount) : eur(row.expected.amount)}
+                      </span>
+                      {row.expected.eur_amount !== undefined && (
+                        <span className="block text-[11px] text-ink-muted">≈ {eur(row.expected.eur_amount)} at the last rate</span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-ink-soft">
+                      Per invoice{row.prices > 0 && <span className="block text-[11px] text-ink-muted">{row.prices} list prices on file</span>}
+                    </span>
+                  )}
+                </td>
+                <td className="num px-3 py-3 text-right text-ink-soft">{row.due_day ? ordinal(row.due_day) : "—"}</td>
+                <td className="px-5 py-3">
+                  <span className="flex flex-wrap gap-1">
+                    {row.sources.map((s) => (
+                      <span key={s} className="rounded-full bg-sunk px-2 py-0.5 text-[11px] text-ink-soft">
+                        {sourceName[s]}
+                      </span>
+                    ))}
+                  </span>
+                </td>
               </tr>
             ))}
           </tbody>

@@ -1,9 +1,7 @@
-import { useEffect, useState } from "react";
 import { useAudit } from "../../api/queries";
 import type { AuditActor } from "../../api/types";
 import { AutonomyBadge, ExecutionBadge } from "../../components/Badges";
 import { Icon } from "../../components/Icon";
-import { verifyChain, type ChainResult } from "../../lib/hashChain";
 import { agentName } from "../../lib/labels";
 import { formatDateTime, shortHash } from "../../lib/format";
 import { ModelLine } from "../today/Reasoning";
@@ -16,12 +14,10 @@ const actorName: Record<AuditActor, string> = {
 };
 
 export function ActivityPage() {
-  const { data, isLoading, isError } = useAudit();
-  const [chain, setChain] = useState<ChainResult | null>(null);
-
-  useEffect(() => {
-    if (data) verifyChain(data).then(setChain);
-  }, [data]);
+  // The chain is verified in the API layer, on the raw response, before conversion.
+  const { data: log, isLoading, isError } = useAudit();
+  const chain = log?.chain;
+  const data = log?.entries;
 
   const entries = data ? [...data].reverse() : [];
 

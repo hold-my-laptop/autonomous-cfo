@@ -19,11 +19,11 @@ export default defineConfig({
     port: 5173,
     host: true,
     fs: { allow: [".", SAMPLES] },
-    // Same as apps/web/nginx.conf in production. The first matching key wins, so the two AI
-    // routes come before the catch-all; /api/v1/... goes to the api unchanged.
+    // Same as apps/web/nginx.conf in production. The first matching key wins, so the AI route
+    // comes before the catch-all; /api/v1/... goes to the api unchanged. (Document extraction is
+    // internal to the backend now: uploads go to the api's POST /api/v1/documents.)
     proxy: {
       "^/api/v1/chat$": toAi("/v1/chat"),
-      "^/api/v1/documents/extract$": toAi("/v1/documents/extract"),
       "/api/v1": { target: BACKEND, changeOrigin: true },
     },
   },

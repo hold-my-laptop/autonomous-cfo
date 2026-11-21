@@ -78,24 +78,37 @@ export const hasLease = () => docs.some((d) => d.doc_id === LEASE_ID);
 
 // ───────────── Cost Memory (from the statement) ─────────────
 
-const MONTHS = ["2025-01", "2025-02", "2025-03", "2025-04"];
-const MEMORY: { label: string; vendor: string; category: Category }[] = [
-  { label: "Rent", vendor: LANDLORD, category: "rent" },
-  { label: "Energy & gas", vendor: "City Energy & Utilities AG", category: "utilities" },
-  { label: "Social security", vendor: "Techniker Krankenkasse", category: "social_security" },
-  { label: "Food & ingredients", vendor: "Asimex Wholesale Ltd", category: "food" },
-  { label: "Wine & beverages", vendor: "Fattoria La Vino GmbH", category: "wine" },
-  { label: "Fresh produce", vendor: "Central Wholesale Market", category: "produce" },
-  { label: "CHF transfer (in EUR)", vendor: "Luigi Amalfi, Zurich", category: "fx_transfer" },
+// Same shape as the real GET /cost-memory: fixed costs expect last full month's amount (March),
+// suppliers are checked per invoice. The CHF transfer is 4,166.67 CHF a month.
+const LAST_FULL_MONTH = "2025-03";
+const CHF_MONTHLY = 4166.67;
+const MEMORY: { ref: string; label: string; vendor: string; category: Category; kind: "fixed" | "supplier" }[] = [
+  { ref: "RENT", label: "Rent", vendor: LANDLORD, category: "rent", kind: "fixed" },
+  { ref: "UTIL", label: "Energy & utilities", vendor: "City Energy & Utilities AG", category: "utilities", kind: "fixed" },
+  { ref: "XFER", label: "CHF transfer", vendor: "Luigi Amalfi, Zurich", category: "fx_transfer", kind: "fixed" },
+  { ref: "SOC", label: "Social security", vendor: "Techniker Krankenkasse", category: "social_security", kind: "fixed" },
+  { ref: "ASIMEX", label: "Supplier", vendor: "Asimex Wholesale Ltd", category: "food", kind: "supplier" },
+  { ref: "FATTORIA", label: "Supplier", vendor: "Fattoria La Vino GmbH", category: "wine", kind: "supplier" },
+  { ref: "MARKET", label: "Supplier", vendor: "Central Wholesale Market", category: "produce", kind: "supplier" },
 ];
 
 export function getMemory(): CostMemoryRow[] {
   return MEMORY.map((m) => {
-    const totals = monthlyTotals(AS_OF, m.category);
+    const march = -(monthlyTotals(AS_OF, m.category).get(LAST_FULL_MONTH) ?? 0);
+    const chf = m.category === "fx_transfer";
     return {
+      cost_ref: m.ref,
       label: m.label,
       vendor: m.vendor,
-      months: MONTHS.map((p) => ({ period: p, value: -(totals.get(p) ?? 0), partial: p === "2025-04" })),
+      kind: m.kind,
+      expected:
+        m.kind === "fixed"
+          ? chf
+            ? { amount: CHF_MONTHLY, currency: "CHF", eur_amount: march }
+            : { amount: march, currency: "EUR" }
+          : undefined,
+      prices: 0,
+      sources: ["statement"],
     };
   });
 }

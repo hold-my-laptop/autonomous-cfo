@@ -165,3 +165,69 @@ export interface BeRunAccepted {
   run_id: string;
   status: BeRunStatus;
 }
+
+// ───────────────────────── Activity log (GET /audit, DATA_CONTRACTS §2.2 AuditEntry) ─────────────────────────
+
+export interface BeAuditEntry {
+  seq: number;
+  /** UTC with milliseconds, exactly as hashed: "2025-05-05T08:00:00.000Z". */
+  timestamp: string;
+  actor: "OWNER" | "AGENT" | "RULES" | "SYSTEM";
+  agent: "CASH" | "PROOF" | null;
+  action: string;
+  run_id: string | null;
+  recommendation_id: string | null;
+  lane: BeLane | null;
+  execution: "SIMULATED" | null;
+  model: string | null;
+  prev_hash: string;
+  hash: string;
+}
+
+// ───────────────────────── Vero Proof: cost memory and documents ─────────────────────────
+
+/** [x0, y0, x1, y1] in PDF points, origin top-left of the page. */
+export type BeBox = [number, number, number, number];
+
+export interface BeCostItem {
+  cost_ref: string; // RENT, UTIL, XFER, PAY, SOC, WTAX or a supplier
+  kind: "FIXED" | "SUPPLIER";
+  counterparty: string;
+  category: BeCategory;
+  currency: "EUR" | "CHF";
+  expected_amount: Cents | null;
+  frequency: "MONTHLY" | null;
+  due_day: number | null;
+  eur_amount: Cents | null;
+  fx_rate: string | null;
+  prices: { description: string; unit: string; unit_price: string; document_id: string }[];
+  sources: { kind: "STATEMENT" | "CONTRACT" | "PRICE_LIST" | "INVOICE"; date: string; document_id: string | null }[];
+}
+
+export type BeDocumentType = "LEASE" | "CONTRACT" | "INVOICE" | "RENT_ADJUSTMENT" | "NOTICE" | "PRICE_LIST" | "PAYMENT_PLAN";
+
+export interface BeDocumentSummary {
+  id: string;
+  type: BeDocumentType;
+  title: string;
+  title_en: string;
+  counterparty: { id: string; name: string };
+  date: string;
+  language: "de" | "en" | "it";
+  currency: "EUR" | "CHF";
+  document_number: string | null;
+  cost_ref: string | null;
+  source: "DOCUMENTS" | "MAILBOX" | "UPLOAD";
+  page_count: number;
+  file_url: string;
+}
+
+export interface BeDocument extends BeDocumentSummary {
+  pages: { page: number; width: number; height: number; blocks: { id: string; text: string; text_en: string; box: BeBox | null }[] }[];
+  lines: { id: string; description: string; quantity: string; unit: string; unit_price: string; vat_rate: number; net: Cents }[];
+  totals: { net: Cents; vat: Cents; gross: Cents } | null;
+  clauses: { id: string; section: string; title: string; text: string; text_en: string; page: number; box: BeBox | null }[];
+  rent_adjustment: { old_amount: Cents; new_amount: Cents; effective_from: string } | null;
+  /** Every printed value, e.g. ref "lines.l1.unit_price", text "12,90 €", with its box. */
+  highlights: { ref: string; page: number; text: string; box: BeBox }[];
+}

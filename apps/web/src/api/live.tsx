@@ -4,7 +4,7 @@ import { announce } from "../lib/announce";
 import { api, USE_MOCK } from "./client";
 import { mockBus } from "./mockBus";
 import { keys } from "./queries";
-import type { AgentId, AuditEntry, Decision, Finding, KnownDocument, ServerEvent } from "./types";
+import type { AgentId, Decision, Finding, KnownDocument, ServerEvent } from "./types";
 
 export type ConnectionState = "connecting" | "live" | "offline";
 type AgentStatus = { message: string; busy: boolean };
@@ -74,6 +74,7 @@ function pollRuns(qc: QueryClient, setState: Dispatch<SetStateAction<LiveState>>
           qc.invalidateQueries({ queryKey: keys.decisions });
           qc.invalidateQueries({ queryKey: keys.forecast });
           qc.invalidateQueries({ queryKey: keys.company });
+          qc.invalidateQueries({ queryKey: keys.audit });
         }
         seen = key;
       }
@@ -144,9 +145,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
           ]);
           break;
         case "audit.appended":
-          qc.setQueryData<AuditEntry[]>(keys.audit, (old) =>
-            old ? [...old.filter((e) => e.seq !== ev.data.seq), ev.data] : old,
-          );
+          // Refetch rather than patch: the whole chain is verified again on the raw entries.
+          qc.invalidateQueries({ queryKey: keys.audit });
           break;
         case "agent.status": {
           const { agent, message, busy } = ev.data;
