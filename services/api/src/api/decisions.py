@@ -289,7 +289,7 @@ def _audit_recommendations(
             "lane": rec.lane,
         }
         if not owner_request:
-            record(state, now, proposer, f"Proposed to {subject_text(rec)}", model=model, **common)
+            record(state, now, proposer, f"Proposed: {subject_text(rec)}", model=model, **common)
         if rec.status in (RecommendationStatus.EXECUTED, RecommendationStatus.APPROVED_EXECUTED):
             done = "Allowed by your rules" if owner_request else "Done within your mandate"
             record(
