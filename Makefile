@@ -5,7 +5,7 @@ COMPOSE_APP := $(COMPOSE) --profile app
 OC_NS := autonomous-cfo
 STATEMENT := data/pizzeria-amalfi-bank-statement-2025-v6.csv
 
-.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy oc-ai-secret oc-ai-build oc-ai-deploy oc-web-build oc-web-deploy oc-network oc-monitoring oc-check
+.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy oc-ai-secret oc-ai-build oc-ai-deploy oc-web-build oc-web-deploy oc-network oc-monitoring oc-check oc-pipeline oc-pipeline-run
 
 up:
 > test -f infra/.env || cp infra/.env.example infra/.env
@@ -93,3 +93,10 @@ oc-check:
 > oc get deploy,inferenceservice -n $(OC_NS)
 > oc get networkpolicy -n $(OC_NS) -l app.kubernetes.io/part-of=vero --no-headers | wc -l | xargs echo "network policies:"
 > oc exec -i -n $(OC_NS) deploy/api -- python - < deploy/openshift/check.py
+
+oc-pipeline:
+> oc apply -n $(OC_NS) -f deploy/openshift/pipeline/
+> oc get pipelines.tekton.dev,tasks.tekton.dev -n $(OC_NS) -l app.kubernetes.io/part-of=vero
+
+oc-pipeline-run:
+> @run=$$(oc create -n $(OC_NS) -f deploy/openshift/pipeline/run/pipelinerun.yaml -o name); echo "$$run started"; s=; until [ "$$s" = True ] || [ "$$s" = False ]; do sleep 10; s=$$(oc get -n $(OC_NS) $$run -o jsonpath='{.status.conditions[0].status}'); done; oc get taskruns.tekton.dev -n $(OC_NS) -l tekton.dev/pipelineRun=$${run#*/}; oc get -n $(OC_NS) $$run; [ "$$s" = True ]

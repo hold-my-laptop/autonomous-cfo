@@ -74,7 +74,7 @@ Ingress inside the project is closed by default and opened only where a service 
 |---|---|---|
 | `db-from-api` | db | api, port 5432 |
 | `ai-from-api` | ai | api, port 8080 |
-| `ai-from-web` | ai | web, port 8080 (nginx sends `/api/v1/chat` and `/api/v1/documents/extract` to the ai service) |
+| `ai-from-web` | ai | web, port 8080 (nginx sends `/api/v1/chat` to the ai service) |
 | `api-from-web-ai-workbench` | api | web, ai and the workbench, port 8080 |
 | `model-from-ai-workbench` | vero-llm | ai and the workbench, port 8080, plus the monitoring namespaces for metrics |
 | `web-from-router` | web | the OpenShift router, port 8080 |
@@ -115,6 +115,7 @@ make oc-api-build oc-api-deploy
 make oc-web-build oc-web-deploy
 make oc-network
 make oc-monitoring
+make oc-pipeline
 make oc-check
 ```
 
@@ -125,7 +126,41 @@ Notes:
 - The api reads the bank statement from the `bank_statement_lines` table in Postgres (`STATEMENT_SOURCE=db`, 1125 lines for 2025).
 - The label makes the project show up in the OpenShift AI dashboard. The workbench is created there
   (Standard Data Science image).
-- A new build after a merge: `oc start-build api -n autonomous-cfo --follow` (or `ai`, `web`). The image trigger does the rollout.
+- A new build after a merge: `make oc-pipeline-run` (see below), or by hand `oc start-build api -n autonomous-cfo --follow`
+  (or `ai`, `web`). The image trigger does the rollout.
+
+### Pipeline (OpenShift Pipelines)
+
+The pipeline `vero-ci` (Tekton, OpenShift Pipelines 1.24) builds, rolls out and checks the app in one run.
+It shows up in the console under Pipelines, where it can also be started with the Start button.
+
+```mermaid
+flowchart LR
+  c["git-commit<br/>main to one commit"] --> w["build-web"] & a["build-api"] & i["build-ai"]
+  w & a & i --> k["check<br/>same as make oc-check"]
+```
+
+| Task | What it does |
+|---|---|
+| `git-commit` | Finds the commit `main` points to, so every build of the run uses the same code |
+| `build-web`, `build-api`, `build-ai` | Start the BuildConfig at that commit and stream its log, wait until the Deployment uses the new image digest, then wait for the rollout. They run in parallel |
+| `check` | Checks the model is Ready, the deployments are rolled out and the network policies are there, then runs `deploy/openshift/check.py` from the same commit inside the api pod |
+
+```bash
+make oc-pipeline
+make oc-pipeline-run
+```
+
+`make oc-pipeline` creates the Tasks and the Pipeline (once, or after changing them). `make oc-pipeline-run` starts a run,
+waits for it and exits with 1 if a task fails. Parameters: `components` (default `web`, `api`), `branch` (default `main`) and `check` (default `true`).
+The ai is not built by default: the ai code on `main` needs the new ai Deployment (more memory, MLflow settings),
+so apply it first with `make oc-ai-deploy`, then start the pipeline with `components` set to `web`, `api`, `ai`.
+The check resets the demo, so do not run the pipeline during a demo.
+
+How it is set up: the runs use the `pipeline` service account, which has the `edit` role in this project only.
+Every step has CPU and memory requests and limits, the images are UBI 9 Python and the cluster's own `openshift/cli`,
+and no volume or secret is needed (the repository is public). The builds still happen in the BuildConfigs,
+so a build started by hand and one started by the pipeline are the same.
 
 ## 5. Checking and operating it
 

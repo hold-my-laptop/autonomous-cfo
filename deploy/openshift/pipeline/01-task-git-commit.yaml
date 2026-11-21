@@ -1,0 +1,41 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: git-commit
+  labels:
+    app.kubernetes.io/part-of: vero
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: branch
+      type: string
+  results:
+    - name: commit
+      type: string
+  stepTemplate:
+    env:
+      - name: HOME
+        value: /tmp
+    computeResources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  steps:
+    - name: ls-remote
+      image: registry.access.redhat.com/ubi9/python-312:latest
+      env:
+        - name: REPO_URL
+          value: $(params.repo-url)
+        - name: BRANCH
+          value: $(params.branch)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        commit=$(git ls-remote "$REPO_URL" "refs/heads/$BRANCH" | cut -f1)
+        test -n "$commit"
+        echo "$BRANCH is at $commit"
+        printf '%s' "$commit" > "$(results.commit.path)"

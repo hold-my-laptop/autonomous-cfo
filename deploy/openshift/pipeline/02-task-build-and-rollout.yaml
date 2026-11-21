@@ -1,0 +1,81 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: build-and-rollout
+  labels:
+    app.kubernetes.io/part-of: vero
+spec:
+  params:
+    - name: buildconfig
+      type: string
+    - name: deployment
+      type: string
+    - name: commit
+      type: string
+  results:
+    - name: image
+      type: string
+  stepTemplate:
+    env:
+      - name: HOME
+        value: /tmp
+    computeResources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  steps:
+    - name: build
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      env:
+        - name: NS
+          value: $(context.taskRun.namespace)
+        - name: BC
+          value: $(params.buildconfig)
+        - name: COMMIT
+          value: $(params.commit)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        build=$(oc start-build "$BC" -n "$NS" --commit="$COMMIT" -o name)
+        echo "$build started for $COMMIT"
+        for i in 1 2 3 4 5 6; do
+          oc logs -f "$build" -n "$NS" && break
+          sleep 10
+        done
+        while true; do
+          phase=$(oc get "$build" -n "$NS" -o jsonpath='{.status.phase}')
+          case "$phase" in
+            Complete) break ;;
+            Failed|Error|Cancelled) echo "$build $phase"; exit 1 ;;
+          esac
+          sleep 5
+        done
+        digest=$(oc get "$build" -n "$NS" -o jsonpath='{.status.output.to.imageDigest}')
+        test -n "$digest"
+        echo "$build pushed $digest"
+        printf '%s' "$digest" > "$(results.image.path)"
+    - name: rollout
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      env:
+        - name: NS
+          value: $(context.taskRun.namespace)
+        - name: DEPLOY
+          value: $(params.deployment)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        digest=$(cat "$(results.image.path)")
+        image=
+        for i in $(seq 60); do
+          image=$(oc get deployment "$DEPLOY" -n "$NS" -o jsonpath='{.spec.template.spec.containers[*].image}')
+          case "$image" in *"$digest"*) break ;; esac
+          sleep 2
+        done
+        case "$image" in
+          *"$digest"*) echo "$DEPLOY uses $digest" ;;
+          *) echo "$DEPLOY did not pick up $digest"; exit 1 ;;
+        esac
+        oc rollout status deployment/"$DEPLOY" -n "$NS" --timeout=300s
