@@ -1,0 +1,7 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: mlflow
+  labels:
+    app: mlflow
+    app.kubernetes.io/part-of: vero

@@ -1,0 +1,24 @@
+OVERDRAFT FACILITY AGREEMENT
+(fictional sample for the Vero demo; Example Bank AG is not a real bank and this is not an offer)
+
+Borrower: Pizzeria Amalfi, Vincenzo Amalfi, Hauptstraße 14, 60311 Frankfurt am Main
+Lender: Example Bank AG, Frankfurt am Main
+
+1. Facility
+The Lender grants the Borrower a current-account overdraft facility of up to EUR 30,000.00 on account
+DE00 0000 0000 0000 0000 00. The facility may be drawn and repaid at any time.
+
+2. Interest
+Interest on the amount actually drawn is charged at a fixed rate of 9.75 % per annum, calculated on the
+basis of actual days elapsed and a 365-day year, and debited quarterly in arrears.
+Amounts drawn above the agreed limit bear interest at 14.50 % per annum.
+
+3. Fees
+No arrangement fee and no fee on the undrawn amount are charged.
+
+4. Term
+The facility is available from the date of signature until 31 December 2025 and may be renewed.
+
+5. Termination
+The Lender may terminate the facility for good cause, in particular in case of a material deterioration
+of the Borrower's financial situation.

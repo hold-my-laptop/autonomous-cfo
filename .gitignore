@@ -49,3 +49,6 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# OCR models (scripts/fetch_ocr_models.py)
+services/ai/models/

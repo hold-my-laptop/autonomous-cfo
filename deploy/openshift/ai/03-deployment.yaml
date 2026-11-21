@@ -40,6 +40,20 @@ spec:
                 secretKeyRef:
                   name: internal-token
                   key: INTERNAL_TOKEN
+            - name: API_PUBLIC_URL  # read-only tools for /v1/chat
+              value: http://api:8080/api/v1
+            - name: MLFLOW_TRACKING_URI  # empty = tracing off; see deploy/openshift/mlflow
+              value: http://mlflow:8080
+            - name: MLFLOW_EXPERIMENT
+              value: vero-agent
+            - name: MLFLOW_DISABLE_TELEMETRY
+              value: "true"
+            - name: MLFLOW_DISABLE_AGENT_HINT
+              value: "1"
+            - name: MLFLOW_HTTP_REQUEST_TIMEOUT  # never let a slow MLflow hold up a run
+              value: "5"
+            - name: MLFLOW_HTTP_REQUEST_MAX_RETRIES
+              value: "0"
           readinessProbe:
             httpGet:
               path: /health/live
@@ -53,13 +67,13 @@ spec:
             initialDelaySeconds: 10
             periodSeconds: 10
             failureThreshold: 3
-          resources:
+          resources:  # OCR of a scanned page peaks at ~800 MB (measured)
             requests:
-              cpu: 100m
-              memory: 256Mi
-            limits:
-              cpu: 500m
+              cpu: 250m
               memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 1536Mi
           securityContext:
             allowPrivilegeEscalation: false
             runAsNonRoot: true
