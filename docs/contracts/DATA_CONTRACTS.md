@@ -718,7 +718,7 @@ Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHE
 | `net_goods` | The finding's expected amount (the goods without the new charge) |
 | `date` | The document's date, the finding's period, the adjustment's `effective_from` |
 
-Values compare by value (`380000` = `"380000"`). The backend then recomputes the formula: billed above justified → `CONFLICT`; otherwise → `VERIFIED` (the covered differences become `explained`). Anything unusable → `UNEXPLAINED`, `escalated`, with `investigation.problems` and `searched`. The agent's `classification` is only recorded as `proposed`. Without the agent (deadline, `/fail`, unreachable, restart, `DATA_CHANGED`, `AGENT_DISABLED`) the finding ends `UNEXPLAINED` and `escalated` until the scripted investigation (P12) takes over.
+Values compare by value (`380000` = `"380000"`). The backend then recomputes the formula: billed above justified → `CONFLICT`; otherwise → `VERIFIED` (the covered differences become `explained`). Anything unusable → `UNEXPLAINED`, `escalated`, with `investigation.problems` and `searched`. The agent's `classification` is only recorded as `proposed`. Without the agent (deadline, `/fail`, unreachable, restart, `DATA_CHANGED`, `AGENT_DISABLED`) the backend runs its scripted investigation (P12): the same tools in a fixed order, then the same check, with `investigation.mode: FALLBACK`. At load and reset the preloaded findings CHECK leaves unexplained get it too, so the Asimex surcharge starts `VERIFIED`.
 
 #### Agent failure
 `{ reason: "MODEL_TIMEOUT" | "MODEL_ERROR" | "INVALID_TOOL_CALLS" | "NO_FINAL_ANSWER" | "TOOL_LIMIT_REACHED", detail?: string }`

@@ -46,6 +46,7 @@ from api.domain.recurring import detect_recurring, project_outflows
 from api.domain.revenue import RevenueModel, build_revenue_model
 from api.domain.schedule import project_scheduled, sort_outflows
 from api.money import Cents
+from api.scripted_investigation import investigate_preloaded
 from api.seed import PIZZERIA_COMPANY, PIZZERIA_TAX_SCHEDULE, initial_mandate
 
 _FORECAST_ID_NAMESPACE = UUID("4a9f0e2b-7c1d-4e3f-8a5b-6c7d8e9f0a1b")
@@ -203,7 +204,8 @@ class DemoState:
 
 def build_base(settings: Settings, statement: StatementImport | None = None) -> BaseData:
     """Derive everything Vero knows on `demo_as_of_date` from the statement (by default the CSV
-    file at `statement_path`) and the Proof dataset, which must agree with it."""
+    file at `statement_path`) and the Proof dataset, which must agree with it. Preloaded
+    findings CHECK leaves unexplained get the scripted investigation, without any model."""
     statement = statement or load_statement(settings.statement_path)
     as_of = settings.demo_as_of_date
     proof = load_dataset(settings.proof_dataset_path, statement, as_of)
@@ -218,7 +220,7 @@ def build_base(settings: Settings, statement: StatementImport | None = None) -> 
         end,
         {Category.PARTNER_TRANSFER: settings.partner_transfer_movable_days},
     ) + project_scheduled(PIZZERIA_TAX_SCHEDULE, as_of, end)
-    return BaseData(
+    base = BaseData(
         company=PIZZERIA_COMPANY,
         as_of=as_of,
         opening_balance=settings.opening_balance,
@@ -232,6 +234,9 @@ def build_base(settings: Settings, statement: StatementImport | None = None) -> 
         routine_checks=routine,
         preloaded_findings=findings,
     )
+    state = DemoState.from_base(base, initial_mandates(as_of), findings={f.id: f for f in findings})
+    investigated = investigate_preloaded(state, demo_load_time(as_of))
+    return replace(base, preloaded_findings=tuple(investigated.values()))
 
 
 def demo_load_time(as_of: date) -> datetime:

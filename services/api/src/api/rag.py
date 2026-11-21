@@ -5,11 +5,14 @@ records; it cannot query the database or run SQL supplied by a user. The same te
 and ranking serve the RAG assistant and Vero Proof's inbox and document search.
 """
 
+from __future__ import annotations
+
 import re
 from collections.abc import Callable, Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from api.state import DemoState
+if TYPE_CHECKING:
+    from api.state import DemoState
 
 _STOP_WORDS = """
 a an and are for how in is of on the to what when which with did do does i my me we our much

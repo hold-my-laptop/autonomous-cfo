@@ -18,6 +18,7 @@ from test_investigations import (
 
 from api.config import get_settings
 from api.domain.models import Run, RunKind, RunMode, RunStatus
+from api.domain.proof.check import preloaded_findings
 from api.domain.proof.findings import Classification
 from api.domain.proof.grounding import (
     Call,
@@ -27,7 +28,7 @@ from api.domain.proof.grounding import (
     ground,
 )
 from api.proof_tools import PROOF_TOOLS
-from api.state import build_demo_state
+from api.state import build_demo_state, demo_load_time
 
 base = get_settings()
 pytestmark = pytest.mark.skipif(not base.statement_path.exists(), reason="sample CSV not found")
@@ -211,7 +212,7 @@ def test_the_cited_letter_becomes_visible_in_documents() -> None:
     assert "ntc_main_street_2025_04" in listed
 
 
-def test_without_the_agent_the_finding_lists_what_was_searched() -> None:
+def test_without_the_agent_its_own_steps_are_what_was_searched() -> None:
     with make_client(InvestigatingAI()) as client:
         run_id = start(client)
         hero(client, run_id, HERO_CALLS[:1])
@@ -219,9 +220,12 @@ def test_without_the_agent_the_finding_lists_what_was_searched() -> None:
         investigation = finding(client, run_id)["investigation"]
     assert investigation["mode"] == "FALLBACK"
     assert investigation["searched"] == [
-        'Searching the inbox for "rent increase" from Main Street Real Estate GmbH'
+        'Searching the inbox for "rent increase" from Main Street Real Estate GmbH',
+        "Reading §4.2 of the lease with Main Street Real Estate GmbH",
+        "Looking up the consumer price index for Jan 2024 and Mar 2025",
+        "Computing what the index clause allows",
     ]
-    assert investigation["problems"] == ["The agent stopped (MODEL_ERROR)"]
+    assert investigation["problems"] == []
 
 
 def asimex_calls(state, run) -> list[Call]:
@@ -253,7 +257,10 @@ def asimex_calls(state, run) -> list[Call]:
 
 def test_asimex_surcharge_is_verified() -> None:
     state = build_demo_state(base)
-    surcharge = next(f for f in state.findings.values() if f.document_id == "inv_AS-11607")
+    checked, _ = preloaded_findings(
+        state.proof, state.cost_memory, state.history, demo_load_time(state.as_of)
+    )
+    surcharge = next(f for f in checked if f.document_id == "inv_AS-11607")
     run = Run(
         id=surcharge.id,
         event_id=surcharge.id,

@@ -138,17 +138,15 @@ def test_correct_extraction_creates_the_rent_finding() -> None:
         assert run["document_id"] == "doc_rent_adjustment_2025_06"
         extract = next(s for s in run["trace"] if s["kind"] == "EXTRACT")
         assert (extract["source"], extract["data"]) == ("AGENT", {"model": "vero-llm"})
-        assert labels(run)[-3:-1] == [
-            "Needs evidence: the investigation looks for the reason next",
-            "The investigation agent is off: no reason found",
-        ]
+        assert "Needs evidence: the investigation looks for the reason next" in labels(run)
+        assert "The investigation agent is off: Vero follows its own steps" in labels(run)
         finding = rent_finding(client, run)
         assert (
             finding["classification"],
             finding["status"],
             finding["escalated"],
             finding["run_id"],
-        ) == ("UNEXPLAINED", "CLASSIFIED", True, run["run_id"])
+        ) == ("CONFLICT", "CLASSIFIED", False, run["run_id"])
         assert finding["impact"] | {"currency": "EUR"} == {
             "currency": "EUR",
             "expected": "380000",
