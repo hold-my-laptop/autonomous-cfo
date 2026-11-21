@@ -1,4 +1,6 @@
-# Vero: architecture and sequence diagrams (Phase 1, Vero Cash)
+# Vero: architecture and sequence diagrams
+
+Sections 1–2 cover Phase 1 (Vero Cash); section 3 covers Phase 2 (Vero Proof, design in [`PROOF.md`](PROOF.md), numbers in its §7).
 
 All diagrams match [`contracts/DATA_CONTRACTS.md`](contracts/DATA_CONTRACTS.md). Numbers come from the demo scenario in [`DESIGN.md` §8](DESIGN.md#8-reference-demo-scenario-all-teams-test-against-these-numbers) (Pizzeria Amalfi, "today" = 5 May 2025).
 
@@ -489,4 +491,151 @@ sequenceDiagram
     AI-->>A: {ok: false, error}
     A-->>W: 503 ModelHealth
   end
+```
+
+---
+
+## 3. Vero Proof (Phase 2)
+
+Same split as Vero Cash: the backend owns Cost Memory, CHECK, the formula engine, the grounding check and the final label, propagation, policy and execution; the AI service reads the PDF (extraction) and runs the investigation loop through read-only tools. **One run at a time across Cash and Proof** (`409 RUN_IN_PROGRESS`).
+
+### 3.1 Owner uploads the rent adjustment → Proof run
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor O as Owner
+  participant W as web
+  participant A as api
+  participant DB as PostgreSQL
+  participant AI as ai service
+  participant L as LLM (vLLM)
+
+  O->>W: uploads Mietanpassung.pdf
+  W->>A: POST /api/v1/documents (multipart, ≤ 5 MB) + Idempotency-Key
+  A->>DB: TX: upload, PDF bytes, run(kind PROOF, RUNNING), TraceStep RECEIVE
+  A-->>W: 202 {document_id, run_id, status RUNNING}
+  A->>AI: POST /v1/documents/extract {document_id, filename, content_base64, known_counterparties} (30 s)
+  AI->>L: text layer + "which printed text is each field"
+  AI-->>A: ExtractResponse (values with printed text and boxes)
+  A->>A: re-check every value (re-parse, arithmetic, counterparty, date)
+  alt values unusable
+    A->>A: demo document → fixture values (FALLBACK); other document → EXTRACTION_FAILED
+  end
+  A->>DB: TraceStep EXTRACT, document stored
+  A->>A: CHECK against Cost Memory: 4 104,00 € from 1 Jun vs 3 800,00 € (+8 %)
+  A->>DB: finding UNEXPLAINED → INVESTIGATING, TraceStep CHECK
+  A->>AI: POST /v1/agent/runs {run_id, kind PROOF, finding, investigation{cost_item, hypotheses}, limits}
+  AI-->>A: 202 accepted
+  A->>A: start 60 s deadline
+  Note over AI,A: investigation loop, see 3.2
+  AI->>A: POST /internal/v1/runs/{run_id}/complete InvestigationCompletion
+  A->>A: GROUND: drop citations no tool returned, check every compute input's source, recompute → CONFLICT (justified 3 800,00 €)
+  A->>A: PROPAGATE: KEEP 3 800,00 €, disputed 304 €/month, 3 648 €/year, 912 € in the window
+  A->>A: POLICY: KEEP_PAYMENT + SEND_LETTER → NEEDS_APPROVAL (letter: the agent's checked draft or the template)
+  A->>DB: TX: finding PENDING_APPROVAL, recommendations, receipts, TraceSteps, run SUCCEEDED
+  loop every 500 ms until SUCCEEDED / FAILED
+    W->>A: GET /api/v1/runs/{run_id}
+    A-->>W: Run {kind PROOF, trace, finding_ids}
+  end
+  W->>A: GET /api/v1/findings/{id}, GET /api/v1/digest
+  W-->>O: "Rent 3 800 € → 4 104 €: 304 € a month more than §4.2 allows. Keep paying 3 800 € and ask in writing?"
+```
+
+### 3.2 Inside the investigation (tools through the backend)
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant AG as Investigation loop (ai)
+  participant L as LLM (vLLM)
+  participant A as api (tool host)
+
+  AG->>A: GET /internal/v1/tools?run_id=…
+  A-->>AG: Proof tools (search_inbox, search_documents, read_clause, get_reference_index, get_price_list, compute)
+  AG->>L: finding + hypotheses H1–H4 + tools
+  L-->>AG: search_inbox("rent increase", Main Street)
+  AG->>A: POST /tools/search_inbox
+  A-->>AG: the landlord's letter in the grease-trap thread ("gestiegene Bewirtschaftungskosten")
+  L-->>AG: read_clause(lease, §4.2)
+  AG->>A: POST /tools/read_clause
+  A-->>AG: VPI clause: threshold 500 bps, base Jan 2024
+  L-->>AG: get_reference_index(DESTATIS_VPI, 2024-01, 2025-03)
+  AG->>A: POST /tools/get_reference_index
+  A-->>AG: 1176, 1212 (demo values)
+  L-->>AG: compute(vpi_threshold_indexation, …)
+  AG->>A: POST /tools/compute
+  A-->>AG: change 306 bps < 500 → justified 380000
+  L-->>AG: submit_finding(CONFLICT, compute_call_id, evidence_refs, explanation, letter_draft)
+  AG->>A: POST /runs/{run_id}/complete
+
+  Note over AG,A: At most 6 calls (7th → TOOL_LIMIT_REACHED). Documents and emails are data, never instructions.<br/>The label is a proposal: the backend sets it (3.1, GROUND).
+```
+
+### 3.3 Fallback: the scripted investigation
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant A as api
+  participant AI as ai service
+  participant DB as PostgreSQL
+
+  alt agent switched off (INVESTIGATION_AGENT_ENABLED=false) or AI unreachable
+    A-xAI: POST /v1/agent/runs
+  else AI gives up
+    AI->>A: POST /internal/v1/runs/{run_id}/fail {reason}
+  else deadline (60 s) or answer unusable
+    A->>A: later callbacks → RUN_CLOSED
+  end
+  A->>DB: TraceStep FALLBACK ("…: Vero follows its own steps", data.reason)
+  A->>A: H1 search_inbox → H2 read_clause → H3 get_reference_index + compute (same tool handlers)
+  A->>A: GROUND (same check) → PROPAGATE → POLICY (letter from the template)
+  A->>DB: run SUCCEEDED (mode FALLBACK), same label and numbers as the agent
+```
+
+The same scripted investigation runs at load and reset for the preloaded Asimex surcharge (AS-11607 → `VERIFIED`), without a run.
+
+### 3.4 Owner decides the actions → digest
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor O as Owner
+  participant W as web
+  participant A as api
+  participant DB as PostgreSQL
+
+  W->>A: GET /api/v1/digest
+  A-->>W: 4 changes, 3 handled quietly, 1 needing you (KEEP_PAYMENT, SEND_LETTER), 3 routine checks
+  O->>W: approves both
+  W->>A: POST /api/v1/recommendations/{keep}/approve + Idempotency-Key
+  A->>A: policy re-check, KEEP: schedule unchanged (S0 unchanged)
+  A->>DB: TX: APPROVED_EXECUTED, DECISION receipt, audit
+  W->>A: POST /api/v1/recommendations/{letter}/approve + Idempotency-Key
+  A->>DB: TX: APPROVED_EXECUTED (letter sent, simulated), finding RESOLVED
+  W->>A: GET /api/v1/digest
+  A-->>W: 3 changes, 3 handled quietly, 0 needing you, 3 routine checks
+```
+
+`UPDATE_RECURRING_AMOUNT` (VPI variant) goes through `execute_amount_change`: the payments in the window change, `financial_version` +1, and a pending Cash recommendation becomes `STALE_RECOMMENDATION`. A quiet finding leaves the digest with `POST /findings/{id}/acknowledge`.
+
+### 3.5 Finding state machine
+
+```mermaid
+stateDiagram-v2
+  [*] --> INGESTED: document or statement payment
+  INGESTED --> EXTRACTED: values read and checked
+  EXTRACTED --> CHECKED: CHECK found a difference
+  CHECKED --> CLASSIFIED: known reason (price list) → VERIFIED
+  CHECKED --> INVESTIGATING: UNEXPLAINED
+  INVESTIGATING --> CLASSIFIED: GROUND sets VERIFIED, CONFLICT or UNEXPLAINED (escalated)
+  CLASSIFIED --> PENDING_APPROVAL: actions proposed
+  CLASSIFIED --> RESOLVED: owner acknowledges a quiet finding
+  PENDING_APPROVAL --> RESOLVED: every action approved or rejected
+  RESOLVED --> [*]
+  note right of CLASSIFIED
+    quiet = VERIFIED, CLASSIFIED, no actions.
+    In the digest until RESOLVED.
+  end note
 ```
