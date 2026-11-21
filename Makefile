@@ -5,7 +5,7 @@ COMPOSE_APP := $(COMPOSE) --profile app
 OC_NS := autonomous-cfo
 STATEMENT := data/pizzeria-amalfi-bank-statement-2025-v6.csv
 
-.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy oc-ai-secret oc-ai-build oc-ai-deploy
+.PHONY: up up-app down logs ps seed demo-reset test eval e2e schema oc-api-build oc-api-deploy oc-db-secret oc-db-deploy oc-ai-secret oc-ai-build oc-ai-deploy oc-network
 
 up:
 > test -f infra/.env || cp infra/.env.example infra/.env
@@ -70,3 +70,7 @@ oc-ai-build:
 oc-ai-deploy: oc-ai-secret
 > oc apply -n $(OC_NS) -f deploy/openshift/ai/03-deployment.yaml -f deploy/openshift/ai/04-service.yaml
 > oc rollout status deployment/ai -n $(OC_NS) --timeout=180s
+
+oc-network:
+> oc apply -n $(OC_NS) -f deploy/openshift/network/
+> oc get networkpolicy -n $(OC_NS) -l app.kubernetes.io/part-of=vero

@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-from-web-ai-workbench
+  labels:
+    app.kubernetes.io/part-of: vero
+spec:
+  podSelector:
+    matchLabels:
+      app: api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: web
+        - podSelector:
+            matchLabels:
+              app: ai
+        - podSelector:
+            matchLabels:
+              notebook-name: cfo-notebook
+      ports:
+        - protocol: TCP
+          port: 8080
