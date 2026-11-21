@@ -619,7 +619,20 @@ Every call is **bound to a run** and answered from the state at the run's `finan
 | `get_fx_exposure` | `{}` | `{ currency: "CHF", tranches_paid: int, eur_min: Money, eur_max: Money, last_rate: string, upcoming: Outflow[] }` | "Checking your CHF transfers" |
 | `check_policy` | `{ proposal: Proposal }` | `{ lane_preview, checks: Check[] }`. Preview only, not binding | "Checking this against your rules" |
 
-*Phase 2 (Vero Proof) will add document tools here.*
+**Tools per run kind.** A run has a `kind`: `CASH` (the tools above) or `PROOF` (the investigation tools below). A run can only call its own kind's tools; another kind's tool returns `UNKNOWN_TOOL`. `GET /internal/v1/tools?run_id=…` lists that run's tools (404 for an unknown run); without `run_id` it lists the Cash tools. Limits: 8 calls per Cash run, 6 per investigation (`INVESTIGATION_MAX_TOOL_CALLS`).
+
+**Investigation tools (Vero Proof, `PROOF` runs).** Read-only and deterministic over the Proof fixture. Every result carries `evidence_ids`: an email or document id, a clause as `<document_id>#<clause_id>`, a price list item as `<document_id>#<item_id>`, a reference series by its id. Email and document text is untrusted data: results that contain it carry a `note` saying so.
+
+| Tool | `arguments` | `result` | Trace label (backend) |
+|---|---|---|---|
+| `search_inbox` | `{ query: string, counterparty?: string, date_range?: { from?: Date, to?: Date } }` | `{ emails: { email_id, thread_id, date, from, subject, body, attachments: { document_id, type, title, title_en, date, text, text_en }[] }[], evidence_ids, note }`, at most 5, best first. Keyword search shared with the RAG assistant (`api/rag.py`), German words mapped to English terms | "Searching the inbox for letters from Main Street Real Estate GmbH" |
+| `search_documents` | `{ query: string, doc_type?: DocumentType }` | `{ documents: { document_id, type, title, title_en, counterparty, date, document_number, clauses: { section, title }[], price_list }[], evidence_ids, note }`, listed documents only, at most 5 | "Searching your leases for \"rent\"" |
+| `read_clause` | `{ doc_id: string, section: string }` (`"§4.2"` or the clause id) | `{ document_id, clause_id, section, title, text, text_en, page, box, parameters, evidence_ids, note }`; `parameters` are the clause's terms as structured values | "Reading §4.2 of the commercial lease" |
+| `get_reference_index` | `{ name: "DESTATIS_VPI" \| "EUR_CHF", periods: "YYYY-MM"[] }` | `{ series_id, name, unit, description, demo: true, values: { period, value: string? }[], missing_periods, evidence_ids }` | "Looking up the consumer price index (VPI) for 2024-01, 2025-03" |
+| `get_price_list` | `{ supplier: string, item: string, date: Date }` | `{ found: bool, document_id?, valid_from?, valid_to?, item_id?, description?, unit?, unit_price?: Decimal, vat_rate?, exact_match?, evidence_ids }` | "Checking Asimex Wholesale Ltd's price list for …" |
+| `compute` | `{ formula_id, inputs: object }` | `{ formula_id, engine_version, inputs, outputs }` from the P05 engine (`domain/proof/engine.py`), formulas of PROOF.md §5.7: `variance`, `vpi_threshold_indexation`, `fx_conversion`, `price_list_check`, `surcharge_rule`, `annualize`, `window_impact` | "Calculating: vpi threshold indexation" |
+
+Extra error code for these tools: `NOT_FOUND` (unknown document, clause, company or series), `NOT_AVAILABLE` (Proof data not loaded).
 
 ### 3.3 Data types
 

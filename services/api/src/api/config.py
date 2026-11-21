@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     ai_url: str = "http://localhost:8001"
     internal_token: SecretStr | None = None
     agent_max_tool_calls: int = 8
+    investigation_max_tool_calls: int = 6
     agent_deadline_s: float = 60.0
     agent_start_timeout_s: float = 5.0
     explain_timeout_s: float = 10.0

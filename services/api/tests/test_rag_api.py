@@ -1,5 +1,5 @@
-from datetime import date
 from contextlib import contextmanager
+from datetime import date
 from types import SimpleNamespace
 from uuid import uuid4
 
