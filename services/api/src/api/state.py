@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime, time
 from typing import Any, Protocol
 from uuid import UUID, uuid5
 
+from api.audit import AuditActor, AuditEntry, record
 from api.config import Settings
 from api.dates import window_end
 from api.domain.backtest import Backtest, compute_backtest
@@ -36,6 +37,8 @@ from api.domain.models import (
     Transaction,
 )
 from api.domain.planner import PlanResult, apply_moves, plan_moves
+from api.domain.proof.cost_memory import CostItem, build_cost_memory
+from api.domain.proof.dataset import ProofDataset, load_dataset
 from api.domain.recurring import detect_recurring, project_outflows
 from api.domain.revenue import RevenueModel, build_revenue_model
 from api.domain.schedule import project_scheduled, sort_outflows
@@ -68,6 +71,8 @@ class BaseData:
     recurring: tuple[RecurringPayment, ...]
     outflows: tuple[Outflow, ...]
     inflows: tuple[Inflow, ...] = ()
+    proof: ProofDataset | None = None
+    cost_memory: tuple[CostItem, ...] = ()
 
 
 @dataclass
@@ -90,6 +95,9 @@ class DemoState:
     recommendations: dict[UUID, Recommendation] = field(default_factory=dict)
     receipts: dict[UUID, Receipt] = field(default_factory=dict)
     idempotency: dict[str, StoredResponse] = field(default_factory=dict)
+    audit: list[AuditEntry] = field(default_factory=list)
+    proof: ProofDataset | None = None
+    cost_memory: tuple[CostItem, ...] = ()
 
     @classmethod
     def from_base(cls, base: BaseData, mandates: list[Mandate], **changes: Any) -> "DemoState":
@@ -103,6 +111,8 @@ class DemoState:
             recurring=list(base.recurring),
             outflows=list(base.outflows),
             inflows=list(base.inflows),
+            proof=base.proof,
+            cost_memory=base.cost_memory,
             mandates=mandates,
             **changes,
         )
@@ -183,9 +193,10 @@ class DemoState:
 
 def build_base(settings: Settings, statement: StatementImport | None = None) -> BaseData:
     """Derive everything Vero knows on `demo_as_of_date` from the statement (by default the CSV
-    file at `statement_path`)."""
+    file at `statement_path`) and the Proof dataset, which must agree with it."""
     statement = statement or load_statement(settings.statement_path)
     as_of = settings.demo_as_of_date
+    proof = load_dataset(settings.proof_dataset_path, statement, as_of)
     history = [t for t in statement.transactions if t.booking_date < as_of]
     end = window_end(as_of, settings.forecast_horizon_days)
     recurring = detect_recurring(history, as_of)
@@ -204,6 +215,8 @@ def build_base(settings: Settings, statement: StatementImport | None = None) -> 
         revenue_model=build_revenue_model(history, as_of, settings.revenue_model_weeks),
         recurring=tuple(recurring),
         outflows=tuple(sort_outflows(outflows)),
+        proof=proof,
+        cost_memory=build_cost_memory(recurring, history, proof, as_of),
     )
 
 
@@ -212,7 +225,17 @@ def initial_mandates(as_of: date) -> list[Mandate]:
 
 
 def fresh_state(base: BaseData) -> DemoState:
-    return DemoState.from_base(base, initial_mandates(base.as_of))
+    """The demo company as loaded, with a new activity log that starts at the load."""
+    mandates = initial_mandates(base.as_of)
+    state = DemoState.from_base(base, mandates)
+    record(
+        state,
+        mandates[0].created_at,
+        AuditActor.SYSTEM,
+        f"Loaded {base.company.name}: {len(state.history)} statement lines up to "
+        f"{state.statement_until:%d %b %Y}, mandate v1 active",
+    )
+    return state
 
 
 def build_demo_state(settings: Settings) -> DemoState:

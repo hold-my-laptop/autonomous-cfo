@@ -23,6 +23,7 @@ apps/web ──/api/v1──▶ services/api ──start run / explain──▶ 
 | Topic | Rule |
 |---|---|
 | **Money** | A string holding an integer number of **cents**: `"125050"` = 1 250,50 €. Never floats. Negative allowed (`"-2276082"`). At most 15 digits (`^-?[0-9]{1,15}$`), otherwise `VALIDATION_ERROR` |
+| **Decimal** | Unit prices and quantities (Vero Proof): a decimal string, never a float, no thousands separator: `"9.40"`, `"2.506"`, `"0.1234"` (`^-?[0-9]{1,9}(\.[0-9]{1,6})?$`) |
 | **Currency** | Account currency **EUR**. Foreign-currency items (CHF tranches) also carry `original_amount`, `original_currency` and `fx_rate` |
 | **Business date** | `"YYYY-MM-DD"`, Europe/Berlin |
 | **Timestamp** | UTC RFC 3339, e.g. `"2025-05-05T09:15:00Z"` |
@@ -34,7 +35,7 @@ apps/web ──/api/v1──▶ services/api ──start run / explain──▶ 
 | **Errors** | `{ code, title, detail }`, see [Problem](#problem) |
 | **Commands** | Every POST that changes state sends an `Idempotency-Key` header (a UUID per user action) |
 
-Types used below: `Money`, `Date`, `Timestamp`, `UUID`, `int`, `bool`, `string`, `T[]` (list), `T?` (may be null).
+Types used below: `Money`, `Decimal`, `Date`, `Timestamp`, `UUID`, `int`, `bool`, `string`, `T[]` (list), `T?` (may be null).
 
 ---
 
@@ -317,6 +318,11 @@ The error body for every 4xx/5xx response, sent as `application/problem+json` (R
 | 16 | Health / model check | `GET /health/live`, `/health/ready`, `/health/model` | live: `{ status: "ok" }` · ready: `{ status: "ok" \| "unavailable", state_loaded: bool }` (503 when not loaded) · model: **ModelHealth** |
 | 17 | Demo reset | `POST /demo/reset` | `{ reset: true, as_of_date, financial_version }` |
 | 18 | *(SHOULD)* Rules from a sentence | `POST /mandate/draft-from-text` with `{ text }` | **MandateDraft** |
+| 19 | Activity page | `GET /audit?after_seq=` (`after_seq` ≥ 0, default 0) | **AuditEntry[]**, oldest first |
+| 20 | *(Vero Proof)* What each recurring cost should be | `GET /cost-memory` | **CostItem[]**: fixed costs `RENT`, `UTIL`, `XFER`, `PAY`, `SOC`, `WTAX`, then suppliers by `cost_ref` |
+| 21 | *(Vero Proof)* The owner's documents | `GET /documents` | **DocumentSummary[]**, oldest first. Mailbox attachments are listed once a finding cites them, an upload once it is uploaded |
+| 22 | *(Vero Proof)* One document, side by side | `GET /documents/{id}` | **Document**; `404 NOT_FOUND` for an unknown or not yet visible document |
+| 23 | *(Vero Proof)* The PDF itself | `GET /documents/{id}/file` | `application/pdf`, shown inline; same `404` rules |
 
 ### 2.2 Data types
 
@@ -449,6 +455,76 @@ Immutable evidence, from `GET /receipts/{id}`.
 | `versions` | map string→string | `engine`, `planner`, `policy`, `revenue_model` |
 | `execution` | `"SIMULATED"` | |
 | `explanation` | Explanation | |
+
+#### CostItem
+What Vero expects one recurring cost to be (Vero Proof's Cost Memory), from `GET /cost-memory`. Rebuilt from the statement and the documents on every load and reset.
+
+| Field | Type | Description |
+|---|---|---|
+| `cost_ref` | string | `RENT`, `UTIL`, `XFER` (the CHF tranche), `PAY`, `SOC`, `WTAX`, or a supplier (`FATTORIA`, `ASIMEX`) |
+| `kind` | enum | `FIXED` (one amount per payment) or `SUPPLIER` (prices per unit) |
+| `counterparty` | string | As in the statement |
+| `counterparty_id` | string? | The Vero Proof counterparty (`cp_…`); null for payroll |
+| `category` | enum | Category; suppliers are `VARIABLE_COST` |
+| `currency` | `EUR` \| `CHF` | Currency of `expected_amount`: the CHF tranche is expected in CHF |
+| `expected_amount` | Money? | `FIXED`: the amount per payment, the contract's when a contract sets it, else the statement's. Null for suppliers |
+| `frequency`, `due_day` | `"MONTHLY"`?, int? | `FIXED` only |
+| `eur_amount`, `fx_rate` | Money?, string? | CHF costs: the last payment in euros and its rate (`"433334"`, `"1.040"`) |
+| `recurring_id` | UUID? | Phase 1's detected recurring payment |
+| `outflow_ref_prefix` | string? | Prefix of the projected outflows: `"RENT"` (RENT-06), `"CHF"` (CHF-06 is the `XFER` cost) |
+| `prices` | ExpectedPrice[] | `SUPPLIER`: the price list valid today. ExpectedPrice: `{ description, unit, unit_price: Decimal, vat_rate (bps), valid_from, valid_to?, document_id, item_id }` |
+| `sources` | CostSource[] | Oldest first. CostSource: `{ kind: STATEMENT \| CONTRACT \| PRICE_LIST \| INVOICE, date, document_id?, clause_id?, transaction_ids[], amount: Money?, currency? }`. STATEMENT lists the payments behind the detection; CONTRACT names the clause that sets the amount |
+
+#### DocumentSummary
+A Vero Proof document, from `GET /documents`.
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | string | e.g. `lease_main_street_2021`, `inv_FLV-16261` |
+| `type` | enum | `LEASE`, `CONTRACT`, `INVOICE`, `RENT_ADJUSTMENT`, `NOTICE`, `PRICE_LIST`, `PAYMENT_PLAN` |
+| `title`, `title_en` | string | German title and its English translation |
+| `counterparty` | `{ id, name }` | |
+| `date` | Date | The document's date |
+| `language` | `de` \| `en` \| `it` | |
+| `currency` | `EUR` \| `CHF` | |
+| `document_number` | string? | Invoices |
+| `cost_ref` | string? | The CostItem it belongs to |
+| `source` | enum | `DOCUMENTS` (the owner's), `MAILBOX` (an email attachment), `UPLOAD` |
+| `page_count` | int | |
+| `sha256` | string? | Of the PDF |
+| `file_url` | string | `/api/v1/documents/{id}/file` |
+
+#### Document
+`GET /documents/{id}`: DocumentSummary plus everything a side-by-side view needs. Boxes are `[x0, y0, x1, y1]` in PDF points with the origin at the **top-left** of the page; scale them by the rendered width ÷ `pages[].width`.
+
+| Field | Type | Description |
+|---|---|---|
+| `pages` | `{ page, width, height, blocks: { id, text, text_en, box? }[] }[]` | Text blocks with their boxes and translations |
+| `lines` | `{ id, description, quantity: Decimal, unit, unit_price: Decimal, vat_rate (bps), net: Money, gross: Money? }[]` | Invoice lines |
+| `totals` | `{ net, vat, gross }`? (Money) | Invoices; VAT rounded per rate on the totals |
+| `clauses` | `{ id, section, title, text, text_en, page, box?, parameters }[]` | `parameters`: the clause's terms as values, e.g. lease §4.2 `{ index, base_period, threshold_bps, last_adjustment, min_months_between, written_request }` |
+| `price_list` | `{ valid_from, valid_to?, items: { id, description, unit, unit_price: Decimal, vat_rate }[] }`? | Price lists |
+| `rent_adjustment` | `{ old_amount, new_amount, effective_from, frequency }`? | Rent adjustments |
+| `highlights` | `{ ref, page, text, box }[]` | Where each value is printed: `ref` is e.g. `date`, `counterparty`, `lines.l1.unit_price`, `totals.gross`, `rent_adjustment.new_amount`, `price_list.p1`; `text` exactly as printed |
+
+#### AuditEntry
+One line of the append-only activity log, from `GET /audit`. Entries are sealed as a hash chain: verify them by recomputing each `hash` in `seq` order.
+
+| Field | Type | Description |
+|---|---|---|
+| `seq` | int | 1, 2, 3, … with no gaps |
+| `timestamp` | string | UTC with milliseconds, e.g. `2025-05-05T08:00:00.000Z`; hashed exactly as sent |
+| `actor` | enum | `OWNER`, `AGENT` (the model ran it), `RULES` (the policy acted), `SYSTEM` (the backend) |
+| `agent` | enum? | `CASH` (Phase 2 adds `PROOF`); null for company-wide entries such as mandate changes |
+| `action` | string | What happened, in plain English, e.g. "Approved: a credit line of 20 000,00 € from 27 Jun (simulated)" |
+| `run_id`, `recommendation_id` | UUID? | The run and recommendation it belongs to |
+| `lane` | enum? | The recommendation's lane |
+| `execution` | `"SIMULATED"`? | Set when the entry records an execution |
+| `model` | string? | The model's name on `AGENT` entries |
+| `prev_hash` | string | The previous entry's `hash`; 64 zeros for the first entry |
+| `hash` | string | SHA-256 (lowercase hex) of the UTF-8 text `prev_hash\|seq\|timestamp\|actor\|agent\|run_id\|recommendation_id\|lane\|execution\|model\|action`, absent values as empty text |
+
+A demo reset starts a new log. Its first entry is always the demo load at `2025-05-05T08:00:00.000Z`.
 
 #### ModelHealth
 `{ ok: bool, model: string, mode: "live" | "replay" | "stub"?, latency_ms: int, error: string? }`, passed through from the AI service. `200` when `ok`, otherwise `503`. When the AI service itself cannot be reached, `model` is `"unknown"`, `mode` is `null` and `error` says so. Without `INTERNAL_TOKEN` (agent mode off) it is always `503`. Show `mode`: only `live` means the model on OpenShift AI answered.

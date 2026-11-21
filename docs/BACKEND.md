@@ -239,7 +239,8 @@ Endpoints (shapes in DATA_CONTRACTS §2):
   4. approve the credit line → S3;
   5. payroll request → NOT_ALLOWED;
   6. backtest values;
-  7. reset → S0 again.
+  7. the activity log (B33) verifies as a chain and lists the owner's approval and the blocked payroll request;
+  8. reset → S0 again, with a new log.
 - It must pass in both FALLBACK and AGENT (fake AI) modes.
 
 ### B31 · Logging — SHOULD
@@ -250,6 +251,14 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 - Investment suggestion for the year-end surplus (card's investment agent).
 - FX hedging hint for the CHF tranches (card's FX agent).
 
+### B33 · Activity log (audit) — MUST (the frontend's Activity page)
+- **What it is:** an append-only log of everything that changed state, in plain language, for the owner and the judges. Each entry is sealed with a SHA-256 hash chained to the entry before, so the browser can recompute every hash and show that nothing was changed or removed afterwards. It complements the receipts (B17), which hold the full evidence for each recommendation.
+- **Actors:** `OWNER` (planned a closure, asked to move a payment, approved or rejected, mandate saved, activated, paused or resumed), `AGENT` (proposals and the run headline when the model ran the run, with the model name), `RULES` (what the policy did with a proposal: done within the mandate, or not allowed), `SYSTEM` (demo load, backend proposals in FALLBACK, fallback reasons, superseded or resized proposals, a decision refused because the data changed). Entries carry the agent (`CASH`; Phase 2 adds `PROOF`), run, recommendation, lane and `execution: SIMULATED` where they apply.
+- **Written where the state changes**, in the same write as the change, so a rolled-back request leaves no entry and an idempotent replay adds none. A demo reset starts a new log whose first entry is fixed (5 May 2025, 08:00 UTC), so two resets give the same first hash.
+- **Storage:** `DemoState.audit` behind the repository; PostgreSQL table `audit_log`, rows only inserted (a reset replaces the whole log). `SCHEMA_VERSION` 5.
+- `GET /audit?after_seq=` → AuditEntry[], oldest first (DATA_CONTRACTS §2.2).
+- **Done when:** the demo path (mandate v2 → closure → approve the credit line) gives, in order, the mandate entries, the owner's closure, the proposals with their lanes, the move done within the mandate (simulated), the run headline and the owner's approval; every hash matches the documented formula; a changed entry is detected at that entry and a removed one at the entry after it; the AGENT path logs the proposals and the model's headline as `AGENT` with the model name; a reset leaves one entry.
+
 ---
 
 ## Summary
@@ -257,7 +266,7 @@ Endpoints (shapes in DATA_CONTRACTS §2):
 | Milestone | Features | Result |
 |---|---|---|
 | A · Cash flow & forecast | B01–B12 | Forecast, closure, backtest via API (no AI) |
-| B · Decisions | B13–B19 | Full demo story with backend fallback |
+| B · Decisions | B13–B19, B33 | Full demo story with backend fallback, activity log |
 | C · Persistence | B20–B21 | PostgreSQL, CSV upload |
 | D · Agent | B22–B27 | LLM agent through tools, explanations, model health, MCP |
 | E · Delivery | B28–B32 | OpenAPI, container, scenario test, logging, extras |
@@ -319,9 +328,9 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 - **Done when:** a re-run changes no file; the stored box for "4.104,00 €" on the rent adjustment is within 2 points of the box `pypdfium2` reports for that text (top-left origin); `expected.json` lists every uploadable demo document.
 
 ### P04 · Cost Memory — MUST
-- **CostItem:** counterparty, `cost_ref` (`RENT`, `UTIL`, `XFER`, or the supplier), expected amount and currency, unit, sources (`STATEMENT`, `CONTRACT`, `PRICE_LIST`, `INVOICE`) with evidence refs.
+- **CostItem:** counterparty, `cost_ref` (`RENT`, `UTIL`, `XFER`, the other detected fixed costs `PAY`, `SOC`, `WTAX`, or the supplier), expected amount and currency, unit, sources (`STATEMENT`, `CONTRACT`, `PRICE_LIST`, `INVOICE`) with evidence refs. `XFER` is the cost whose Phase 1 outflows are `CHF-…`, so each item also names its outflow prefix.
 - Built from Phase 1's recurring detection (B04) on the rows before `as_of`, plus the fixture's documents and price lists. It is **base data** like the imported statement (rebuilt on load and reset); only changeable state is persisted.
-- Read API: `GET /api/v1/cost-memory`, `GET /api/v1/documents`, `GET /api/v1/documents/{id}` (metadata, pages, highlight boxes), `GET /api/v1/documents/{id}/file` (the PDF). The mailbox is **not** listed publicly; a document becomes visible when a finding cites it.
+- Read API: `GET /api/v1/cost-memory`, `GET /api/v1/documents`, `GET /api/v1/documents/{id}` (metadata, pages, highlight boxes), `GET /api/v1/documents/{id}/file` (the PDF). The mailbox is **not** listed publicly; a document becomes visible when a finding cites it. Each fixture document says where it lives (`source`: `DOCUMENTS`, `MAILBOX`, `UPLOAD`): only the landlord's letter is mailbox-only.
 - **Contracts with the feature:** CostItem and Document go into DATA_CONTRACTS §2 and `openapi.json` here, so the frontend can build against them early.
 - **Done when:** `RENT` expects 380000 (statement + lease), `XFER` expects 416667 CHF (statement + partnership agreement), Fattoria and Asimex items carry their list prices.
 
@@ -346,7 +355,7 @@ When a recurring cost changes, Vero finds out why, proves whether the change is 
 ### P07 · Findings — MUST
 - **Finding** as in the blueprint's schema: classification and history, status, counterparty, `cost_ref`, billing period, source document, line item, trace (via `run_id`), financial impact, evidence refs, propagation, recommendation ids.
 - **Status:** `INGESTED → EXTRACTED → CHECKED → (INVESTIGATING) → CLASSIFIED → PENDING_APPROVAL → RESOLVED`; every transition is a trace step.
-- Persisted behind the repository (in memory and PostgreSQL), `SCHEMA_VERSION` → 5.
+- Persisted behind the repository (in memory and PostgreSQL), `SCHEMA_VERSION` bumped (5 is the activity log, B33). Proof runs, findings and their decisions also write activity log entries with `agent: PROOF`.
 - `GET /api/v1/findings?classification=&status=`, `GET /api/v1/findings/{id}`, `POST /api/v1/findings/{id}/acknowledge` (`Idempotency-Key`; the owner's one tap on a quiet finding: it leaves the digest; `NOT_PENDING` if already acknowledged or not quiet). Findings with actions leave the digest when their actions are decided (P14).
 - **Schema name `ProofFinding`:** `Finding` is already Phase 1's ANALYSED fact (`schemas.py`, DATA_CONTRACTS §2.2), and OpenAPI component names must be unique. The path stays `/findings`. Written into DATA_CONTRACTS §2 and `openapi.json` with this feature.
 - **Done when:** findings round-trip in both repositories, a reset recreates the preloaded findings identically, and acknowledging the Fattoria finding removes it from the digest.

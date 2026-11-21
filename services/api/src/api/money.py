@@ -69,3 +69,31 @@ Money = Annotated[
         }
     ),
 ]
+
+
+DECIMAL_PATTERN = r"^-?[0-9]{1,9}(\.[0-9]{1,6})?$"
+_DECIMAL_RE = re.compile(DECIMAL_PATTERN)
+
+
+def _validate_decimal(value: object) -> Decimal:
+    if isinstance(value, Decimal) and _DECIMAL_RE.fullmatch(format(value, "f")):
+        return value
+    if isinstance(value, str) and _DECIMAL_RE.fullmatch(value):
+        return Decimal(value)
+    raise ValueError('must be a decimal string such as "12.5", never a number')
+
+
+DecimalStr = Annotated[
+    Decimal,
+    BeforeValidator(_validate_decimal),
+    PlainSerializer(lambda d: format(d, "f"), return_type=str),
+    WithJsonSchema(
+        {
+            "type": "string",
+            "pattern": DECIMAL_PATTERN,
+            "description": "A decimal number as a string, never a float: unit prices and "
+            'quantities, e.g. "0.1234" or "2.5"',
+            "examples": ["9.40"],
+        }
+    ),
+]

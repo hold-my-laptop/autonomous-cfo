@@ -1,0 +1,77 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: cluster-check
+  labels:
+    app.kubernetes.io/part-of: vero
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: commit
+      type: string
+  volumes:
+    - name: src
+      emptyDir: {}
+  stepTemplate:
+    env:
+      - name: HOME
+        value: /tmp
+    computeResources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
+  steps:
+    - name: cluster
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      env:
+        - name: NS
+          value: $(context.taskRun.namespace)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        oc get deployment,inferenceservice -n "$NS"
+        ready=$(oc get inferenceservice vero-llm -n "$NS" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')
+        echo "model ready: $ready"
+        test "$ready" = True
+        for d in db api ai web; do
+          oc rollout status deployment/"$d" -n "$NS" --timeout=120s
+        done
+        policies=$(oc get networkpolicy -n "$NS" -l app.kubernetes.io/part-of=vero -o name | wc -l)
+        echo "network policies: $policies"
+        test "$policies" -ge 8
+    - name: fetch
+      image: registry.access.redhat.com/ubi9/python-312:latest
+      workingDir: /src
+      volumeMounts:
+        - name: src
+          mountPath: /src
+      env:
+        - name: REPO_URL
+          value: $(params.repo-url)
+        - name: COMMIT
+          value: $(params.commit)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        git init -q repo
+        cd repo
+        git remote add origin "$REPO_URL"
+        git fetch -q --depth 1 origin "$COMMIT"
+        git checkout -q FETCH_HEAD
+        git log -1 --format='%h %s'
+    - name: e2e
+      image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+      volumeMounts:
+        - name: src
+          mountPath: /src
+      env:
+        - name: NS
+          value: $(context.taskRun.namespace)
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+        oc exec -i -n "$NS" deploy/api -- python - < /src/repo/deploy/openshift/check.py

@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
+from api import audit
 from api.domain import backtest as bt
 from api.domain import forecast as fc
 from api.domain import models as dm
@@ -781,3 +782,39 @@ class MandateActivateIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     expected_active_version: int = Field(ge=1)
+
+
+class AuditEntry(BaseModel):
+    """One sealed line of the activity log. `hash` is the SHA-256 (hex) of
+    `prev_hash|seq|timestamp|actor|agent|run_id|recommendation_id|lane|execution|model|action`,
+    with absent values as empty text; the first entry's `prev_hash` is 64 zeros."""
+
+    seq: int
+    timestamp: str = Field(description="UTC with milliseconds, exactly as hashed")
+    actor: Literal["AGENT", "RULES", "OWNER", "SYSTEM"]
+    agent: Literal["CASH"] | None
+    action: str
+    run_id: UUID | None
+    recommendation_id: UUID | None
+    lane: str | None
+    execution: Literal["SIMULATED"] | None
+    model: str | None
+    prev_hash: str
+    hash: str
+
+    @classmethod
+    def from_domain(cls, e: audit.AuditEntry) -> Self:
+        return cls(
+            seq=e.seq,
+            timestamp=e.timestamp,
+            actor=e.actor.value,
+            agent=e.agent.value if e.agent else None,
+            action=e.action,
+            run_id=e.run_id,
+            recommendation_id=e.recommendation_id,
+            lane=e.lane,
+            execution=e.execution,
+            model=e.model,
+            prev_hash=e.prev_hash,
+            hash=e.hash,
+        )

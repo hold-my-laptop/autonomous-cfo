@@ -1,0 +1,100 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: vero-ci
+  labels:
+    app.kubernetes.io/part-of: vero
+spec:
+  params:
+    - name: repo-url
+      type: string
+      default: https://github.com/hold-my-laptop/autonomous-cfo.git
+    - name: branch
+      type: string
+      default: main
+    - name: components
+      type: array
+      description: Images to build and roll out (web, api, ai)
+      default:
+        - web
+        - api
+    - name: check
+      type: string
+      description: Run the cluster check afterwards (it resets the demo)
+      default: "true"
+  results:
+    - name: commit
+      value: $(tasks.git-commit.results.commit)
+  tasks:
+    - name: git-commit
+      taskRef:
+        name: git-commit
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: branch
+          value: $(params.branch)
+    - name: build-web
+      runAfter:
+        - git-commit
+      when:
+        - input: web
+          operator: in
+          values: ["$(params.components[*])"]
+      taskRef:
+        name: build-and-rollout
+      params:
+        - name: buildconfig
+          value: web
+        - name: deployment
+          value: web
+        - name: commit
+          value: $(tasks.git-commit.results.commit)
+    - name: build-api
+      runAfter:
+        - git-commit
+      when:
+        - input: api
+          operator: in
+          values: ["$(params.components[*])"]
+      taskRef:
+        name: build-and-rollout
+      params:
+        - name: buildconfig
+          value: api
+        - name: deployment
+          value: api
+        - name: commit
+          value: $(tasks.git-commit.results.commit)
+    - name: build-ai
+      runAfter:
+        - git-commit
+      when:
+        - input: ai
+          operator: in
+          values: ["$(params.components[*])"]
+      taskRef:
+        name: build-and-rollout
+      params:
+        - name: buildconfig
+          value: ai
+        - name: deployment
+          value: ai
+        - name: commit
+          value: $(tasks.git-commit.results.commit)
+    - name: check
+      runAfter:
+        - build-web
+        - build-api
+        - build-ai
+      when:
+        - input: $(params.check)
+          operator: in
+          values: ["true"]
+      taskRef:
+        name: cluster-check
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: commit
+          value: $(tasks.git-commit.results.commit)

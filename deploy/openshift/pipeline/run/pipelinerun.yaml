@@ -1,0 +1,13 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  generateName: vero-ci-
+  labels:
+    app.kubernetes.io/part-of: vero
+spec:
+  pipelineRef:
+    name: vero-ci
+  taskRunTemplate:
+    serviceAccountName: pipeline
+  timeouts:
+    pipeline: 45m

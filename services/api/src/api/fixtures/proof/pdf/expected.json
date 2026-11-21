@@ -1,0 +1,3815 @@
+[
+  {
+    "file": "doc_rent_adjustment_2025_06.pdf",
+    "known_counterparties": [
+      {
+        "id": "cp_main_street",
+        "name": "Main Street Real Estate GmbH",
+        "aliases": [
+          "Main Street Immobilien",
+          "Hausverwaltung Main Street"
+        ]
+      },
+      {
+        "id": "cp_fattoria",
+        "name": "Fattoria La Vino GmbH",
+        "aliases": [
+          "Fattoria La Vino"
+        ]
+      },
+      {
+        "id": "cp_asimex",
+        "name": "Asimex Wholesale Ltd",
+        "aliases": [
+          "Asimex"
+        ]
+      },
+      {
+        "id": "cp_city_energy",
+        "name": "City Energy & Utilities AG",
+        "aliases": [
+          "City Energy"
+        ]
+      },
+      {
+        "id": "cp_luigi",
+        "name": "Luigi Amalfi (Luigi's Ristorante Zurich)",
+        "aliases": [
+          "Luigi Amalfi",
+          "Luigi's Ristorante"
+        ]
+      },
+      {
+        "id": "cp_tk",
+        "name": "Techniker Krankenkasse Social Health Fund",
+        "aliases": [
+          "Techniker Krankenkasse",
+          "TK"
+        ]
+      },
+      {
+        "id": "cp_tax_office",
+        "name": "Tax Office Frankfurt am Main",
+        "aliases": [
+          "Finanzamt Frankfurt am Main"
+        ]
+      }
+    ],
+    "expected": {
+      "doc_type": "RENT_ADJUSTMENT",
+      "counterparty": {
+        "value": "Main Street Real Estate GmbH",
+        "matched_id": "cp_main_street"
+      },
+      "date": {
+        "value": "2025-04-30",
+        "text": "30.04.2025",
+        "page": 1,
+        "box": [
+          145.21,
+          146.02,
+          195.24,
+          152.82
+        ]
+      },
+      "currency": {
+        "value": "EUR"
+      },
+      "effective_from": {
+        "value": "2025-06-01",
+        "text": "01.06.2025",
+        "page": 1,
+        "box": [
+          196.66,
+          253.08,
+          252.35,
+          260.63
+        ]
+      },
+      "old_amount": {
+        "value": "380000",
+        "text": "3.800,00 €",
+        "page": 1,
+        "box": [
+          196.76,
+          205.08,
+          249.37,
+          213.65
+        ]
+      },
+      "new_amount": {
+        "value": "410400",
+        "text": "4.104,00 €",
+        "page": 1,
+        "box": [
+          196.45,
+          221.08,
+          255.05,
+          229.91
+        ]
+      },
+      "frequency": {
+        "value": "MONTHLY",
+        "text": "monatlich",
+        "page": 1,
+        "box": [
+          196.91,
+          236.9,
+          244.74,
+          244.63
+        ]
+      },
+      "lines": []
+    }
+  },
+  {
+    "file": "inv_FLV-16261.pdf",
+    "known_counterparties": [
+      {
+        "id": "cp_main_street",
+        "name": "Main Street Real Estate GmbH",
+        "aliases": [
+          "Main Street Immobilien",
+          "Hausverwaltung Main Street"
+        ]
+      },
+      {
+        "id": "cp_fattoria",
+        "name": "Fattoria La Vino GmbH",
+        "aliases": [
+          "Fattoria La Vino"
+        ]
+      },
+      {
+        "id": "cp_asimex",
+        "name": "Asimex Wholesale Ltd",
+        "aliases": [
+          "Asimex"
+        ]
+      },
+      {
+        "id": "cp_city_energy",
+        "name": "City Energy & Utilities AG",
+        "aliases": [
+          "City Energy"
+        ]
+      },
+      {
+        "id": "cp_luigi",
+        "name": "Luigi Amalfi (Luigi's Ristorante Zurich)",
+        "aliases": [
+          "Luigi Amalfi",
+          "Luigi's Ristorante"
+        ]
+      },
+      {
+        "id": "cp_tk",
+        "name": "Techniker Krankenkasse Social Health Fund",
+        "aliases": [
+          "Techniker Krankenkasse",
+          "TK"
+        ]
+      },
+      {
+        "id": "cp_tax_office",
+        "name": "Tax Office Frankfurt am Main",
+        "aliases": [
+          "Finanzamt Frankfurt am Main"
+        ]
+      }
+    ],
+    "expected": {
+      "doc_type": "INVOICE",
+      "counterparty": {
+        "value": "Fattoria La Vino GmbH",
+        "matched_id": "cp_fattoria"
+      },
+      "date": {
+        "value": "2025-03-07",
+        "text": "07.03.2025",
+        "page": 1,
+        "box": [
+          460.59,
+          117.42,
+          510.71,
+          124.22
+        ]
+      },
+      "currency": {
+        "value": "EUR"
+      },
+      "document_number": {
+        "value": "FLV-16261",
+        "text": "FLV-16261",
+        "page": 1,
+        "box": [
+          460.88,
+          104.42,
+          507.38,
+          111.22
+        ]
+      },
+      "lines": [
+        {
+          "description": {
+            "value": "Chianti Classico DOCG 2021, 0,75 l",
+            "text": "Chianti Classico DOCG 2021, 0,75 l",
+            "page": 1,
+            "box": [
+              78.45,
+              187.62,
+              217.76,
+              194.62
+            ]
+          },
+          "quantity": {
+            "value": "30",
+            "text": "30",
+            "page": 1,
+            "box": [
+              340.43,
+              187.76,
+              349.47,
+              193.8
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              187.62,
+              364.5,
+              193.7
+            ]
+          },
+          "unit_price": {
+            "value": "8.9",
+            "text": "8,90 €",
+            "page": 1,
+            "box": [
+              415.1,
+              187.76,
+              439.45,
+              194.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              187.76,
+              477.55,
+              193.8
+            ]
+          },
+          "net": {
+            "value": "26700",
+            "text": "267,00 €",
+            "page": 1,
+            "box": [
+              504.23,
+              187.76,
+              538.72,
+              194.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Montepulciano d'Abruzzo DOC 2022, 0,75 l",
+            "text": "Montepulciano d'Abruzzo DOC 2022, 0,75 l",
+            "page": 1,
+            "box": [
+              78.78,
+              200.62,
+              249.02,
+              208.36
+            ]
+          },
+          "quantity": {
+            "value": "24",
+            "text": "24",
+            "page": 1,
+            "box": [
+              340.4,
+              200.76,
+              349.55,
+              206.7
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              200.62,
+              364.5,
+              206.7
+            ]
+          },
+          "unit_price": {
+            "value": "6.45",
+            "text": "6,45 €",
+            "page": 1,
+            "box": [
+              415.11,
+              200.76,
+              439.45,
+              207.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              200.76,
+              477.55,
+              206.8
+            ]
+          },
+          "net": {
+            "value": "15480",
+            "text": "154,80 €",
+            "page": 1,
+            "box": [
+              504.53,
+              200.76,
+              538.72,
+              207.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Pinot Grigio delle Venezie DOC 2023, 0,75 l",
+            "text": "Pinot Grigio delle Venezie DOC 2023, 0,75 l",
+            "page": 1,
+            "box": [
+              78.78,
+              213.62,
+              251.0,
+              221.36
+            ]
+          },
+          "quantity": {
+            "value": "24",
+            "text": "24",
+            "page": 1,
+            "box": [
+              340.4,
+              213.76,
+              349.55,
+              219.7
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              213.62,
+              364.5,
+              219.7
+            ]
+          },
+          "unit_price": {
+            "value": "6.2",
+            "text": "6,20 €",
+            "page": 1,
+            "box": [
+              415.11,
+              213.76,
+              439.45,
+              220.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              213.76,
+              477.55,
+              219.8
+            ]
+          },
+          "net": {
+            "value": "14880",
+            "text": "148,80 €",
+            "page": 1,
+            "box": [
+              504.53,
+              213.76,
+              538.72,
+              220.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Prosecco DOC Extra Dry, 0,75 l",
+            "text": "Prosecco DOC Extra Dry, 0,75 l",
+            "page": 1,
+            "box": [
+              78.78,
+              226.62,
+              201.55,
+              234.36
+            ]
+          },
+          "quantity": {
+            "value": "18",
+            "text": "18",
+            "page": 1,
+            "box": [
+              340.7,
+              226.76,
+              349.45,
+              232.8
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              226.62,
+              364.5,
+              232.7
+            ]
+          },
+          "unit_price": {
+            "value": "7.35",
+            "text": "7,35 €",
+            "page": 1,
+            "box": [
+              415.21,
+              226.76,
+              439.45,
+              233.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              226.76,
+              477.55,
+              232.8
+            ]
+          },
+          "net": {
+            "value": "13230",
+            "text": "132,30 €",
+            "page": 1,
+            "box": [
+              504.53,
+              226.76,
+              538.72,
+              233.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Primitivo di Manduria DOC 2021, 0,75 l",
+            "text": "Primitivo di Manduria DOC 2021, 0,75 l",
+            "page": 1,
+            "box": [
+              78.78,
+              239.62,
+              233.4,
+              246.62
+            ]
+          },
+          "quantity": {
+            "value": "6",
+            "text": "6",
+            "page": 1,
+            "box": [
+              345.47,
+              239.76,
+              349.49,
+              245.8
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              239.62,
+              364.5,
+              245.7
+            ]
+          },
+          "unit_price": {
+            "value": "9.85",
+            "text": "9,85 €",
+            "page": 1,
+            "box": [
+              415.06,
+              239.76,
+              439.45,
+              246.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              239.76,
+              477.55,
+              245.8
+            ]
+          },
+          "net": {
+            "value": "5910",
+            "text": "59,10 €",
+            "page": 1,
+            "box": [
+              509.36,
+              239.76,
+              538.72,
+              246.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Limoncello di Amalfi IGP, 0,5 l",
+            "text": "Limoncello di Amalfi IGP, 0,5 l",
+            "page": 1,
+            "box": [
+              78.78,
+              252.62,
+              196.51,
+              259.62
+            ]
+          },
+          "quantity": {
+            "value": "4",
+            "text": "4",
+            "page": 1,
+            "box": [
+              345.3,
+              252.87,
+              349.55,
+              258.7
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              252.62,
+              364.5,
+              258.7
+            ]
+          },
+          "unit_price": {
+            "value": "11.9",
+            "text": "11,90 €",
+            "page": 1,
+            "box": [
+              410.34,
+              252.76,
+              439.45,
+              259.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              252.76,
+              477.55,
+              258.8
+            ]
+          },
+          "net": {
+            "value": "4760",
+            "text": "47,60 €",
+            "page": 1,
+            "box": [
+              509.13,
+              252.76,
+              538.72,
+              259.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Campari Bitter, 1 l",
+            "text": "Campari Bitter, 1 l",
+            "page": 1,
+            "box": [
+              78.45,
+              265.62,
+              150.63,
+              273.36
+            ]
+          },
+          "quantity": {
+            "value": "1",
+            "text": "1",
+            "page": 1,
+            "box": [
+              345.79,
+              265.87,
+              349.26,
+              271.7
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              265.62,
+              364.5,
+              271.7
+            ]
+          },
+          "unit_price": {
+            "value": "13.67",
+            "text": "13,67 €",
+            "page": 1,
+            "box": [
+              410.34,
+              265.76,
+              439.45,
+              272.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              265.76,
+              477.55,
+              271.8
+            ]
+          },
+          "net": {
+            "value": "1367",
+            "text": "13,67 €",
+            "page": 1,
+            "box": [
+              509.62,
+              265.76,
+              538.72,
+              272.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Acqua San Pellegrino, 0,75 l",
+            "text": "Acqua San Pellegrino, 0,75 l",
+            "page": 1,
+            "box": [
+              78.06,
+              278.62,
+              189.5,
+              286.36
+            ]
+          },
+          "quantity": {
+            "value": "24",
+            "text": "24",
+            "page": 1,
+            "box": [
+              340.4,
+              278.76,
+              349.55,
+              284.7
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              278.62,
+              364.5,
+              284.7
+            ]
+          },
+          "unit_price": {
+            "value": "0.89",
+            "text": "0,89 €",
+            "page": 1,
+            "box": [
+              415.08,
+              278.76,
+              439.45,
+              285.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              278.76,
+              477.55,
+              284.8
+            ]
+          },
+          "net": {
+            "value": "2136",
+            "text": "21,36 €",
+            "page": 1,
+            "box": [
+              509.32,
+              278.76,
+              538.72,
+              285.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Olio Extra Vergine di Oliva, 5 l",
+            "text": "Olio Extra Vergine di Oliva, 5 l",
+            "page": 1,
+            "box": [
+              78.45,
+              291.62,
+              197.62,
+              299.36
+            ]
+          },
+          "quantity": {
+            "value": "1",
+            "text": "1",
+            "page": 1,
+            "box": [
+              345.79,
+              291.87,
+              349.26,
+              297.7
+            ]
+          },
+          "unit": {
+            "value": "Kan.",
+            "text": "Kan.",
+            "page": 1,
+            "box": [
+              356.78,
+              291.87,
+              372.88,
+              297.8
+            ]
+          },
+          "unit_price": {
+            "value": "30",
+            "text": "30,00 €",
+            "page": 1,
+            "box": [
+              410.07,
+              291.76,
+              439.45,
+              298.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              291.76,
+              477.55,
+              297.8
+            ]
+          },
+          "net": {
+            "value": "3000",
+            "text": "30,00 €",
+            "page": 1,
+            "box": [
+              509.35,
+              291.76,
+              538.72,
+              298.62
+            ]
+          }
+        }
+      ],
+      "totals": {
+        "net": {
+          "value": "87463",
+          "text": "874,63 €",
+          "page": 1,
+          "box": [
+            499.81,
+            314.02,
+            538.65,
+            321.74
+          ]
+        },
+        "vat": {
+          "value": "16258",
+          "text": "162,58 €",
+          "page": 1,
+          "box": [
+            500.19,
+            356.02,
+            538.65,
+            363.74
+          ]
+        },
+        "gross": {
+          "value": "103721",
+          "text": "1.037,21 €",
+          "page": 1,
+          "box": [
+            486.49,
+            370.02,
+            538.61,
+            377.97
+          ]
+        }
+      }
+    }
+  },
+  {
+    "file": "inv_FLV-94818.pdf",
+    "known_counterparties": [
+      {
+        "id": "cp_main_street",
+        "name": "Main Street Real Estate GmbH",
+        "aliases": [
+          "Main Street Immobilien",
+          "Hausverwaltung Main Street"
+        ]
+      },
+      {
+        "id": "cp_fattoria",
+        "name": "Fattoria La Vino GmbH",
+        "aliases": [
+          "Fattoria La Vino"
+        ]
+      },
+      {
+        "id": "cp_asimex",
+        "name": "Asimex Wholesale Ltd",
+        "aliases": [
+          "Asimex"
+        ]
+      },
+      {
+        "id": "cp_city_energy",
+        "name": "City Energy & Utilities AG",
+        "aliases": [
+          "City Energy"
+        ]
+      },
+      {
+        "id": "cp_luigi",
+        "name": "Luigi Amalfi (Luigi's Ristorante Zurich)",
+        "aliases": [
+          "Luigi Amalfi",
+          "Luigi's Ristorante"
+        ]
+      },
+      {
+        "id": "cp_tk",
+        "name": "Techniker Krankenkasse Social Health Fund",
+        "aliases": [
+          "Techniker Krankenkasse",
+          "TK"
+        ]
+      },
+      {
+        "id": "cp_tax_office",
+        "name": "Tax Office Frankfurt am Main",
+        "aliases": [
+          "Finanzamt Frankfurt am Main"
+        ]
+      }
+    ],
+    "expected": {
+      "doc_type": "INVOICE",
+      "counterparty": {
+        "value": "Fattoria La Vino GmbH",
+        "matched_id": "cp_fattoria"
+      },
+      "date": {
+        "value": "2025-04-28",
+        "text": "28.04.2025",
+        "page": 1,
+        "box": [
+          460.66,
+          117.42,
+          510.71,
+          124.22
+        ]
+      },
+      "currency": {
+        "value": "EUR"
+      },
+      "document_number": {
+        "value": "FLV-94818",
+        "text": "FLV-94818",
+        "page": 1,
+        "box": [
+          460.88,
+          104.42,
+          507.59,
+          111.22
+        ]
+      },
+      "lines": [
+        {
+          "description": {
+            "value": "Chianti Classico DOCG 2021, 0,75 l",
+            "text": "Chianti Classico DOCG 2021, 0,75 l",
+            "page": 1,
+            "box": [
+              78.45,
+              187.62,
+              217.76,
+              194.62
+            ]
+          },
+          "quantity": {
+            "value": "30",
+            "text": "30",
+            "page": 1,
+            "box": [
+              340.43,
+              187.76,
+              349.47,
+              193.8
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              187.62,
+              364.5,
+              193.7
+            ]
+          },
+          "unit_price": {
+            "value": "9.4",
+            "text": "9,40 €",
+            "page": 1,
+            "box": [
+              415.06,
+              187.76,
+              439.45,
+              194.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              187.76,
+              477.55,
+              193.8
+            ]
+          },
+          "net": {
+            "value": "28200",
+            "text": "282,00 €",
+            "page": 1,
+            "box": [
+              504.23,
+              187.76,
+              538.72,
+              194.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Montepulciano d'Abruzzo DOC 2022, 0,75 l",
+            "text": "Montepulciano d'Abruzzo DOC 2022, 0,75 l",
+            "page": 1,
+            "box": [
+              78.78,
+              200.62,
+              249.02,
+              208.36
+            ]
+          },
+          "quantity": {
+            "value": "12",
+            "text": "12",
+            "page": 1,
+            "box": [
+              340.7,
+              200.76,
+              349.2,
+              206.7
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              200.62,
+              364.5,
+              206.7
+            ]
+          },
+          "unit_price": {
+            "value": "6.45",
+            "text": "6,45 €",
+            "page": 1,
+            "box": [
+              415.11,
+              200.76,
+              439.45,
+              207.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              200.76,
+              477.55,
+              206.8
+            ]
+          },
+          "net": {
+            "value": "7740",
+            "text": "77,40 €",
+            "page": 1,
+            "box": [
+              509.4,
+              200.76,
+              538.72,
+              207.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Pinot Grigio delle Venezie DOC 2023, 0,75 l",
+            "text": "Pinot Grigio delle Venezie DOC 2023, 0,75 l",
+            "page": 1,
+            "box": [
+              78.78,
+              213.62,
+              251.0,
+              221.36
+            ]
+          },
+          "quantity": {
+            "value": "12",
+            "text": "12",
+            "page": 1,
+            "box": [
+              340.7,
+              213.76,
+              349.2,
+              219.7
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              213.62,
+              364.5,
+              219.7
+            ]
+          },
+          "unit_price": {
+            "value": "6.6",
+            "text": "6,60 €",
+            "page": 1,
+            "box": [
+              415.11,
+              213.76,
+              439.45,
+              220.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              213.76,
+              477.55,
+              219.8
+            ]
+          },
+          "net": {
+            "value": "7920",
+            "text": "79,20 €",
+            "page": 1,
+            "box": [
+              509.4,
+              213.76,
+              538.72,
+              220.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Prosecco DOC Extra Dry, 0,75 l",
+            "text": "Prosecco DOC Extra Dry, 0,75 l",
+            "page": 1,
+            "box": [
+              78.78,
+              226.62,
+              201.55,
+              234.36
+            ]
+          },
+          "quantity": {
+            "value": "6",
+            "text": "6",
+            "page": 1,
+            "box": [
+              345.47,
+              226.76,
+              349.49,
+              232.8
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              226.62,
+              364.5,
+              232.7
+            ]
+          },
+          "unit_price": {
+            "value": "7.35",
+            "text": "7,35 €",
+            "page": 1,
+            "box": [
+              415.21,
+              226.76,
+              439.45,
+              233.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              226.76,
+              477.55,
+              232.8
+            ]
+          },
+          "net": {
+            "value": "4410",
+            "text": "44,10 €",
+            "page": 1,
+            "box": [
+              509.13,
+              226.76,
+              538.72,
+              233.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Primitivo di Manduria DOC 2021, 0,75 l",
+            "text": "Primitivo di Manduria DOC 2021, 0,75 l",
+            "page": 1,
+            "box": [
+              78.78,
+              239.62,
+              233.4,
+              246.62
+            ]
+          },
+          "quantity": {
+            "value": "6",
+            "text": "6",
+            "page": 1,
+            "box": [
+              345.47,
+              239.76,
+              349.49,
+              245.8
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              239.62,
+              364.5,
+              245.7
+            ]
+          },
+          "unit_price": {
+            "value": "10.45",
+            "text": "10,45 €",
+            "page": 1,
+            "box": [
+              410.34,
+              239.76,
+              439.45,
+              246.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              239.76,
+              477.55,
+              245.8
+            ]
+          },
+          "net": {
+            "value": "6270",
+            "text": "62,70 €",
+            "page": 1,
+            "box": [
+              509.3,
+              239.76,
+              538.72,
+              246.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Lambrusco Grasparossa di Castelvetro DOC, 0,75 l",
+            "text": "Lambrusco Grasparossa di Castelvetro DOC, 0,75 l",
+            "page": 1,
+            "box": [
+              78.78,
+              252.62,
+              280.13,
+              260.36
+            ]
+          },
+          "quantity": {
+            "value": "12",
+            "text": "12",
+            "page": 1,
+            "box": [
+              340.7,
+              252.76,
+              349.2,
+              258.7
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              252.62,
+              364.5,
+              258.7
+            ]
+          },
+          "unit_price": {
+            "value": "5.85",
+            "text": "5,85 €",
+            "page": 1,
+            "box": [
+              415.17,
+              252.76,
+              439.45,
+              259.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              252.76,
+              477.55,
+              258.8
+            ]
+          },
+          "net": {
+            "value": "7020",
+            "text": "70,20 €",
+            "page": 1,
+            "box": [
+              509.4,
+              252.76,
+              538.72,
+              259.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Limoncello di Amalfi IGP, 0,5 l",
+            "text": "Limoncello di Amalfi IGP, 0,5 l",
+            "page": 1,
+            "box": [
+              78.78,
+              265.62,
+              196.51,
+              272.62
+            ]
+          },
+          "quantity": {
+            "value": "3",
+            "text": "3",
+            "page": 1,
+            "box": [
+              345.52,
+              265.76,
+              349.36,
+              271.8
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              265.62,
+              364.5,
+              271.7
+            ]
+          },
+          "unit_price": {
+            "value": "11.9",
+            "text": "11,90 €",
+            "page": 1,
+            "box": [
+              410.34,
+              265.76,
+              439.45,
+              272.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              265.76,
+              477.55,
+              271.8
+            ]
+          },
+          "net": {
+            "value": "3570",
+            "text": "35,70 €",
+            "page": 1,
+            "box": [
+              509.35,
+              265.76,
+              538.72,
+              272.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Campari Bitter, 1 l",
+            "text": "Campari Bitter, 1 l",
+            "page": 1,
+            "box": [
+              78.45,
+              278.62,
+              150.63,
+              286.36
+            ]
+          },
+          "quantity": {
+            "value": "5",
+            "text": "5",
+            "page": 1,
+            "box": [
+              345.53,
+              278.87,
+              349.3,
+              284.8
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              278.62,
+              364.5,
+              284.7
+            ]
+          },
+          "unit_price": {
+            "value": "13.67",
+            "text": "13,67 €",
+            "page": 1,
+            "box": [
+              410.34,
+              278.76,
+              439.45,
+              285.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              278.76,
+              477.55,
+              284.8
+            ]
+          },
+          "net": {
+            "value": "6835",
+            "text": "68,35 €",
+            "page": 1,
+            "box": [
+              509.3,
+              278.76,
+              538.72,
+              285.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Acqua San Pellegrino, 0,75 l",
+            "text": "Acqua San Pellegrino, 0,75 l",
+            "page": 1,
+            "box": [
+              78.06,
+              291.62,
+              189.5,
+              299.36
+            ]
+          },
+          "quantity": {
+            "value": "36",
+            "text": "36",
+            "page": 1,
+            "box": [
+              340.43,
+              291.76,
+              349.49,
+              297.8
+            ]
+          },
+          "unit": {
+            "value": "Fl.",
+            "text": "Fl.",
+            "page": 1,
+            "box": [
+              356.78,
+              291.62,
+              364.5,
+              297.7
+            ]
+          },
+          "unit_price": {
+            "value": "0.95",
+            "text": "0,95 €",
+            "page": 1,
+            "box": [
+              415.08,
+              291.76,
+              439.45,
+              298.62
+            ]
+          },
+          "vat_rate": {
+            "value": 1900,
+            "text": "19 %",
+            "page": 1,
+            "box": [
+              458.56,
+              291.76,
+              477.55,
+              297.8
+            ]
+          },
+          "net": {
+            "value": "3420",
+            "text": "34,20 €",
+            "page": 1,
+            "box": [
+              509.35,
+              291.76,
+              538.72,
+              298.62
+            ]
+          }
+        }
+      ],
+      "totals": {
+        "net": {
+          "value": "75385",
+          "text": "753,85 €",
+          "page": 1,
+          "box": [
+            499.94,
+            314.02,
+            538.65,
+            321.74
+          ]
+        },
+        "vat": {
+          "value": "14323",
+          "text": "143,23 €",
+          "page": 1,
+          "box": [
+            500.19,
+            328.02,
+            538.65,
+            335.74
+          ]
+        },
+        "gross": {
+          "value": "89708",
+          "text": "897,08 €",
+          "page": 1,
+          "box": [
+            495.7,
+            342.02,
+            538.63,
+            349.97
+          ]
+        }
+      }
+    }
+  },
+  {
+    "file": "inv_AS-80497.pdf",
+    "known_counterparties": [
+      {
+        "id": "cp_main_street",
+        "name": "Main Street Real Estate GmbH",
+        "aliases": [
+          "Main Street Immobilien",
+          "Hausverwaltung Main Street"
+        ]
+      },
+      {
+        "id": "cp_fattoria",
+        "name": "Fattoria La Vino GmbH",
+        "aliases": [
+          "Fattoria La Vino"
+        ]
+      },
+      {
+        "id": "cp_asimex",
+        "name": "Asimex Wholesale Ltd",
+        "aliases": [
+          "Asimex"
+        ]
+      },
+      {
+        "id": "cp_city_energy",
+        "name": "City Energy & Utilities AG",
+        "aliases": [
+          "City Energy"
+        ]
+      },
+      {
+        "id": "cp_luigi",
+        "name": "Luigi Amalfi (Luigi's Ristorante Zurich)",
+        "aliases": [
+          "Luigi Amalfi",
+          "Luigi's Ristorante"
+        ]
+      },
+      {
+        "id": "cp_tk",
+        "name": "Techniker Krankenkasse Social Health Fund",
+        "aliases": [
+          "Techniker Krankenkasse",
+          "TK"
+        ]
+      },
+      {
+        "id": "cp_tax_office",
+        "name": "Tax Office Frankfurt am Main",
+        "aliases": [
+          "Finanzamt Frankfurt am Main"
+        ]
+      }
+    ],
+    "expected": {
+      "doc_type": "INVOICE",
+      "counterparty": {
+        "value": "Asimex Wholesale Ltd",
+        "matched_id": "cp_asimex"
+      },
+      "date": {
+        "value": "2025-03-08",
+        "text": "08.03.2025",
+        "page": 1,
+        "box": [
+          460.59,
+          117.42,
+          510.71,
+          124.22
+        ]
+      },
+      "currency": {
+        "value": "EUR"
+      },
+      "document_number": {
+        "value": "AS-80497",
+        "text": "AS-80497",
+        "page": 1,
+        "box": [
+          460.07,
+          104.42,
+          502.96,
+          111.22
+        ]
+      },
+      "lines": [
+        {
+          "description": {
+            "value": "Mozzarella di Bufala Campana DOP",
+            "text": "Mozzarella di Bufala Campana DOP",
+            "page": 1,
+            "box": [
+              78.78,
+              187.62,
+              218.62,
+              195.36
+            ]
+          },
+          "quantity": {
+            "value": "12",
+            "text": "12",
+            "page": 1,
+            "box": [
+              340.7,
+              187.76,
+              349.2,
+              193.7
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              187.62,
+              364.98,
+              195.36
+            ]
+          },
+          "unit_price": {
+            "value": "12.4",
+            "text": "12,40 €",
+            "page": 1,
+            "box": [
+              410.34,
+              187.76,
+              439.45,
+              194.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              187.76,
+              477.55,
+              193.8
+            ]
+          },
+          "net": {
+            "value": "14880",
+            "text": "148,80 €",
+            "page": 1,
+            "box": [
+              504.53,
+              187.76,
+              538.72,
+              194.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Fior di Latte",
+            "text": "Fior di Latte",
+            "page": 1,
+            "box": [
+              78.78,
+              200.62,
+              125.47,
+              206.8
+            ]
+          },
+          "quantity": {
+            "value": "6",
+            "text": "6",
+            "page": 1,
+            "box": [
+              345.47,
+              200.76,
+              349.49,
+              206.8
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              200.62,
+              364.98,
+              208.36
+            ]
+          },
+          "unit_price": {
+            "value": "7.95",
+            "text": "7,95 €",
+            "page": 1,
+            "box": [
+              415.21,
+              200.76,
+              439.45,
+              207.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              200.76,
+              477.55,
+              206.8
+            ]
+          },
+          "net": {
+            "value": "4770",
+            "text": "47,70 €",
+            "page": 1,
+            "box": [
+              509.13,
+              200.76,
+              538.72,
+              207.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Parmigiano Reggiano DOP, 24 Monate",
+            "text": "Parmigiano Reggiano DOP, 24 Monate",
+            "page": 1,
+            "box": [
+              78.78,
+              213.62,
+              230.34,
+              221.36
+            ]
+          },
+          "quantity": {
+            "value": "3",
+            "text": "3",
+            "page": 1,
+            "box": [
+              345.52,
+              213.76,
+              349.36,
+              219.8
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              213.62,
+              364.98,
+              221.36
+            ]
+          },
+          "unit_price": {
+            "value": "19.8",
+            "text": "19,80 €",
+            "page": 1,
+            "box": [
+              410.34,
+              213.76,
+              439.45,
+              220.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              213.76,
+              477.55,
+              219.8
+            ]
+          },
+          "net": {
+            "value": "5940",
+            "text": "59,40 €",
+            "page": 1,
+            "box": [
+              509.36,
+              213.76,
+              538.72,
+              220.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Prosciutto di Parma DOP",
+            "text": "Prosciutto di Parma DOP",
+            "page": 1,
+            "box": [
+              78.78,
+              226.62,
+              175.59,
+              232.8
+            ]
+          },
+          "quantity": {
+            "value": "2.506",
+            "text": "2,506",
+            "page": 1,
+            "box": [
+              327.68,
+              226.76,
+              349.48,
+              233.62
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              226.62,
+              364.98,
+              234.36
+            ]
+          },
+          "unit_price": {
+            "value": "21.9",
+            "text": "21,90 €",
+            "page": 1,
+            "box": [
+              410.05,
+              226.76,
+              439.45,
+              233.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              226.76,
+              477.55,
+              232.8
+            ]
+          },
+          "net": {
+            "value": "5488",
+            "text": "54,88 €",
+            "page": 1,
+            "box": [
+              509.36,
+              226.76,
+              538.72,
+              233.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+            "text": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+            "page": 1,
+            "box": [
+              78.78,
+              239.62,
+              243.94,
+              247.36
+            ]
+          },
+          "quantity": {
+            "value": "12",
+            "text": "12",
+            "page": 1,
+            "box": [
+              340.7,
+              239.76,
+              349.2,
+              245.7
+            ]
+          },
+          "unit": {
+            "value": "Dose",
+            "text": "Dose",
+            "page": 1,
+            "box": [
+              356.78,
+              239.87,
+              375.7,
+              245.8
+            ]
+          },
+          "unit_price": {
+            "value": "6.8",
+            "text": "6,80 €",
+            "page": 1,
+            "box": [
+              415.11,
+              239.76,
+              439.45,
+              246.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              239.76,
+              477.55,
+              245.8
+            ]
+          },
+          "net": {
+            "value": "8160",
+            "text": "81,60 €",
+            "page": 1,
+            "box": [
+              509.28,
+              239.76,
+              538.72,
+              246.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Mehl Tipo 00, 25 kg",
+            "text": "Mehl Tipo 00, 25 kg",
+            "page": 1,
+            "box": [
+              78.78,
+              252.62,
+              156.17,
+              260.36
+            ]
+          },
+          "quantity": {
+            "value": "6",
+            "text": "6",
+            "page": 1,
+            "box": [
+              345.47,
+              252.76,
+              349.49,
+              258.8
+            ]
+          },
+          "unit": {
+            "value": "Sack",
+            "text": "Sack",
+            "page": 1,
+            "box": [
+              356.53,
+              252.62,
+              374.97,
+              258.8
+            ]
+          },
+          "unit_price": {
+            "value": "18.5",
+            "text": "18,50 €",
+            "page": 1,
+            "box": [
+              410.34,
+              252.76,
+              439.45,
+              259.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              252.76,
+              477.55,
+              258.8
+            ]
+          },
+          "net": {
+            "value": "11100",
+            "text": "111,00 €",
+            "page": 1,
+            "box": [
+              504.53,
+              252.76,
+              538.72,
+              259.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Oliven Taggiasca, 950 g",
+            "text": "Oliven Taggiasca, 950 g",
+            "page": 1,
+            "box": [
+              78.45,
+              265.62,
+              173.68,
+              273.36
+            ]
+          },
+          "quantity": {
+            "value": "3",
+            "text": "3",
+            "page": 1,
+            "box": [
+              345.52,
+              265.76,
+              349.36,
+              271.8
+            ]
+          },
+          "unit": {
+            "value": "Glas",
+            "text": "Glas",
+            "page": 1,
+            "box": [
+              356.45,
+              265.62,
+              373.08,
+              271.8
+            ]
+          },
+          "unit_price": {
+            "value": "9.87",
+            "text": "9,87 €",
+            "page": 1,
+            "box": [
+              415.06,
+              265.76,
+              439.45,
+              272.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              265.76,
+              477.55,
+              271.8
+            ]
+          },
+          "net": {
+            "value": "2961",
+            "text": "29,61 €",
+            "page": 1,
+            "box": [
+              509.32,
+              265.76,
+              538.72,
+              272.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Basilikum frisch",
+            "text": "Basilikum frisch",
+            "page": 1,
+            "box": [
+              78.78,
+              278.62,
+              140.48,
+              284.8
+            ]
+          },
+          "quantity": {
+            "value": "10",
+            "text": "10",
+            "page": 1,
+            "box": [
+              340.7,
+              278.76,
+              349.47,
+              284.8
+            ]
+          },
+          "unit": {
+            "value": "Bund",
+            "text": "Bund",
+            "page": 1,
+            "box": [
+              356.78,
+              278.62,
+              375.97,
+              284.8
+            ]
+          },
+          "unit_price": {
+            "value": "1.35",
+            "text": "1,35 €",
+            "page": 1,
+            "box": [
+              415.43,
+              278.76,
+              439.45,
+              285.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              278.76,
+              477.55,
+              284.8
+            ]
+          },
+          "net": {
+            "value": "1350",
+            "text": "13,50 €",
+            "page": 1,
+            "box": [
+              509.62,
+              278.76,
+              538.72,
+              285.62
+            ]
+          }
+        }
+      ],
+      "totals": {
+        "net": {
+          "value": "54649",
+          "text": "546,49 €",
+          "page": 1,
+          "box": [
+            499.89,
+            301.02,
+            538.65,
+            308.74
+          ]
+        },
+        "vat": {
+          "value": "3825",
+          "text": "38,25 €",
+          "page": 1,
+          "box": [
+            505.61,
+            315.02,
+            538.66,
+            322.74
+          ]
+        },
+        "gross": {
+          "value": "58474",
+          "text": "584,74 €",
+          "page": 1,
+          "box": [
+            495.84,
+            329.02,
+            538.63,
+            336.97
+          ]
+        }
+      }
+    }
+  },
+  {
+    "file": "inv_AS-72217.pdf",
+    "known_counterparties": [
+      {
+        "id": "cp_main_street",
+        "name": "Main Street Real Estate GmbH",
+        "aliases": [
+          "Main Street Immobilien",
+          "Hausverwaltung Main Street"
+        ]
+      },
+      {
+        "id": "cp_fattoria",
+        "name": "Fattoria La Vino GmbH",
+        "aliases": [
+          "Fattoria La Vino"
+        ]
+      },
+      {
+        "id": "cp_asimex",
+        "name": "Asimex Wholesale Ltd",
+        "aliases": [
+          "Asimex"
+        ]
+      },
+      {
+        "id": "cp_city_energy",
+        "name": "City Energy & Utilities AG",
+        "aliases": [
+          "City Energy"
+        ]
+      },
+      {
+        "id": "cp_luigi",
+        "name": "Luigi Amalfi (Luigi's Ristorante Zurich)",
+        "aliases": [
+          "Luigi Amalfi",
+          "Luigi's Ristorante"
+        ]
+      },
+      {
+        "id": "cp_tk",
+        "name": "Techniker Krankenkasse Social Health Fund",
+        "aliases": [
+          "Techniker Krankenkasse",
+          "TK"
+        ]
+      },
+      {
+        "id": "cp_tax_office",
+        "name": "Tax Office Frankfurt am Main",
+        "aliases": [
+          "Finanzamt Frankfurt am Main"
+        ]
+      }
+    ],
+    "expected": {
+      "doc_type": "INVOICE",
+      "counterparty": {
+        "value": "Asimex Wholesale Ltd",
+        "matched_id": "cp_asimex"
+      },
+      "date": {
+        "value": "2025-04-26",
+        "text": "26.04.2025",
+        "page": 1,
+        "box": [
+          460.66,
+          117.42,
+          510.71,
+          124.22
+        ]
+      },
+      "currency": {
+        "value": "EUR"
+      },
+      "document_number": {
+        "value": "AS-72217",
+        "text": "AS-72217",
+        "page": 1,
+        "box": [
+          460.07,
+          104.42,
+          502.96,
+          111.22
+        ]
+      },
+      "lines": [
+        {
+          "description": {
+            "value": "Mozzarella di Bufala Campana DOP",
+            "text": "Mozzarella di Bufala Campana DOP",
+            "page": 1,
+            "box": [
+              78.78,
+              187.62,
+              218.62,
+              195.36
+            ]
+          },
+          "quantity": {
+            "value": "14",
+            "text": "14",
+            "page": 1,
+            "box": [
+              340.7,
+              187.87,
+              349.55,
+              193.7
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              187.62,
+              364.98,
+              195.36
+            ]
+          },
+          "unit_price": {
+            "value": "12.9",
+            "text": "12,90 €",
+            "page": 1,
+            "box": [
+              410.34,
+              187.76,
+              439.45,
+              194.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              187.76,
+              477.55,
+              193.8
+            ]
+          },
+          "net": {
+            "value": "18060",
+            "text": "180,60 €",
+            "page": 1,
+            "box": [
+              504.53,
+              187.76,
+              538.72,
+              194.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Fior di Latte",
+            "text": "Fior di Latte",
+            "page": 1,
+            "box": [
+              78.78,
+              200.62,
+              125.47,
+              206.8
+            ]
+          },
+          "quantity": {
+            "value": "10",
+            "text": "10",
+            "page": 1,
+            "box": [
+              340.7,
+              200.76,
+              349.47,
+              206.8
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              200.62,
+              364.98,
+              208.36
+            ]
+          },
+          "unit_price": {
+            "value": "7.95",
+            "text": "7,95 €",
+            "page": 1,
+            "box": [
+              415.21,
+              200.76,
+              439.45,
+              207.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              200.76,
+              477.55,
+              206.8
+            ]
+          },
+          "net": {
+            "value": "7950",
+            "text": "79,50 €",
+            "page": 1,
+            "box": [
+              509.4,
+              200.76,
+              538.72,
+              207.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Parmigiano Reggiano DOP, 24 Monate",
+            "text": "Parmigiano Reggiano DOP, 24 Monate",
+            "page": 1,
+            "box": [
+              78.78,
+              213.62,
+              230.34,
+              221.36
+            ]
+          },
+          "quantity": {
+            "value": "3",
+            "text": "3",
+            "page": 1,
+            "box": [
+              345.52,
+              213.76,
+              349.36,
+              219.8
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              213.62,
+              364.98,
+              221.36
+            ]
+          },
+          "unit_price": {
+            "value": "19.8",
+            "text": "19,80 €",
+            "page": 1,
+            "box": [
+              410.34,
+              213.76,
+              439.45,
+              220.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              213.76,
+              477.55,
+              219.8
+            ]
+          },
+          "net": {
+            "value": "5940",
+            "text": "59,40 €",
+            "page": 1,
+            "box": [
+              509.36,
+              213.76,
+              538.72,
+              220.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Prosciutto di Parma DOP",
+            "text": "Prosciutto di Parma DOP",
+            "page": 1,
+            "box": [
+              78.78,
+              226.62,
+              175.59,
+              232.8
+            ]
+          },
+          "quantity": {
+            "value": "2.198",
+            "text": "2,198",
+            "page": 1,
+            "box": [
+              327.68,
+              226.76,
+              349.44,
+              233.62
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              226.62,
+              364.98,
+              234.36
+            ]
+          },
+          "unit_price": {
+            "value": "23.4",
+            "text": "23,40 €",
+            "page": 1,
+            "box": [
+              410.05,
+              226.76,
+              439.45,
+              233.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              226.76,
+              477.55,
+              232.8
+            ]
+          },
+          "net": {
+            "value": "5143",
+            "text": "51,43 €",
+            "page": 1,
+            "box": [
+              509.36,
+              226.76,
+              538.72,
+              233.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Salame Napoli",
+            "text": "Salame Napoli",
+            "page": 1,
+            "box": [
+              78.53,
+              239.62,
+              134.86,
+              247.36
+            ]
+          },
+          "quantity": {
+            "value": "2.5",
+            "text": "2,5",
+            "page": 1,
+            "box": [
+              337.86,
+              239.76,
+              349.29,
+              246.62
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              239.62,
+              364.98,
+              247.36
+            ]
+          },
+          "unit_price": {
+            "value": "15.2",
+            "text": "15,20 €",
+            "page": 1,
+            "box": [
+              410.34,
+              239.76,
+              439.45,
+              246.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              239.76,
+              477.55,
+              245.8
+            ]
+          },
+          "net": {
+            "value": "3800",
+            "text": "38,00 €",
+            "page": 1,
+            "box": [
+              509.35,
+              239.76,
+              538.72,
+              246.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+            "text": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+            "page": 1,
+            "box": [
+              78.78,
+              252.62,
+              243.94,
+              260.36
+            ]
+          },
+          "quantity": {
+            "value": "12",
+            "text": "12",
+            "page": 1,
+            "box": [
+              340.7,
+              252.76,
+              349.2,
+              258.7
+            ]
+          },
+          "unit": {
+            "value": "Dose",
+            "text": "Dose",
+            "page": 1,
+            "box": [
+              356.78,
+              252.87,
+              375.7,
+              258.8
+            ]
+          },
+          "unit_price": {
+            "value": "7.2",
+            "text": "7,20 €",
+            "page": 1,
+            "box": [
+              415.21,
+              252.76,
+              439.45,
+              259.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              252.76,
+              477.55,
+              258.8
+            ]
+          },
+          "net": {
+            "value": "8640",
+            "text": "86,40 €",
+            "page": 1,
+            "box": [
+              509.28,
+              252.76,
+              538.72,
+              259.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Mehl Tipo 00, 25 kg",
+            "text": "Mehl Tipo 00, 25 kg",
+            "page": 1,
+            "box": [
+              78.78,
+              265.62,
+              156.17,
+              273.36
+            ]
+          },
+          "quantity": {
+            "value": "6",
+            "text": "6",
+            "page": 1,
+            "box": [
+              345.47,
+              265.76,
+              349.49,
+              271.8
+            ]
+          },
+          "unit": {
+            "value": "Sack",
+            "text": "Sack",
+            "page": 1,
+            "box": [
+              356.53,
+              265.62,
+              374.97,
+              271.8
+            ]
+          },
+          "unit_price": {
+            "value": "18.5",
+            "text": "18,50 €",
+            "page": 1,
+            "box": [
+              410.34,
+              265.76,
+              439.45,
+              272.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              265.76,
+              477.55,
+              271.8
+            ]
+          },
+          "net": {
+            "value": "11100",
+            "text": "111,00 €",
+            "page": 1,
+            "box": [
+              504.53,
+              265.76,
+              538.72,
+              272.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Oliven Taggiasca, 950 g",
+            "text": "Oliven Taggiasca, 950 g",
+            "page": 1,
+            "box": [
+              78.45,
+              278.62,
+              173.68,
+              286.36
+            ]
+          },
+          "quantity": {
+            "value": "2",
+            "text": "2",
+            "page": 1,
+            "box": [
+              345.49,
+              278.76,
+              349.2,
+              284.7
+            ]
+          },
+          "unit": {
+            "value": "Glas",
+            "text": "Glas",
+            "page": 1,
+            "box": [
+              356.45,
+              278.62,
+              373.08,
+              284.8
+            ]
+          },
+          "unit_price": {
+            "value": "9.87",
+            "text": "9,87 €",
+            "page": 1,
+            "box": [
+              415.06,
+              278.76,
+              439.45,
+              285.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              278.76,
+              477.55,
+              284.8
+            ]
+          },
+          "net": {
+            "value": "1974",
+            "text": "19,74 €",
+            "page": 1,
+            "box": [
+              509.62,
+              278.76,
+              538.72,
+              285.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Basilikum frisch",
+            "text": "Basilikum frisch",
+            "page": 1,
+            "box": [
+              78.78,
+              291.62,
+              140.48,
+              297.8
+            ]
+          },
+          "quantity": {
+            "value": "12",
+            "text": "12",
+            "page": 1,
+            "box": [
+              340.7,
+              291.76,
+              349.2,
+              297.7
+            ]
+          },
+          "unit": {
+            "value": "Bund",
+            "text": "Bund",
+            "page": 1,
+            "box": [
+              356.78,
+              291.62,
+              375.97,
+              297.8
+            ]
+          },
+          "unit_price": {
+            "value": "1.35",
+            "text": "1,35 €",
+            "page": 1,
+            "box": [
+              415.43,
+              291.76,
+              439.45,
+              298.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              291.76,
+              477.55,
+              297.8
+            ]
+          },
+          "net": {
+            "value": "1620",
+            "text": "16,20 €",
+            "page": 1,
+            "box": [
+              509.62,
+              291.76,
+              538.72,
+              298.62
+            ]
+          }
+        }
+      ],
+      "totals": {
+        "net": {
+          "value": "64227",
+          "text": "642,27 €",
+          "page": 1,
+          "box": [
+            499.83,
+            314.02,
+            538.65,
+            321.74
+          ]
+        },
+        "vat": {
+          "value": "4496",
+          "text": "44,96 €",
+          "page": 1,
+          "box": [
+            505.36,
+            328.02,
+            538.66,
+            335.74
+          ]
+        },
+        "gross": {
+          "value": "68723",
+          "text": "687,23 €",
+          "page": 1,
+          "box": [
+            495.71,
+            342.02,
+            538.63,
+            349.97
+          ]
+        }
+      }
+    }
+  },
+  {
+    "file": "inv_AS-11607.pdf",
+    "known_counterparties": [
+      {
+        "id": "cp_main_street",
+        "name": "Main Street Real Estate GmbH",
+        "aliases": [
+          "Main Street Immobilien",
+          "Hausverwaltung Main Street"
+        ]
+      },
+      {
+        "id": "cp_fattoria",
+        "name": "Fattoria La Vino GmbH",
+        "aliases": [
+          "Fattoria La Vino"
+        ]
+      },
+      {
+        "id": "cp_asimex",
+        "name": "Asimex Wholesale Ltd",
+        "aliases": [
+          "Asimex"
+        ]
+      },
+      {
+        "id": "cp_city_energy",
+        "name": "City Energy & Utilities AG",
+        "aliases": [
+          "City Energy"
+        ]
+      },
+      {
+        "id": "cp_luigi",
+        "name": "Luigi Amalfi (Luigi's Ristorante Zurich)",
+        "aliases": [
+          "Luigi Amalfi",
+          "Luigi's Ristorante"
+        ]
+      },
+      {
+        "id": "cp_tk",
+        "name": "Techniker Krankenkasse Social Health Fund",
+        "aliases": [
+          "Techniker Krankenkasse",
+          "TK"
+        ]
+      },
+      {
+        "id": "cp_tax_office",
+        "name": "Tax Office Frankfurt am Main",
+        "aliases": [
+          "Finanzamt Frankfurt am Main"
+        ]
+      }
+    ],
+    "expected": {
+      "doc_type": "INVOICE",
+      "counterparty": {
+        "value": "Asimex Wholesale Ltd",
+        "matched_id": "cp_asimex"
+      },
+      "date": {
+        "value": "2025-05-03",
+        "text": "03.05.2025",
+        "page": 1,
+        "box": [
+          460.59,
+          117.42,
+          510.71,
+          124.22
+        ]
+      },
+      "currency": {
+        "value": "EUR"
+      },
+      "document_number": {
+        "value": "AS-11607",
+        "text": "AS-11607",
+        "page": 1,
+        "box": [
+          460.07,
+          104.42,
+          502.96,
+          111.22
+        ]
+      },
+      "lines": [
+        {
+          "description": {
+            "value": "Mozzarella di Bufala Campana DOP",
+            "text": "Mozzarella di Bufala Campana DOP",
+            "page": 1,
+            "box": [
+              78.78,
+              187.62,
+              218.62,
+              195.36
+            ]
+          },
+          "quantity": {
+            "value": "12",
+            "text": "12",
+            "page": 1,
+            "box": [
+              340.7,
+              187.76,
+              349.2,
+              193.7
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              187.62,
+              364.98,
+              195.36
+            ]
+          },
+          "unit_price": {
+            "value": "12.9",
+            "text": "12,90 €",
+            "page": 1,
+            "box": [
+              410.34,
+              187.76,
+              439.45,
+              194.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              187.76,
+              477.55,
+              193.8
+            ]
+          },
+          "net": {
+            "value": "15480",
+            "text": "154,80 €",
+            "page": 1,
+            "box": [
+              504.53,
+              187.76,
+              538.72,
+              194.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Fior di Latte",
+            "text": "Fior di Latte",
+            "page": 1,
+            "box": [
+              78.78,
+              200.62,
+              125.47,
+              206.8
+            ]
+          },
+          "quantity": {
+            "value": "8",
+            "text": "8",
+            "page": 1,
+            "box": [
+              345.45,
+              200.76,
+              349.45,
+              206.8
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              200.62,
+              364.98,
+              208.36
+            ]
+          },
+          "unit_price": {
+            "value": "7.95",
+            "text": "7,95 €",
+            "page": 1,
+            "box": [
+              415.21,
+              200.76,
+              439.45,
+              207.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              200.76,
+              477.55,
+              206.8
+            ]
+          },
+          "net": {
+            "value": "6360",
+            "text": "63,60 €",
+            "page": 1,
+            "box": [
+              509.3,
+              200.76,
+              538.72,
+              207.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Parmigiano Reggiano DOP, 24 Monate",
+            "text": "Parmigiano Reggiano DOP, 24 Monate",
+            "page": 1,
+            "box": [
+              78.78,
+              213.62,
+              230.34,
+              221.36
+            ]
+          },
+          "quantity": {
+            "value": "2",
+            "text": "2",
+            "page": 1,
+            "box": [
+              345.49,
+              213.76,
+              349.2,
+              219.7
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              213.62,
+              364.98,
+              221.36
+            ]
+          },
+          "unit_price": {
+            "value": "19.8",
+            "text": "19,80 €",
+            "page": 1,
+            "box": [
+              410.34,
+              213.76,
+              439.45,
+              220.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              213.76,
+              477.55,
+              219.8
+            ]
+          },
+          "net": {
+            "value": "3960",
+            "text": "39,60 €",
+            "page": 1,
+            "box": [
+              509.35,
+              213.76,
+              538.72,
+              220.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Prosciutto di Parma DOP",
+            "text": "Prosciutto di Parma DOP",
+            "page": 1,
+            "box": [
+              78.78,
+              226.62,
+              175.59,
+              232.8
+            ]
+          },
+          "quantity": {
+            "value": "2.486",
+            "text": "2,486",
+            "page": 1,
+            "box": [
+              327.68,
+              226.76,
+              349.48,
+              233.62
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              226.62,
+              364.98,
+              234.36
+            ]
+          },
+          "unit_price": {
+            "value": "23.4",
+            "text": "23,40 €",
+            "page": 1,
+            "box": [
+              410.05,
+              226.76,
+              439.45,
+              233.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              226.76,
+              477.55,
+              232.8
+            ]
+          },
+          "net": {
+            "value": "5817",
+            "text": "58,17 €",
+            "page": 1,
+            "box": [
+              509.36,
+              226.76,
+              538.72,
+              233.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Salame Napoli",
+            "text": "Salame Napoli",
+            "page": 1,
+            "box": [
+              78.53,
+              239.62,
+              134.86,
+              247.36
+            ]
+          },
+          "quantity": {
+            "value": "2",
+            "text": "2",
+            "page": 1,
+            "box": [
+              345.49,
+              239.76,
+              349.2,
+              245.7
+            ]
+          },
+          "unit": {
+            "value": "kg",
+            "text": "kg",
+            "page": 1,
+            "box": [
+              356.73,
+              239.62,
+              364.98,
+              247.36
+            ]
+          },
+          "unit_price": {
+            "value": "15.2",
+            "text": "15,20 €",
+            "page": 1,
+            "box": [
+              410.34,
+              239.76,
+              439.45,
+              246.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              239.76,
+              477.55,
+              245.8
+            ]
+          },
+          "net": {
+            "value": "3040",
+            "text": "30,40 €",
+            "page": 1,
+            "box": [
+              509.35,
+              239.76,
+              538.72,
+              246.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+            "text": "Pomodori Pelati San Marzano DOP, 2,5 kg",
+            "page": 1,
+            "box": [
+              78.78,
+              252.62,
+              243.94,
+              260.36
+            ]
+          },
+          "quantity": {
+            "value": "12",
+            "text": "12",
+            "page": 1,
+            "box": [
+              340.7,
+              252.76,
+              349.2,
+              258.7
+            ]
+          },
+          "unit": {
+            "value": "Dose",
+            "text": "Dose",
+            "page": 1,
+            "box": [
+              356.78,
+              252.87,
+              375.7,
+              258.8
+            ]
+          },
+          "unit_price": {
+            "value": "7.2",
+            "text": "7,20 €",
+            "page": 1,
+            "box": [
+              415.21,
+              252.76,
+              439.45,
+              259.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              252.76,
+              477.55,
+              258.8
+            ]
+          },
+          "net": {
+            "value": "8640",
+            "text": "86,40 €",
+            "page": 1,
+            "box": [
+              509.28,
+              252.76,
+              538.72,
+              259.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Mehl Tipo 00, 25 kg",
+            "text": "Mehl Tipo 00, 25 kg",
+            "page": 1,
+            "box": [
+              78.78,
+              265.62,
+              156.17,
+              273.36
+            ]
+          },
+          "quantity": {
+            "value": "5",
+            "text": "5",
+            "page": 1,
+            "box": [
+              345.53,
+              265.87,
+              349.3,
+              271.8
+            ]
+          },
+          "unit": {
+            "value": "Sack",
+            "text": "Sack",
+            "page": 1,
+            "box": [
+              356.53,
+              265.62,
+              374.97,
+              271.8
+            ]
+          },
+          "unit_price": {
+            "value": "18.5",
+            "text": "18,50 €",
+            "page": 1,
+            "box": [
+              410.34,
+              265.76,
+              439.45,
+              272.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              265.76,
+              477.55,
+              271.8
+            ]
+          },
+          "net": {
+            "value": "9250",
+            "text": "92,50 €",
+            "page": 1,
+            "box": [
+              509.24,
+              265.76,
+              538.72,
+              272.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Oliven Taggiasca, 950 g",
+            "text": "Oliven Taggiasca, 950 g",
+            "page": 1,
+            "box": [
+              78.45,
+              278.62,
+              173.68,
+              286.36
+            ]
+          },
+          "quantity": {
+            "value": "2",
+            "text": "2",
+            "page": 1,
+            "box": [
+              345.49,
+              278.76,
+              349.2,
+              284.7
+            ]
+          },
+          "unit": {
+            "value": "Glas",
+            "text": "Glas",
+            "page": 1,
+            "box": [
+              356.45,
+              278.62,
+              373.08,
+              284.8
+            ]
+          },
+          "unit_price": {
+            "value": "9.87",
+            "text": "9,87 €",
+            "page": 1,
+            "box": [
+              415.06,
+              278.76,
+              439.45,
+              285.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              278.76,
+              477.55,
+              284.8
+            ]
+          },
+          "net": {
+            "value": "1974",
+            "text": "19,74 €",
+            "page": 1,
+            "box": [
+              509.62,
+              278.76,
+              538.72,
+              285.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Basilikum frisch",
+            "text": "Basilikum frisch",
+            "page": 1,
+            "box": [
+              78.78,
+              291.62,
+              140.48,
+              297.8
+            ]
+          },
+          "quantity": {
+            "value": "10",
+            "text": "10",
+            "page": 1,
+            "box": [
+              340.7,
+              291.76,
+              349.47,
+              297.8
+            ]
+          },
+          "unit": {
+            "value": "Bund",
+            "text": "Bund",
+            "page": 1,
+            "box": [
+              356.78,
+              291.62,
+              375.97,
+              297.8
+            ]
+          },
+          "unit_price": {
+            "value": "1.35",
+            "text": "1,35 €",
+            "page": 1,
+            "box": [
+              415.43,
+              291.76,
+              439.45,
+              298.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              291.76,
+              477.55,
+              297.8
+            ]
+          },
+          "net": {
+            "value": "1350",
+            "text": "13,50 €",
+            "page": 1,
+            "box": [
+              509.62,
+              291.76,
+              538.72,
+              298.62
+            ]
+          }
+        },
+        {
+          "description": {
+            "value": "Logistikzuschlag",
+            "text": "Logistikzuschlag",
+            "page": 1,
+            "box": [
+              78.78,
+              304.62,
+              143.11,
+              312.36
+            ]
+          },
+          "quantity": {
+            "value": "1",
+            "text": "1",
+            "page": 1,
+            "box": [
+              345.79,
+              304.87,
+              349.26,
+              310.7
+            ]
+          },
+          "unit": {
+            "value": "Lfg.",
+            "text": "Lfg.",
+            "page": 1,
+            "box": [
+              356.78,
+              304.62,
+              370.02,
+              312.36
+            ]
+          },
+          "unit_price": {
+            "value": "24.5",
+            "text": "24,50 €",
+            "page": 1,
+            "box": [
+              410.05,
+              304.76,
+              439.45,
+              311.62
+            ]
+          },
+          "vat_rate": {
+            "value": 700,
+            "text": "7 %",
+            "page": 1,
+            "box": [
+              463.42,
+              304.76,
+              477.55,
+              310.8
+            ]
+          },
+          "net": {
+            "value": "2450",
+            "text": "24,50 €",
+            "page": 1,
+            "box": [
+              509.32,
+              304.76,
+              538.72,
+              311.62
+            ]
+          }
+        }
+      ],
+      "totals": {
+        "net": {
+          "value": "58321",
+          "text": "583,21 €",
+          "page": 1,
+          "box": [
+            499.89,
+            327.02,
+            538.65,
+            334.74
+          ]
+        },
+        "vat": {
+          "value": "4082",
+          "text": "40,82 €",
+          "page": 1,
+          "box": [
+            505.36,
+            341.02,
+            538.66,
+            348.74
+          ]
+        },
+        "gross": {
+          "value": "62403",
+          "text": "624,03 €",
+          "page": 1,
+          "box": [
+            495.71,
+            355.02,
+            538.63,
+            362.97
+          ]
+        }
+      }
+    }
+  }
+]
