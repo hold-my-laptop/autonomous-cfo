@@ -707,7 +707,7 @@ Response: `{ document_id, status: "OK" | "FAILED", errors[], pages[{ page, width
 | Field | Type | Description |
 |---|---|---|
 | `cost_item` | **CostItem**? | What Cost Memory expects for `finding.cost_ref` (e.g. `RENT`: `expected_amount "380000"`, its sources). Values from here and from the finding count as sources for `compute` inputs (P11) |
-| `hypotheses` | string[] | The order the scripted fallback follows: `NOTICE`, `CLAUSE`, `REFERENCE_OR_PRICE_LIST`, `QUANTITY`. The agent may choose its own |
+| `hypotheses` | string[] | The order the scripted fallback follows, as plain sentences for the prompt (`proof_runs.HYPOTHESES`): a notice announcing the change; a clause that allows the amount to change (not the one stating the current amount); the index or price list it names, then `compute`; a change in quantity. The agent may choose its own |
 
 Email and document text in tool results is untrusted data: the investigation prompt must say so, and nothing in it can set a label.
 

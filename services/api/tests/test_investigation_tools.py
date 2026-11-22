@@ -166,6 +166,7 @@ def test_hero_sequence(client: TestClient) -> None:
         ),
         ("TOOL_RESULT", "Found 2 emails"),
         ("TOOL_CALL", "Reading §4.2 of the lease with Main Street Real Estate GmbH"),
+        ("TOOL_RESULT", "Found §4.2 Wertsicherung, page 1"),
         ("TOOL_CALL", "Looking up the consumer price index for Jan 2024 and Mar 2025"),
         ("TOOL_RESULT", "117.6 in Jan 2024; 121.2 in Mar 2025 (demo values)"),
         ("TOOL_CALL", "Computing what the index clause allows"),
@@ -321,6 +322,27 @@ def test_read_clause_matches_section_spellings_and_lists_sections(client: TestCl
     assert missing["error"]["message"] == (
         "no section '§9' in lease_main_street_2021; sections: §1, §2, §4.1, §4.2, §4.3, "
         "Nachtrag Nr. 1"
+    )
+
+
+def test_read_clause_on_a_notice_points_to_the_documents_with_sections(
+    client: TestClient,
+) -> None:
+    run_id = make_run(client, RunKind.PROOF)
+
+    notice = call(
+        client,
+        run_id,
+        "read_clause",
+        {"doc_id": "ntc_main_street_2025_04", "section": "Erhöhung der Miete um 8 %"},
+    )
+
+    assert notice["ok"] is False
+    assert notice["error"]["code"] == "INVALID_ARGUMENT"
+    assert notice["error"]["message"] == (
+        "ntc_main_street_2025_04 is a notice without sections: its full text was in the search "
+        "result, so do not read it again; documents from Main Street Real Estate GmbH with "
+        "sections: lease_main_street_2021 (§1, §2, §4.1, §4.2, §4.3, Nachtrag Nr. 1)"
     )
 
 

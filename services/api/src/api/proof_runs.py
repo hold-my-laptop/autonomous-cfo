@@ -57,7 +57,16 @@ REASON_INVALID = "INVALID_ANSWER"
 REASON_RESTARTED = "SERVICE_RESTARTED"
 REASON_DATA_CHANGED = "DATA_CHANGED"
 REASON_INCONCLUSIVE = "AGENT_INCONCLUSIVE"
-HYPOTHESES = ("NOTICE", "CLAUSE", "REFERENCE_OR_PRICE_LIST", "QUANTITY")
+HYPOTHESES = (
+    "A letter or notice from the counterparty announcing the change: search_inbox returns its "
+    "full text",
+    "A contract clause that allows the amount to change (an index, adjustment or surcharge "
+    "clause), not the clause that states the current amount: search_documents lists the "
+    "sections of leases, contracts and terms, read_clause reads one",
+    "The reference index or price list that clause names, for its base period and the latest "
+    "value up to today, then compute with the clause's parameters",
+    "A change in quantity rather than price",
+)
 _REASON_LABELS = {
     REASON_DISABLED: "Reading with the model is off",
     REASON_UNREACHABLE: "The AI service is unavailable",

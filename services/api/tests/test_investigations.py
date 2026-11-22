@@ -10,7 +10,7 @@ from test_document_upload import FakeAI, upload
 from api.agent import AgentUnavailableError
 from api.config import Settings, get_settings
 from api.main import create_app
-from api.proof_runs import accept_upload
+from api.proof_runs import HYPOTHESES, accept_upload
 
 TOKEN = "test-internal-token"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
@@ -167,12 +167,8 @@ def test_agent_path() -> None:
         investigation = payload["investigation"]
         assert investigation["cost_item"]["cost_ref"] == "RENT"
         assert investigation["cost_item"]["expected_amount"] == "380000"
-        assert investigation["hypotheses"] == [
-            "NOTICE",
-            "CLAUSE",
-            "REFERENCE_OR_PRICE_LIST",
-            "QUANTITY",
-        ]
+        assert investigation["hypotheses"] == list(HYPOTHESES)
+        assert investigation["hypotheses"][1].startswith("A contract clause that allows")
 
         tools = client.get(f"/internal/v1/tools?run_id={run_id}", headers=AUTH).json()
         assert tools[0]["name"] == "search_inbox"

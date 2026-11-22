@@ -147,6 +147,27 @@ def test_an_index_no_tool_returned_is_rejected() -> None:
     assert_vero_steps_in(done, result, steps)
 
 
+def test_the_current_index_must_be_the_latest_month() -> None:
+    """Live runs: the agent asked for May 2025, got no value, and computed with Jan 2024's."""
+    done, result, steps = investigate(ANSWER, with_inputs(current_index=1176))
+
+    assert rejected(steps) == (
+        "current_index 1176 is not the DESTATIS_VPI value for 2025-03, the latest published "
+        "up to 05 May 2025"
+    )
+    assert_vero_steps_in(done, result, steps)
+    assert result["investigation"]["inputs"]["current_index"] == 1212
+
+
+def test_the_base_index_must_be_the_clauses_base_period() -> None:
+    done, result, steps = investigate(ANSWER, with_inputs(base_index=1212))
+
+    assert rejected(steps) == (
+        "base_index 1212 is not the DESTATIS_VPI value for 2024-01, the clause's base period"
+    )
+    assert_vero_steps_in(done, result, steps)
+
+
 def test_the_billed_rent_is_not_a_base_amount() -> None:
     done, result, steps = investigate(ANSWER, with_inputs(base_amount="410400"))
 
