@@ -90,6 +90,7 @@ def test_fallback_steps_are_backend_steps_in_hypothesis_order() -> None:
         "Found 4 emails",
         "H2 · A contract clause that allows it",
         "Reading §4.2 of the lease with Main Street Real Estate GmbH",
+        "Found §4.2 Wertsicherung, page 1",
         "H3 · The reference index then and now",
         "Looking up the consumer price index for Jan 2024 and Mar 2025",
         "117.6 in Jan 2024; 121.2 in Mar 2025 (demo values)",

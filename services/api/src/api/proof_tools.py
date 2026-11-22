@@ -378,6 +378,7 @@ def _read_clause(state: DemoState, run, args: ReadClauseArgs, settings) -> ToolO
         },
         f"Reading {clause.section} of the {_PLURALS[document.type][:-1]} with "
         f"{_name(state, document.counterparty_id)}",
+        f"Found {clause.section} {clause.title}, page {clause.page}",
     )
 
 

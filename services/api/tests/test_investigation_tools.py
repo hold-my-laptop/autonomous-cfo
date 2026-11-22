@@ -166,6 +166,7 @@ def test_hero_sequence(client: TestClient) -> None:
         ),
         ("TOOL_RESULT", "Found 2 emails"),
         ("TOOL_CALL", "Reading §4.2 of the lease with Main Street Real Estate GmbH"),
+        ("TOOL_RESULT", "Found §4.2 Wertsicherung, page 1"),
         ("TOOL_CALL", "Looking up the consumer price index for Jan 2024 and Mar 2025"),
         ("TOOL_RESULT", "117.6 in Jan 2024; 121.2 in Mar 2025 (demo values)"),
         ("TOOL_CALL", "Computing what the index clause allows"),
