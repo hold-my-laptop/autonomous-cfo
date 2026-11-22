@@ -242,7 +242,10 @@ async def _loop(start: AgentRunStart, llm: LLM, backend: Backend, settings: Sett
                             "tool_calls": [{"name": tc.name, "arguments": tc.arguments} for tc in reply.tool_calls]})
             sp.set_attributes({"model": model, "tool_calls_used": used})
 
+        spent = used >= max_calls
         if not reply.tool_calls:
+            if spent:
+                raise AgentFailed("TOOL_LIMIT_REACHED", "no submit_finding after the last tool call")
             corrections += 1
             if corrections > MAX_CORRECTIONS:
                 raise AgentFailed("NO_FINAL_ANSWER", (reply.content or "")[:200])
@@ -268,6 +271,8 @@ async def _loop(start: AgentRunStart, llm: LLM, backend: Backend, settings: Sett
                     return InvestigationCompletion(**answer, model=model,
                                                    prompt_version=INVESTIGATION_PROMPT_VERSION,
                                                    tool_calls=used)
+                if spent:
+                    raise AgentFailed("TOOL_LIMIT_REACHED", problem)
                 corrections += 1
                 if corrections > MAX_CORRECTIONS:
                     raise AgentFailed("INVALID_TOOL_CALLS", problem)
@@ -284,9 +289,7 @@ async def _loop(start: AgentRunStart, llm: LLM, backend: Backend, settings: Sett
                 continue
 
             if used >= max_calls:
-                _tool_msg(messages, tc.id, {"ok": False, "error": {
-                    "code": "TOOL_LIMIT_REACHED", "message": "No tool calls left. Call submit_finding now."}})
-                continue
+                raise AgentFailed("TOOL_LIMIT_REACHED", f"{tc.name} called after the last tool call")
 
             with tracing.span(f"tool:{tc.name}", "TOOL", args) as sp:
                 result = await backend.call_tool(tc.name, run_id, args, call_id=tc.id)
