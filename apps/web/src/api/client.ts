@@ -9,12 +9,12 @@ import type {
   Decision,
   DecisionAction,
   DemoScenario,
-  DigestRow,
+  Digest,
+  DocumentRun,
   Finding,
   Forecast,
   KnownDocument,
   Policy,
-  RecommendedAction,
   SourceDoc,
 } from "./types";
 import type {
@@ -22,14 +22,17 @@ import type {
   BeCompany,
   BeCostItem,
   BeDecisionResult,
+  BeDigest,
   BeDocument,
   BeDocumentSummary,
   BeFinding,
   BeForecast,
   BeMandate,
   BeOverview,
+  BeRecommendation,
   BeRun,
   BeRunAccepted,
+  BeUploadAccepted,
 } from "./backend";
 import {
   toAuditEntry,
@@ -39,6 +42,9 @@ import {
   toCostMemoryRow,
   toDecision,
   toDecisions,
+  toDigest,
+  toDocumentRun,
+  toFinding,
   toForecast,
   toKnownDocument,
   toPolicy,
@@ -51,14 +57,17 @@ const mock = () => import("./mock");
 export const API_URL: string = import.meta.env.VITE_API_URL ?? "/api/v1";
 export const USE_MOCK = import.meta.env.VITE_MOCK === "1";
 
-/** An error from the backend, with the HTTP status and the problem-details text when there is one. */
+/** An error from the backend, with the HTTP status, the problem-details text and its code when there is one. */
 export class ApiError extends Error {
   readonly status: number;
   readonly path: string;
-  constructor(status: number, path: string, message: string) {
+  /** e.g. RUN_IN_PROGRESS, DOCUMENT_ALREADY_PROCESSED, FILE_TOO_LARGE */
+  readonly code?: string;
+  constructor(status: number, path: string, message: string, code?: string) {
     super(message);
     this.status = status;
     this.path = path;
+    this.code = code;
   }
 }
 
@@ -67,22 +76,18 @@ async function http<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     let detail = text;
+    let code: string | undefined;
     try {
-      const body = JSON.parse(text) as { detail?: unknown; title?: unknown };
+      const body = JSON.parse(text) as { detail?: unknown; title?: unknown; code?: unknown };
       if (typeof body.detail === "string") detail = body.detail;
       else if (typeof body.title === "string") detail = body.title;
+      if (typeof body.code === "string") code = body.code;
     } catch {
       // not JSON: keep the raw text
     }
-    throw new ApiError(res.status, path, `${res.status} ${path} ${detail}`.trim());
+    throw new ApiError(res.status, path, `${res.status} ${path} ${detail}`.trim(), code);
   }
   return res.json() as Promise<T>;
-}
-
-function upload<T>(path: string, file: File): Promise<T> {
-  const body = new FormData();
-  body.append("file", file);
-  return http<T>(path, { method: "POST", body });
 }
 
 const postJson = <T>(path: string, data: unknown) =>
@@ -138,6 +143,37 @@ const live = {
     return { ok: true };
   },
   latestRun: async (): Promise<BeRun | null> => (await http<BeRun[]>("/runs?limit=1"))[0] ?? null,
+
+  /** Findings with their recommendations, and for an upload its run's trace ("How Vero found out"). */
+  findings: async (): Promise<Finding[]> => {
+    const [findings, recs] = await Promise.all([http<BeFinding[]>("/findings"), http<BeRecommendation[]>("/recommendations")]);
+    const byId = new Map(recs.map((r) => [r.id, r]));
+    const runIds = [...new Set(findings.filter((f) => !f.quiet && f.run_id).map((f) => f.run_id!))];
+    const runs = new Map(
+      await Promise.all(runIds.map(async (id) => [id, await http<BeRun>(`/runs/${id}`).catch(() => null)] as const)),
+    );
+    return findings.map((f) => toFinding(f, byId, f.run_id ? runs.get(f.run_id) : null));
+  },
+  digest: async (): Promise<Digest> => {
+    const [digest, findings] = await Promise.all([http<BeDigest>("/digest"), http<BeFinding[]>("/findings")]);
+    return toDigest(digest, findings);
+  },
+  /** POST /documents: a PDF of at most 5 MB, answered 202; the check runs in GET /runs/{run_id}. */
+  uploadDocument: async (file: File): Promise<DocumentRun> => {
+    const body = new FormData();
+    body.append("file", file);
+    const r = await http<BeUploadAccepted>("/documents", { method: "POST", headers: { "Idempotency-Key": uuid() }, body });
+    return { ...r, steps: [], finding_ids: [], checked: false };
+  },
+  documentRun: async (runId: string): Promise<DocumentRun> => toDocumentRun(await http<BeRun>(`/runs/${encodeURIComponent(runId)}`)),
+  /** Each of a finding's actions is a recommendation; the finding is RESOLVED once all are decided. */
+  decideFinding: async (approve: string[], reject: string[]): Promise<void> => {
+    for (const id of approve) await command(`/recommendations/${encodeURIComponent(id)}/approve`);
+    for (const id of reject) await command(`/recommendations/${encodeURIComponent(id)}/reject`);
+  },
+  acknowledgeFinding: async (id: string): Promise<void> => {
+    await command(`/findings/${encodeURIComponent(id)}/acknowledge`);
+  },
 };
 
 const mockChatAnswer: ChatResponse = {
@@ -167,14 +203,12 @@ export const api = {
   act: (id: string, action: DecisionAction): Promise<Decision> =>
     USE_MOCK ? mock().then((m) => m.actOnDecision(id, action)) : live.act(id, action),
 
-  // Not in the backend yet (see docs/BACKEND.md Phase 2).
+  /** Mock only: test a customer or supplier contract on the forecast (the backend checks bills, not contracts). */
   uploadContract: (file: File): Promise<ContractCheckResult> =>
-    USE_MOCK ? mock().then((m) => m.uploadContract(file)) : upload("/contracts", file),
+    USE_MOCK ? mock().then((m) => m.uploadContract(file)) : Promise.reject(new Error("Contract simulation only exists in mock mode.")),
 
-  // Vero: cost check. Documents arrive by themselves (bank feed, e-mail, upload); no upload here.
-  // Live: cost memory and documents are real; findings (P07), digest (P15) and upload (P08) are coming,
-  // until then those calls fail and the page shows its error/empty states.
-  findings: (): Promise<Finding[]> => (USE_MOCK ? mock().then((m) => m.getFindings()) : http("/findings")),
+  // Vero: cost check. Bills reach it by themselves (bank feed, e-mail) or by upload.
+  findings: (): Promise<Finding[]> => (USE_MOCK ? mock().then((m) => m.getFindings()) : live.findings()),
   /** Checked cost changes, summarised for the Overview (real GET /findings, or the mock's findings). */
   costChecks: async (): Promise<CostCheck[]> =>
     USE_MOCK
@@ -184,11 +218,18 @@ export const api = {
     USE_MOCK ? mock().then((m) => m.getCostMemory()) : (await http<BeCostItem[]>("/cost-memory")).map(toCostMemoryRow),
   costDocuments: async (): Promise<KnownDocument[]> =>
     USE_MOCK ? mock().then((m) => m.getCostDocuments()) : (await http<BeDocumentSummary[]>("/documents")).map(toKnownDocument),
-  digest: (): Promise<DigestRow[]> => (USE_MOCK ? mock().then((m) => m.getDigest()) : http("/digest")),
+  digest: (): Promise<Digest> => (USE_MOCK ? mock().then((m) => m.getDigest()) : live.digest()),
   document: async (docId: string): Promise<SourceDoc> =>
     USE_MOCK ? mock().then((m) => m.getDocument(docId)) : toSourceDoc(await http<BeDocument>(`/documents/${encodeURIComponent(docId)}`)),
-  approveFinding: (findingId: string, actions: RecommendedAction["type"][]): Promise<Finding> =>
-    USE_MOCK ? mock().then((m) => m.approveFinding(findingId, actions)) : postJson(`/costs/findings/${findingId}/approve`, { actions }),
+  /** Upload a bill or notice. Only bills are checked: the rent adjustment and invoices. */
+  uploadDocument: (file: File): Promise<DocumentRun> => (USE_MOCK ? mock().then((m) => m.uploadDocument(file)) : live.uploadDocument(file)),
+  documentRun: (runId: string): Promise<DocumentRun> => (USE_MOCK ? mock().then((m) => m.getDocumentRun(runId)) : live.documentRun(runId)),
+  /** Approve some of a finding's prepared actions and decline the rest. */
+  decideFinding: (findingId: string, approve: string[], reject: string[]): Promise<void> =>
+    USE_MOCK ? mock().then((m) => m.decideFinding(findingId, approve, reject)) : live.decideFinding(approve, reject),
+  /** A change Vero handled quietly: one tap clears it from the digest. */
+  acknowledgeFinding: (findingId: string): Promise<void> =>
+    USE_MOCK ? mock().then((m) => m.acknowledgeFinding(findingId)) : live.acknowledgeFinding(findingId),
 
   demo: (scenario: DemoScenario): Promise<{ ok: true }> =>
     USE_MOCK ? mock().then((m) => m.runDemo(scenario)) : live.demo(scenario),

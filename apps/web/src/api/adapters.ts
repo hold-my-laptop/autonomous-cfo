@@ -2,9 +2,14 @@
  * Real backend (backend.ts) → UI types (types.ts). The screens only ever see the UI types,
  * so mock mode and live mode render through the same components.
  */
-import { formatDate, formatEurWhole } from "../lib/format";
+import { clauseName, indexRentVerdict, paymentPropagation, searchedSteps, traceSteps } from "../features/vero/story";
+import { formatDate, formatEur, formatEurWhole } from "../lib/format";
 import type {
   BeAuditEntry,
+  BeClassification,
+  BeDigest,
+  BeEvidenceRef,
+  BeRun,
   BeCategory,
   BeCompany,
   BeCostItem,
@@ -26,9 +31,15 @@ import type {
   AuditEntry,
   AutonomyLevel,
   Company,
+  Classification,
   CostCheck,
   CostMemoryRow,
+  Digest,
   DocLine,
+  DocumentRun,
+  EvidenceRef,
+  FindingStatus,
+  RecommendedAction,
   KnownDocument,
   SourceDoc,
   Decision,
@@ -153,16 +164,60 @@ function statusOf(r: BeRecommendation): DecisionStatus {
 function headlineOf(r: BeRecommendation): string {
   const done = r.lane === "DONE_WITHIN_MANDATE";
   const s = r.subject;
-  const text =
-    s.kind === "RESCHEDULE_PAYMENT"
-      ? `${done ? "Moved" : "Move"} ${s.counterparty} (${formatEurWhole(eur(s.amount))}) from ${formatDate(s.from_date)} to ${formatDate(s.to_date)}`
-      : `${done ? "Arranged" : "Arrange"} a ${formatEurWhole(eur(s.amount))} short-term credit line from ${formatDate(s.available_from)}`;
+  let text: string;
+  switch (s.kind) {
+    case "RESCHEDULE_PAYMENT":
+      text = `${done ? "Moved" : "Move"} ${s.counterparty} (${formatEurWhole(eur(s.amount))}) from ${formatDate(s.from_date)} to ${formatDate(s.to_date)}`;
+      break;
+    case "CREDIT_LINE":
+      text = `${done ? "Arranged" : "Arrange"} a ${formatEurWhole(eur(s.amount))} short-term credit line from ${formatDate(s.available_from)}`;
+      break;
+    case "KEEP_PAYMENT":
+      text = `Keep paying ${s.counterparty} ${formatEur(eur(s.amount))}, not the ${formatEur(eur(s.billed_amount))} billed`;
+      break;
+    case "UPDATE_RECURRING_AMOUNT":
+      text = `Pay ${s.counterparty} ${formatEur(eur(s.to_amount))} instead of ${formatEur(eur(s.from_amount))} from ${formatDate(s.effective_from)}`;
+      break;
+    case "SEND_LETTER":
+      text = `${done ? "Sent" : "Send"} a letter to ${s.counterparty} asking for the basis of the change`;
+      break;
+  }
   return r.lane === "NOT_ALLOWED" ? `Not allowed by your rules: ${text[0].toLowerCase()}${text.slice(1)}` : text;
 }
+
+/** The euro amount a recommendation is about (letters have none). */
+function amountOf(s: BeRecommendation["subject"]): number | undefined {
+  switch (s.kind) {
+    case "UPDATE_RECURRING_AMOUNT":
+      return eur(s.to_amount);
+    case "SEND_LETTER":
+      return undefined;
+    default:
+      return eur(s.amount);
+  }
+}
+
+const labels: Record<BeRecommendation["kind"], { approve: string; approved: string }> = {
+  RESCHEDULE_PAYMENT: { approve: "Move payment", approved: "Payment moved (simulated)." },
+  CREDIT_LINE: { approve: "Request credit line", approved: "Credit line requested (simulated)." },
+  KEEP_PAYMENT: { approve: "Keep the amount", approved: "Payment amount kept (simulated)." },
+  UPDATE_RECURRING_AMOUNT: { approve: "Change the amount", approved: "Payment amount changed (simulated)." },
+  SEND_LETTER: { approve: "Send the letter", approved: "Letter sent (simulated). Nothing left the app." },
+};
 
 const arrow = (a: string, b: string) => (a === b ? a : `${a} → ${b}`);
 
 function factsOf(r: BeRecommendation): Fact[] {
+  const s = r.subject;
+  if (s.kind === "KEEP_PAYMENT" || s.kind === "SEND_LETTER") {
+    const facts: Fact[] = [];
+    if (s.kind === "KEEP_PAYMENT") {
+      facts.push({ label: "Billed", value: formatEur(eur(s.billed_amount)), tone: "bad" });
+      facts.push({ label: "Contract allows", value: formatEur(eur(s.amount)), tone: "good" });
+    }
+    if (r.reason.disputed) facts.push({ label: "Disputed a month", value: formatEur(eur(r.reason.disputed)), tone: "bad" });
+    return facts;
+  }
   const { before, after_if_executed: after } = r.impact;
   const facts: Fact[] = [
     {
@@ -229,23 +284,25 @@ function reasoningOf(r: BeRecommendation): ReasoningStep[] {
   return steps;
 }
 
+const PROOF_KINDS = new Set<BeRecommendation["kind"]>(["KEEP_PAYMENT", "UPDATE_RECURRING_AMOUNT", "SEND_LETTER"]);
+
 export function toDecision(r: BeRecommendation): Decision {
-  const credit = r.subject.kind === "CREDIT_LINE";
+  const label = labels[r.kind] ?? labels.RESCHEDULE_PAYMENT;
   return {
     id: r.id,
-    agent: "liquidity",
+    agent: PROOF_KINDS.has(r.kind) ? "costs" : "liquidity",
     autonomy: autonomy[r.lane],
     execution: "simulated",
     status: statusOf(r),
     createdAt: r.created_at,
     headline: headlineOf(r),
     summary: r.explanation.text,
-    amountEur: eur(r.subject.amount),
+    amountEur: amountOf(r.subject),
     facts: factsOf(r),
     reasoning: reasoningOf(r),
-    approveLabel: credit ? "Request credit line" : "Move payment",
+    approveLabel: label.approve,
     rejectLabel: "Not now",
-    approvedMessage: credit ? "Credit line requested (simulated)." : "Payment moved (simulated).",
+    approvedMessage: label.approved,
     rejectedMessage: "OK. Nothing changes.",
     resolvedAt: r.decided_at ?? r.executed?.executed_at ?? undefined,
     resolvedBy: r.executed ? (r.executed.executed_by === "VERO" ? "agent" : "owner") : r.decided_at ? "owner" : undefined,
@@ -346,7 +403,7 @@ export function toSourceDoc(d: BeDocument): SourceDoc {
     parts.push({
       page: c.page,
       y: c.box?.[1] ?? Number.MAX_SAFE_INTEGER,
-      line: { text: `${c.section} ${c.title}: ${c.text}`, en: gloss(c.text, c.text_en) },
+      line: { id: c.id, text: `${c.section} ${c.title}: ${c.text}`, en: gloss(c.text, c.text_en) },
     });
   }
   for (const l of d.lines) {
@@ -465,32 +522,325 @@ export function toCostCheck(f: BeFinding): CostCheck {
     title: f.title,
     counterparty: f.counterparty,
     outcome,
-    needsOwner: outcome !== "matches" || f.escalated || f.status === "PENDING_APPROVAL",
+    // In the digest and not quiet: waiting for a decision or for evidence (decided or acknowledged ones leave it).
+    needsOwner: f.in_digest && !f.quiet,
     deltaEur: f.impact?.delta != null ? eur(f.impact.delta) : undefined,
     evidence: [...new Set(f.differences.flatMap((d) => d.evidence.map((e) => evidenceWord[e.kind])).filter(Boolean))],
   };
 }
 
-const mockEvidence: Record<string, string> = {
+const mockEvidence: Record<EvidenceRef["type"], string> = {
   statement: "your bank statement",
   notice: "the notice",
   lease: "your lease",
   contract: "your contract",
   invoice: "the invoice",
+  price_list: "your price list",
+  email: "your emails",
   reference: "official reference values",
+  cost_memory: "your usual costs",
 };
 
-/** The mock's (richer) finding, reduced the same way. */
+/** The mock's finding, reduced the same way. */
 export function mockToCostCheck(f: Finding): CostCheck {
   const outcome: CostCheck["outcome"] =
     f.classification === "verified" ? "matches" : f.classification === "conflict" ? "conflict" : "needs_evidence";
   return {
     id: f.finding_id,
-    title: `${f.vendor}: ${f.line_item.description}`,
+    title: `${f.vendor}: ${f.title}`,
     counterparty: f.vendor,
     outcome,
-    needsOwner: f.status !== "resolved" && (outcome !== "matches" || f.status === "pending_approval" || !!f.evidence_request),
+    needsOwner: !f.quiet && !f.acknowledged && f.status !== "resolved",
     deltaEur: f.line_item.current_value - f.line_item.previous_value,
     evidence: [...new Set(f.evidence_refs.map((e) => mockEvidence[e.type]).filter(Boolean))],
+  };
+}
+
+// ───────────────────────── Vero Proof: findings, digest, uploads ─────────────────────────
+
+const classOf = (c: BeClassification, escalated = false): Classification =>
+  c === "VERIFIED" ? "verified" : c === "CONFLICT" ? "conflict" : escalated ? "escalated" : "unexplained";
+
+const docType = (id: string): EvidenceRef["type"] =>
+  id.startsWith("lease_")
+    ? "lease"
+    : id.startsWith("inv_")
+      ? "invoice"
+      : id.startsWith("pl_")
+        ? "price_list"
+        : id.startsWith("ctr_") || id.startsWith("terms_")
+          ? "contract"
+          : "notice";
+
+const docLabel: Record<EvidenceRef["type"], string> = {
+  lease: "Lease",
+  invoice: "Invoice",
+  price_list: "Price list",
+  contract: "Contract",
+  notice: "Letter",
+  statement: "Bank statement",
+  email: "Email",
+  reference: "Reference values (demo)",
+  cost_memory: "Cost Memory",
+};
+
+/** Evidence refs → one entry per document (a cited clause wins over the whole document), then the rest. */
+function evidenceOf(refs: BeEvidenceRef[]): EvidenceRef[] {
+  const byDoc = new Map<string, EvidenceRef>();
+  const other: EvidenceRef[] = [];
+  for (const r of refs) {
+    if (r.document_id) {
+      const type = docType(r.document_id);
+      const clause = r.kind === "CLAUSE" ? clauseName(r.item_id) : "";
+      const prev = byDoc.get(r.document_id);
+      if (!prev || (clause && !prev.item_id)) {
+        byDoc.set(r.document_id, {
+          type,
+          doc_id: r.document_id,
+          item_id: r.kind === "CLAUSE" ? (r.item_id ?? undefined) : undefined,
+          label: clause ? `${docLabel[type]} ${clause}` : docLabel[type],
+          ref: r.ref ?? undefined,
+        });
+      }
+    } else if (r.kind === "EMAIL" || r.kind === "REFERENCE_VALUE") {
+      const type = r.kind === "EMAIL" ? "email" : "reference";
+      other.push({ type, doc_id: null, label: docLabel[type], ref: r.ref ?? undefined });
+    } else if (r.kind === "COST_ITEM") {
+      other.push({ type: "cost_memory", doc_id: null, label: `Cost Memory: ${costLabel[r.cost_ref ?? ""] ?? r.cost_ref}`, ref: r.cost_ref ?? undefined });
+    } else if (r.kind === "TRANSACTION") {
+      other.push({ type: "statement", doc_id: null, label: "Bank statement", ref: r.transaction_id ?? undefined });
+    }
+  }
+  return [...byDoc.values(), ...other];
+}
+
+const actionStatus = (s: BeRecommendation["status"]): RecommendedAction["status"] =>
+  s === "PENDING" ? "pending" : s === "APPROVED_EXECUTED" || s === "EXECUTED" ? "approved" : s === "REJECTED" ? "rejected" : "other";
+
+/** A Proof recommendation as one of a finding's prepared actions. */
+function toAction(r: BeRecommendation): RecommendedAction | null {
+  const s = r.subject;
+  const base = { id: r.id, status: actionStatus(r.status), execution: "simulated" as const, detail: r.explanation.text };
+  switch (s.kind) {
+    case "KEEP_PAYMENT":
+      return {
+        ...base,
+        kind: "keep_payment",
+        title: `Keep paying ${formatEur(eur(s.amount))}${s.effective_from ? ` from ${formatDate(s.effective_from)}` : ""}, not ${formatEur(eur(s.billed_amount))}`,
+      };
+    case "UPDATE_RECURRING_AMOUNT":
+      return {
+        ...base,
+        kind: "update_amount",
+        title: `Pay ${formatEur(eur(s.to_amount))} instead of ${formatEur(eur(s.from_amount))} from ${formatDate(s.effective_from)}`,
+      };
+    case "SEND_LETTER":
+      return {
+        ...base,
+        kind: "send_letter",
+        title: `Send a letter to ${s.counterparty}, in German`,
+        draft: { kind: "counter_proposal", to: s.counterparty, subject: s.letter_subject, body: s.draft, language: "de", source: s.draft_source },
+      };
+    default:
+      return null;
+  }
+}
+
+const findingStatus = (s: BeFinding["status"]) => s.toLowerCase() as FindingStatus;
+const num = (v: unknown) => Number(v);
+
+/** The verdict: index rent (lease §4.2) in its own words, any other formula as billed / allowed / disputed. */
+function verdictOf(f: BeFinding, expected: number, billed: number, effective: string): Finding["verdict"] {
+  const inv = f.investigation;
+  const prop = f.propagation;
+  if (!inv || inv.justified === null) return undefined;
+  const justified = eur(inv.justified);
+  const disputed = inv.disputed !== null ? eur(inv.disputed) : 0;
+  const bill = inv.billed !== null ? eur(inv.billed) : billed;
+  if (inv.formula_id === "vpi_threshold_indexation" && inv.inputs && inv.outputs) {
+    return indexRentVerdict({
+      clause: clauseName(f.evidence_refs.find((r) => r.kind === "CLAUSE")?.item_id) || "the index clause",
+      baseIndex: num(inv.inputs.base_index) / 10,
+      currentIndex: num(inv.inputs.current_index) / 10,
+      thresholdBps: num(inv.inputs.threshold_bps),
+      changeBps: num(inv.outputs.change_bps),
+      allowed: inv.outputs.adjustment_allowed === true,
+      current: inv.inputs.base_amount !== undefined ? eur(String(inv.inputs.base_amount)) : expected,
+      billed: bill,
+      justified,
+      disputed,
+      disputedAnnual: prop?.disputed_annual ? eur(prop.disputed_annual) : disputed * 12,
+      disputedInWindow: prop?.disputed_in_window ? eur(prop.disputed_in_window) : undefined,
+      payments: prop?.forecast?.payments ?? [],
+      effectiveFrom: effective,
+      sourceDoc: f.document_id,
+    });
+  }
+  return {
+    title:
+      disputed > 0
+        ? `${f.counterparty} bills ${formatEur(bill)}. The evidence allows ${formatEur(justified)}.`
+        : `The evidence allows the ${formatEur(bill)} billed.`,
+    detail: f.history.at(-1)?.label ?? "",
+    cells: [
+      { k: "Billed", v: formatEur(bill), calc: f.document_id ?? "the bill" },
+      { k: "Allowed", v: formatEur(justified), calc: inv.formula_id ?? "the evidence", tone: "good" },
+      { k: "Disputed", v: formatEur(disputed), calc: `${formatEur(bill)} − ${formatEur(justified)}`, tone: disputed > 0 ? "bad" : undefined },
+    ],
+  };
+}
+
+/**
+ * A real Proof finding for the cost check page. `recs` are its recommendations (GET /recommendations),
+ * `run` the upload's run (GET /runs/{run_id}) for "How Vero found out"; the preloaded findings have
+ * no run, so their investigation's `searched` list stands in.
+ */
+export function toFinding(f: BeFinding, recs: Map<string, BeRecommendation>, run?: BeRun | null): Finding {
+  const inv = f.investigation;
+  const prop = f.propagation;
+  const recurring = f.kind === "RECURRING_AMOUNT";
+  const label = costLabel[f.cost_ref] ?? f.counterparty;
+  const expected = f.impact.expected !== null ? eur(f.impact.expected) : 0;
+  const billed = f.impact.billed !== null ? eur(f.impact.billed) : expected + eur(f.impact.delta);
+  const effective = prop?.effective_from ?? f.period_from ?? f.created_at.slice(0, 10);
+  const labelled = f.history.filter((h) => h.classification !== null);
+  const history = labelled.map((h) => classOf(h.classification!));
+  if (history.length) history[history.length - 1] = classOf(f.classification, f.escalated);
+
+  const actions = f.recommendation_ids.flatMap((id) => {
+    const r = recs.get(id);
+    const a = r ? toAction(r) : null;
+    return a ? [a] : [];
+  });
+  const needsEvidence = f.classification === "UNEXPLAINED" && !f.quiet && (f.status === "CLASSIFIED" || f.status === "PENDING_APPROVAL");
+
+  return {
+    finding_id: f.id,
+    status: findingStatus(f.status),
+    classification: classOf(f.classification, f.escalated),
+    classification_history: history,
+    vendor: f.counterparty,
+    title: recurring && f.differences.length === 1 ? f.differences[0].description : f.title,
+    source_doc_id: f.document_id,
+    line_item: {
+      description: recurring ? (f.differences[0]?.description.replace(/ from .*$/, "") ?? label) : "Invoice total",
+      previous_value: expected,
+      current_value: billed,
+      currency: "EUR",
+      unit: recurring ? "month" : "invoice",
+      effective_from: effective,
+      monthly_variance: eur(f.impact.delta),
+      variance_pct: (f.impact.bps ?? 0) / 100,
+    },
+    investigation_trace: run?.trace?.length ? traceSteps(run.trace) : searchedSteps(inv?.searched ?? []),
+    reason: (labelled.at(-1) ?? f.history.at(-1))?.label ?? "",
+    verdict: verdictOf(f, expected, billed, effective),
+    financial_impact:
+      inv && inv.justified !== null
+        ? {
+            justified_value: eur(inv.justified),
+            disputed_amount_monthly: inv.disputed !== null ? eur(inv.disputed) : 0,
+            disputed_amount_annual: prop?.disputed_annual ? eur(prop.disputed_annual) : 0,
+            disputed_in_window: prop?.disputed_in_window ? eur(prop.disputed_in_window) : undefined,
+          }
+        : undefined,
+    evidence_refs: evidenceOf(f.evidence_refs),
+    propagation: prop
+      ? paymentPropagation({
+          decision: prop.decision,
+          label,
+          current: prop.current_amount !== null ? eur(prop.current_amount) : expected,
+          proposed: prop.proposed_amount !== null ? eur(prop.proposed_amount) : expected,
+          billed: prop.billed_amount !== null ? eur(prop.billed_amount) : billed,
+          effectiveFrom: prop.effective_from,
+          payments: prop.forecast?.payments ?? [],
+          outflowDifference: prop.forecast ? eur(prop.forecast.outflow_difference) : 0,
+          lowestBefore: prop.forecast ? eur(prop.forecast.lowest_before) : undefined,
+          lowestAfter: prop.forecast ? eur(prop.forecast.lowest_after) : undefined,
+        })
+      : [],
+    recommended_actions: actions,
+    quiet: f.quiet,
+    acknowledged: f.acknowledged_at !== null,
+    evidence_request: needsEvidence
+      ? {
+          message: f.escalated
+            ? `Vero looked for the reason (${inv?.searched.length ?? 0} look-ups) and found none. Nothing is changed until you send the evidence.`
+            : "Vero hasn't found the reason for this change yet. Nothing is changed until then.",
+          action_label: "Upload a bill or notice",
+          href: "/contract",
+        }
+      : undefined,
+    created_at: f.created_at,
+    resolved_at: f.status === "RESOLVED" ? f.updated_at : undefined,
+  };
+}
+
+const unitPrice = (v: string | null) => (v === null ? "" : formatEur(Number(v)));
+
+/** One difference of a quiet change, as a line under it. */
+function differenceLine(d: BeFinding["differences"][number]): string {
+  switch (d.kind) {
+    case "PRICE_CHANGE":
+      return `${d.description}: ${unitPrice(d.previous_unit_price)} → ${unitPrice(d.unit_price)}`;
+    case "NEW_ITEM":
+      return `${d.description}: new, ${unitPrice(d.unit_price)}`;
+    case "NEW_CHARGE":
+      return `${d.description}: ${formatEur(eur(d.delta))}, new`;
+    default:
+      return `${d.description}: ${d.expected_amount ? formatEur(eur(d.expected_amount)) : "?"} → ${d.billed_amount ? formatEur(eur(d.billed_amount)) : "?"}`;
+  }
+}
+
+const chfFormat = new Intl.NumberFormat("en-GB", { style: "currency", currency: "CHF" });
+
+/** GET /digest, with the differences behind each quiet change from GET /findings. */
+export function toDigest(d: BeDigest, findings: BeFinding[]): Digest {
+  const byId = new Map(findings.map((f) => [f.id, f]));
+  const money = (cents: Cents, currency: string, eurCents: Cents | null) =>
+    currency === "CHF"
+      ? `${chfFormat.format(eur(cents))}${eurCents ? ` (${formatEur(eur(eurCents))})` : ""}`
+      : formatEur(eur(cents));
+  return {
+    counts: d.counts,
+    quiet: d.changes
+      .filter((c) => c.quiet)
+      .map((c) => {
+        const f = byId.get(c.finding_id);
+        return {
+          id: c.finding_id,
+          classification: classOf(c.classification, c.escalated),
+          title: c.title,
+          detail: c.reason,
+          doc_id: f?.document_id ?? null,
+          calc: f?.differences.map(differenceLine),
+        };
+      }),
+    routine: d.routine_checks.map((r) => ({
+      cost_ref: r.cost_ref,
+      counterparty: r.counterparty,
+      date: r.date,
+      paid: money(r.paid, r.currency, r.eur_amount),
+      expected: money(r.expected, r.currency, null),
+      matches: r.matches,
+      doc_id: r.document_id,
+    })),
+  };
+}
+
+/** An upload's run (GET /runs/{id}), for the upload page's progress. */
+export function toDocumentRun(r: BeRun): DocumentRun {
+  const failure = r.status === "FAILED" ? r.trace.filter((t) => t.kind === "FALLBACK").at(-1) : undefined;
+  const colon = failure?.label.indexOf(": ") ?? -1;
+  return {
+    checked: r.trace.some((t) => t.kind === "CHECK"),
+    reason: failure?.data?.reason ?? undefined,
+    detail: failure && colon > 0 ? failure.label.slice(colon + 2) : undefined,
+    document_id: r.document_id ?? "",
+    run_id: r.run_id,
+    status: r.status === "SUCCEEDED" || r.status === "FAILED" ? r.status : "RUNNING",
+    steps: r.trace.map((t) => t.label),
+    headline: r.result?.headline?.text,
+    finding_ids: r.finding_ids ?? [],
   };
 }

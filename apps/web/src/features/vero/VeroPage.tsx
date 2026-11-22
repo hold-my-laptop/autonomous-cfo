@@ -1,12 +1,15 @@
 import { Link, useSearchParams } from "react-router-dom";
-import { ApiError } from "../../api/client";
-import { useCompany, useCostDocuments, useCostMemory, useDigest, useFindings } from "../../api/queries";
+import { useAcknowledgeFinding, useCompany, useCostDocuments, useCostMemory, useDigest, useFindings } from "../../api/queries";
 import type { CostMemoryRow, Finding, KnownDocument } from "../../api/types";
 import { Icon } from "../../components/Icon";
+import { useToast } from "../../components/Toast";
+import { formatDate } from "../../lib/format";
 import { FindingView, isWorking } from "./Investigation";
 import { ClassificationBadge, eur } from "./parts";
 
 const cites = (f: Finding, docId: string) => f.source_doc_id === docId || f.evidence_refs.some((e) => e.doc_id === docId);
+/** Quiet findings belong to "Handled quietly" (until acknowledged), not to the cards. */
+const isCard = (f: Finding) => !f.quiet && !f.acknowledged;
 
 function headline(findings: Finding[]) {
   const open = findings.filter((f) => f.status !== "resolved");
@@ -30,16 +33,14 @@ export function VeroPage() {
   const docs = useCostDocuments();
   const digest = useDigest();
 
-  const all = findings.data ?? [];
+  const all = (findings.data ?? []).filter(isCard);
   const shown = docFilter ? all.filter((f) => cites(f, docFilter)) : all;
-  const needsYou = all.filter((f) => f.status === "pending_approval" || (f.evidence_request && f.status !== "resolved")).length;
   const protectedEur = all
     .filter((f) => f.classification === "conflict")
     .reduce((s, f) => s + (f.financial_impact?.disputed_amount_annual ?? 0), 0);
-  const quiet = digest.data?.length ?? 0;
+  const counts = digest.data?.counts;
+  const needsYou = counts?.needs_owner ?? 0;
   const filterDoc = docs.data?.find((d) => d.doc_id === docFilter);
-  // GET /findings answers 404 until the backend ships it (P07): not an outage.
-  const notBuiltYet = findings.error instanceof ApiError && findings.error.status === 404;
 
   return (
     <div className="space-y-10">
@@ -60,9 +61,13 @@ export function VeroPage() {
 
       <dl className="liquid-glass grid grid-cols-2 rounded-3xl lg:grid-cols-4">
         {[
-          { k: "Changes checked", v: String(quiet + all.length), sub: "This month" },
-          { k: "Handled quietly", v: String(quiet), sub: "Explained by the evidence, no alert" },
-          { k: "Needs you", v: String(needsYou), sub: needsYou ? "See below" : "Nothing waiting", alert: needsYou > 0 },
+          {
+            k: "Changes checked",
+            v: counts ? String(counts.changes) : "–",
+            sub: counts ? `And ${counts.routine_checks} routine ${counts.routine_checks === 1 ? "payment" : "payments"} matched` : "Open changes",
+          },
+          { k: "Handled quietly", v: counts ? String(counts.handled_quietly) : "–", sub: "Explained by the evidence, no alert" },
+          { k: "Needs you", v: counts ? String(needsYou) : "–", sub: needsYou ? "See below" : "Nothing waiting", alert: needsYou > 0 },
           { k: "Protected", v: eur(protectedEur), sub: "Disputed amount, per year" },
         ].map((c, i) => (
           <div
@@ -99,14 +104,9 @@ export function VeroPage() {
           )}
         </div>
 
-        {findings.isError &&
-          (notBuiltYet ? (
-            <p className="liquid-glass-strong rounded-3xl p-5 text-[13px] text-ink-soft">
-              Cost checks aren't available on this backend yet. Your documents and Cost Memory are already loaded.
-            </p>
-          ) : (
-            <p role="alert" className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load the cost checks. Check that the backend is running.</p>
-          ))}
+        {findings.isError && (
+          <p role="alert" className="liquid-glass-strong rounded-3xl p-5 text-short">Couldn't load the cost checks. Check that the backend is running.</p>
+        )}
         {findings.isLoading && <div className="h-40 animate-pulse rounded-3xl bg-sunk" />}
         {findings.data && shown.length === 0 && (
           <div className="liquid-glass flex items-start gap-3 rounded-3xl p-6">
@@ -115,12 +115,12 @@ export function VeroPage() {
             </span>
             <div>
               <p className="text-[15px] font-semibold">
-                {docFilter ? "No cost check cites this document yet." : "No cost changes to check."}
+                {docFilter ? "No open cost check cites this document." : "No cost change needs you."}
               </p>
               <p className="text-[13px] text-ink-soft">
                 {docFilter
                   ? "When a bill or notice from this party arrives, Vero checks it against this document automatically."
-                  : "New bills are checked automatically when they arrive."}
+                  : "New bills are checked automatically when they arrive. Changes the evidence explains are listed under Handled quietly."}
               </p>
             </div>
           </div>
@@ -152,7 +152,7 @@ function KnownDocuments({ docs, highlight }: { docs: KnownDocument[]; highlight:
           <p className="text-[13px] text-ink-soft">Documents every cost is checked against.</p>
         </div>
         <Link to="/contract" className="inline-flex h-8 items-center gap-1 rounded-full px-3 text-xs font-medium text-link hover:bg-sunk">
-          Add a contract or lease <Icon name="chevron" size={12} className="-rotate-90" />
+          Upload a bill or notice <Icon name="chevron" size={12} className="-rotate-90" />
         </Link>
       </div>
       <ul className="flex flex-wrap gap-2">
@@ -186,35 +186,82 @@ function KnownDocuments({ docs, highlight }: { docs: KnownDocument[]; highlight:
   );
 }
 
-/** Quiet, not idle: legitimate changes never alert. */
+/** Quiet, not idle: legitimate changes never alert. One tap acknowledges them. */
 function Digest() {
   const { data } = useDigest();
-  if (!data?.length) return null;
+  const ack = useAcknowledgeFinding();
+  const toast = useToast();
+  if (!data || (!data.quiet.length && !data.routine.length)) return null;
   return (
-    <section aria-labelledby="digest-h">
-      <div className="mb-3">
+    <section aria-labelledby="digest-h" className="space-y-4">
+      <div>
         <h2 id="digest-h" className="text-[20px] font-semibold">Handled quietly</h2>
         <p className="text-[13px] text-ink-soft">Costs that changed, and the evidence that explains them. No action needed.</p>
       </div>
-      <ul className="liquid-glass-strong divide-y divide-line overflow-hidden rounded-3xl">
-        {data.map((r) => (
-          <li key={r.id} className="px-5 py-4 sm:px-6">
-            <div className="flex flex-wrap items-center gap-2">
-              <ClassificationBadge value={r.classification} />
-              <span className="font-mono text-[11px] text-ink-muted">{r.doc_id}</span>
-            </div>
-            <p className="mt-1.5 text-[14px] font-semibold">{r.title}</p>
-            <p className="text-[13px] text-ink-soft">{r.detail}</p>
-            {r.calc && (
-              <ul className="glass-inset mt-2 space-y-0.5 rounded-lg px-3 py-2 font-mono text-[11px] text-ink-soft">
-                {r.calc.map((c) => (
-                  <li key={c} className="whitespace-pre-wrap">{c}</li>
-                ))}
-              </ul>
-            )}
-          </li>
-        ))}
-      </ul>
+      {data.quiet.length > 0 && (
+        <ul className="liquid-glass-strong divide-y divide-line overflow-hidden rounded-3xl">
+          {data.quiet.map((r) => (
+            <li key={r.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <ClassificationBadge value={r.classification} />
+                  {r.doc_id && <span className="font-mono text-[11px] text-ink-muted">{r.doc_id}</span>}
+                </div>
+                <p className="mt-1.5 text-[14px] font-semibold">{r.title}</p>
+                <p className="text-[13px] text-ink-soft">{r.detail}</p>
+                {r.calc && r.calc.length > 0 && (
+                  <ul className="glass-inset mt-2 space-y-0.5 rounded-lg px-3 py-2 font-mono text-[11px] text-ink-soft">
+                    {r.calc.map((c) => (
+                      <li key={c} className="whitespace-pre-wrap">{c}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <button
+                type="button"
+                disabled={ack.isPending && ack.variables === r.id}
+                onClick={async () => {
+                  try {
+                    await ack.mutateAsync(r.id);
+                    toast("Cleared from the digest.");
+                  } catch {
+                    toast("That didn't go through. Try again.", "neutral");
+                  }
+                }}
+                className="liquid-glass-pill h-8 shrink-0 self-start rounded-full px-3 text-xs font-medium text-ink"
+              >
+                {ack.isPending && ack.variables === r.id ? "Clearing…" : "Got it"}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {data.routine.length > 0 && (
+        <div>
+          <h3 className="text-[15px] font-semibold">Routine checks</h3>
+          <p className="text-[13px] text-ink-soft">The latest payment of each fixed cost, compared with its contract.</p>
+          <ul className="liquid-glass mt-2 divide-y divide-line overflow-hidden rounded-3xl">
+            {data.routine.map((c) => (
+              <li key={c.cost_ref} className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-[13px] sm:px-6">
+                <span className="min-w-0">
+                  <span className="font-medium">{c.counterparty}</span>
+                  <span className="text-ink-soft"> · {formatDate(c.date)} · {c.doc_id}</span>
+                </span>
+                <span className="num flex items-center gap-2">
+                  {c.paid}
+                  {c.matches ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-safe-tint px-2 py-0.5 text-[11px] font-semibold text-safe">
+                      <Icon name="check" size={11} /> Matches
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-cream px-2 py-0.5 text-[11px] font-semibold text-ask">Expected {c.expected}</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </section>
   );
 }
