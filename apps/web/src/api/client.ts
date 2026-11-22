@@ -51,15 +51,28 @@ import {
   toSourceDoc,
 } from "./adapters";
 import { verifyBackendChain, verifyMockChain } from "../lib/hashChain";
+import mockSuggestionData from "./mockSuggestions.json";
 /** The in-browser mock backend, loaded only in mock mode (it bundles the sample bank statement). */
 const mock = () => import("./mock");
 
-/** Mock suggestions shown next to the live decisions: the currency and tax agents have no backend yet. */
-const MOCK_SUGGESTIONS = new Set(["liq_chf", "fx_forward", "tax_prepay"]);
-const mockSuggestions = () =>
-  mock()
-    .then((m) => m.getDecisions())
-    .then((ds) => ds.filter((d) => MOCK_SUGGESTIONS.has(d.id)));
+/**
+ * Mock suggestions shown next to the live decisions: the currency and tax agents have no backend yet.
+ * Static copies of the mock's cards, so the live bundle never loads the mock or its bank statement.
+ */
+const mockSuggestionList = mockSuggestionData as unknown as Decision[];
+const MOCK_SUGGESTIONS = new Set(mockSuggestionList.map((d) => d.id));
+const mockSuggestions = async () => mockSuggestionList.map((d) => ({ ...d }));
+const actOnMockSuggestion = async (id: string, action: DecisionAction): Promise<Decision> => {
+  const i = mockSuggestionList.findIndex((d) => d.id === id);
+  const updated: Decision = {
+    ...mockSuggestionList[i],
+    status: action === "approve" ? "approved" : "rejected",
+    resolvedAt: new Date().toISOString(),
+    resolvedBy: "owner",
+  };
+  mockSuggestionList[i] = updated;
+  return { ...updated };
+};
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? "/api/v1";
 export const USE_MOCK = import.meta.env.VITE_MOCK === "1";
@@ -211,7 +224,11 @@ export const api = {
   },
 
   act: (id: string, action: DecisionAction): Promise<Decision> =>
-    USE_MOCK || MOCK_SUGGESTIONS.has(id) ? mock().then((m) => m.actOnDecision(id, action)) : live.act(id, action),
+    USE_MOCK
+      ? mock().then((m) => m.actOnDecision(id, action))
+      : MOCK_SUGGESTIONS.has(id)
+        ? actOnMockSuggestion(id, action)
+        : live.act(id, action),
 
   /** Mock only: test a customer or supplier contract on the forecast (the backend checks bills, not contracts). */
   uploadContract: (file: File): Promise<ContractCheckResult> =>
