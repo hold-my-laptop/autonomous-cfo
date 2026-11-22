@@ -344,6 +344,8 @@ def _section_key(text: str) -> str:
 
 def _read_clause(state: DemoState, run, args: ReadClauseArgs, settings) -> ToolOutput:
     document = _document(state, args.doc_id)
+    if not document.clauses:
+        raise ToolError("INVALID_ARGUMENT", _without_sections(state, document))
     key = _section_key(args.section.replace("_", "."))
     clause = next(
         (
@@ -379,6 +381,26 @@ def _read_clause(state: DemoState, run, args: ReadClauseArgs, settings) -> ToolO
         f"Reading {clause.section} of the {_PLURALS[document.type][:-1]} with "
         f"{_name(state, document.counterparty_id)}",
         f"Found {clause.section} {clause.title}, page {clause.page}",
+    )
+
+
+def _without_sections(state: DemoState, document: Document) -> str:
+    """Why a document cannot be read by section, and the counterparty's documents that can."""
+    kind = _PLURALS[document.type][:-1]
+    readable = [
+        f"{d.id} ({', '.join(c.section for c in d.clauses)})"
+        for d in _documents(state)
+        if d.clauses and d.counterparty_id == document.counterparty_id
+    ]
+    where = (
+        f"documents from {_name(state, document.counterparty_id)} with sections: "
+        + "; ".join(readable)
+        if readable
+        else "search_documents finds the leases, contracts and terms that have sections"
+    )
+    return (
+        f"{document.id} is a {kind} without sections: its full text was in the search result, "
+        f"so do not read it again; {where}"
     )
 
 

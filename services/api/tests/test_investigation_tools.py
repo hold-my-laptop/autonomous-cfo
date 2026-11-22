@@ -325,6 +325,27 @@ def test_read_clause_matches_section_spellings_and_lists_sections(client: TestCl
     )
 
 
+def test_read_clause_on_a_notice_points_to_the_documents_with_sections(
+    client: TestClient,
+) -> None:
+    run_id = make_run(client, RunKind.PROOF)
+
+    notice = call(
+        client,
+        run_id,
+        "read_clause",
+        {"doc_id": "ntc_main_street_2025_04", "section": "Erhöhung der Miete um 8 %"},
+    )
+
+    assert notice["ok"] is False
+    assert notice["error"]["code"] == "INVALID_ARGUMENT"
+    assert notice["error"]["message"] == (
+        "ntc_main_street_2025_04 is a notice without sections: its full text was in the search "
+        "result, so do not read it again; documents from Main Street Real Estate GmbH with "
+        "sections: lease_main_street_2021 (§1, §2, §4.1, §4.2, §4.3, Nachtrag Nr. 1)"
+    )
+
+
 def test_reference_index_reports_missing_months(client: TestClient) -> None:
     run_id = make_run(client, RunKind.PROOF)
 
