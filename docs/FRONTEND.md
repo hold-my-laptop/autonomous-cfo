@@ -17,8 +17,7 @@ npm run dev                # real backend: start it first with `make up-app` (ap
 ```
 
 The client calls `/api/v1/...` on its own origin, the same as [`nginx.conf`](../apps/web/nginx.conf) does in the cluster, so no
-CORS is needed. The dev server forwards `/api/v1/chat` and `/api/v1/documents/extract` to `$AI_URL` (as `/v1/...`)
-and everything else under `/api/v1/*` to `$BACKEND_URL` unchanged.
+CORS is needed. The dev server forwards chat to the AI service. It forwards other API requests, including multipart bill uploads to `POST /api/v1/documents`, to the backend. The backend calls the internal extraction endpoint.
 
 In live mode the backend's shapes (cents as strings, snake_case) are mapped onto the UI types in
 [`src/api/adapters.ts`](../apps/web/src/api/adapters.ts); the mapping is listed at the bottom of [`src/api/types.ts`](../apps/web/src/api/types.ts).
@@ -29,7 +28,7 @@ The backend has no event stream, so live updates come from polling the latest ru
 | Route | What it shows |
 |---|---|
 | `/` Overview | One status sentence, 13-week cash chart (W1–W13), **Needs your OK**, **Suggestions**, **Done and checked** |
-| `/contract` | The only upload. Customer contract → cash impact → safer terms → email draft. Lease → registered for Vero |
+| `/contract` | Upload a bill or notice (PDF up to 5 MB), follow the run and open the resulting findings |
 | `/costs` | Vero, the cost check: findings with a live investigation trace, evidence, prepared actions. `?doc=<id>` filters by document |
 | `/activity` | Sealed (hash-chained) history of everything agents and the owner did |
 
@@ -37,7 +36,7 @@ Every item shows the challenge's four levels: **Checked on its own** (analysis),
 **Needs your OK**, **Done for you**, plus **Simulated** vs real execution.
 "How did you decide?" opens the business logic step by step.
 
-Accessibility: Inter with tabular figures, fixed 16px base, keyboard focus, screen-reader labels,
+Accessibility: Plus Jakarta Sans with tabular figures, fixed 16px base, keyboard focus, screen-reader labels,
 reduced motion respected.
 
 ## Data
@@ -49,11 +48,9 @@ The demo replays 2025 from Monday 14 April; agents only see transactions before 
 
 - `src/api/mock/statement.ts`: CSV parser, daily balances, weekly forecast (mock forecast = 2025 actuals + approved decisions)
 - `src/api/mock/index.ts`: CFO story (Cash, Currency, Tax agents), contract check, presenter events
-- `src/api/mock/costs.ts`: Vero (rent notice → lease §5 → `engine.ts`)
+- `src/api/mock/costs.ts` contains the sample bills and cost-check findings for browser mock mode.
 
-Presenter controls (`?demo=1`): **Rent increase notice arrives**, **Fast-forward to 1 July**, **Start again**.
-Upload the lease on Contract check first (demo button "Lease (Mietvertrag)") for the full rent story;
-without it Vero stops at "Needs evidence" and asks for the lease.
+For the live rent scenario, open **Upload a bill** and choose **Rent adjustment from the landlord**. The lease is already on file. Open **Cost changes** to inspect the notice, lease §4.2 and the index calculation. The live presenter panel (`?demo=1`) includes **Start again**, which resets shared demo state.
 
 Real-backend builds do not include the mock (it is loaded with a dynamic import only when `VITE_MOCK=1`).
 
@@ -64,5 +61,5 @@ Real-backend builds do not include the mock (it is loaded with a dynamic import 
 `VITE_MOCK` is not set, so the mock and the sample CSV are not part of the bundle.
 
 ```bash
-make up-app     # db + api + web via infra/docker-compose.yml, web on http://localhost:8080
+make up-app     # db + api + ai + web via infra/docker-compose.yml, web on http://localhost:8080
 ```

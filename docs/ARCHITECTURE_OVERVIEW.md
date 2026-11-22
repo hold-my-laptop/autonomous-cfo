@@ -1,4 +1,4 @@
-l# Vero: high-level architecture (whiteboard version)
+# Vero: high-level architecture (whiteboard version)
 
 A one-page picture to draw for the team. For details see [`ARCHITECTURE.md`](ARCHITECTURE.md) and [`contracts/DATA_CONTRACTS.md`](contracts/DATA_CONTRACTS.md).
 
