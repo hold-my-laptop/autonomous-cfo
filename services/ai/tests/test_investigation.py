@@ -82,7 +82,7 @@ def test_hero_investigation_completes_with_a_grounded_conflict(settings):
     assert done.classification == "CONFLICT" and done.evidence_refs == EVIDENCE
     assert done.compute_call_id == "c4"  # the id of the compute tool call
     assert done.letter_draft.startswith("Sehr geehrte") and done.tool_calls == 4
-    assert done.prompt_version == "investigation-2" and done.model == "scripted-model"
+    assert done.prompt_version == "investigation-3" and done.model == "scripted-model"
     assert backend.listed_for == "p1"  # the Proof tools of this run
     assert [n for n, _ in backend.calls] == ["search_inbox", "read_clause", "get_reference_index", "compute"]
 
