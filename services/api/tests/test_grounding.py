@@ -43,6 +43,23 @@ def investigate(answer: dict, calls=HERO_CALLS) -> tuple[dict, dict, list[str]]:
         return run(client, run_id), finding(client, run_id), labels(client, run_id)
 
 
+def rejected(steps: list[str]) -> str:
+    """Why the grounding check could not use the agent's answer, from the run's trace."""
+    [step] = [s for s in steps if s.startswith("Can't use the answer: ")]
+    return step.removeprefix("Can't use the answer: ")
+
+
+def assert_vero_steps_in(done: dict, result: dict, steps: list[str]) -> None:
+    """An answer the evidence doesn't support goes through Vero's own steps: the hero's
+    conflict with the engine's numbers, marked FALLBACK."""
+    assert "The agent found no reason the evidence supports: Vero follows its own steps" in steps
+    assert (result["classification"], result["escalated"]) == ("CONFLICT", False)
+    investigation = result["investigation"]
+    assert (investigation["mode"], investigation["problems"]) == ("FALLBACK", [])
+    assert (investigation["justified"], investigation["disputed"]) == ("380000", "30400")
+    assert done["mode"] == "FALLBACK"
+
+
 def with_inputs(**changes) -> tuple:
     call_id, name, arguments = HERO_CALLS[3]
     inputs = arguments["inputs"] | changes
@@ -116,31 +133,25 @@ def test_a_citation_no_tool_returned_is_dropped() -> None:
 def test_a_threshold_not_in_the_clause_is_rejected() -> None:
     done, result, steps = investigate(ANSWER, with_inputs(threshold_bps=1000))
 
-    assert (result["classification"], result["escalated"]) == ("UNEXPLAINED", True)
-    investigation = result["investigation"]
-    assert investigation["problems"] == [
+    assert rejected(steps) == (
         "threshold_bps 1000 has no source in Cost Memory, the document or an earlier tool result"
-    ]
-    assert (investigation["justified"], investigation["formula_id"]) == (None, None)
-    assert len(investigation["searched"]) == 4
-    assert steps[-4].startswith("Can't use the answer: threshold_bps 1000 has no source")
-    assert steps[-2] == "Keep paying 3 800,00 € for RENT"
-    assert done["result"]["headline"]["text"].endswith(": needs your review")
-    assert done["mode"] == "AGENT"
+    )
+    assert_vero_steps_in(done, result, steps)
+    assert done["result"]["headline"]["text"].endswith(": 304,00 € more than allowed")
 
 
 def test_an_index_no_tool_returned_is_rejected() -> None:
     done, result, steps = investigate(ANSWER, with_inputs(current_index=1300))
 
-    assert result["classification"] == "UNEXPLAINED"
-    assert result["investigation"]["problems"][0].startswith("current_index 1300 has no source")
+    assert rejected(steps).startswith("current_index 1300 has no source")
+    assert_vero_steps_in(done, result, steps)
 
 
 def test_the_billed_rent_is_not_a_base_amount() -> None:
     done, result, steps = investigate(ANSWER, with_inputs(base_amount="410400"))
 
-    assert result["classification"] == "UNEXPLAINED"
-    assert result["investigation"]["problems"][0].startswith("base_amount '410400' has no source")
+    assert rejected(steps).startswith("base_amount '410400' has no source")
+    assert_vero_steps_in(done, result, steps)
 
 
 def test_clause_terms_must_come_from_an_earlier_call() -> None:
@@ -148,10 +159,10 @@ def test_clause_terms_must_come_from_an_earlier_call() -> None:
 
     done, result, steps = investigate(ANSWER, (HERO_CALLS[0], index, computed, clause))
 
-    assert result["classification"] == "UNEXPLAINED"
-    assert result["investigation"]["problems"] == [
+    assert rejected(steps) == (
         "threshold_bps 500 has no source in Cost Memory, the document or an earlier tool result"
-    ]
+    )
+    assert_vero_steps_in(done, result, steps)
 
 
 @pytest.mark.parametrize(
@@ -165,8 +176,20 @@ def test_clause_terms_must_come_from_an_earlier_call() -> None:
 def test_the_label_needs_this_runs_compute_call(compute_call_id, problem) -> None:
     done, result, steps = investigate(ANSWER | {"compute_call_id": compute_call_id})
 
-    assert (result["classification"], result["escalated"]) == ("UNEXPLAINED", True)
-    assert result["investigation"]["problems"] == [problem]
+    assert rejected(steps) == problem
+    assert_vero_steps_in(done, result, steps)
+
+
+def test_an_agent_that_labels_the_conflict_unexplained_is_overruled() -> None:
+    """The cluster's evaluation run (22 Nov): the agent computed the right numbers, then
+    submitted UNEXPLAINED, which names no compute call."""
+    done, result, steps = investigate(
+        ANSWER | {"classification": "UNEXPLAINED", "compute_call_id": None}
+    )
+
+    assert rejected(steps) == "the answer names no compute call"
+    assert_vero_steps_in(done, result, steps)
+    assert [a for a in result["recommendation_ids"]] and result["status"] == "PENDING_APPROVAL"
 
 
 def test_a_failed_compute_call_is_not_usable() -> None:
@@ -176,9 +199,10 @@ def test_a_failed_compute_call_is_not_usable() -> None:
         hero(client, run_id, HERO_CALLS[:3])
         assert not call(client, run_id, *failing)["ok"]
         post(client, run_id, "complete", ANSWER)
-        result = finding(client, run_id)
+        result, done, steps = finding(client, run_id), run(client, run_id), labels(client, run_id)
 
-    assert result["investigation"]["problems"] == ["compute call 'c4' failed"]
+    assert rejected(steps) == "compute call 'c4' failed"
+    assert_vero_steps_in(done, result, steps)
 
 
 def test_a_formula_that_does_not_fit_the_finding() -> None:
@@ -198,11 +222,13 @@ def test_a_formula_that_does_not_fit_the_finding() -> None:
     )
     annualize = ("c4", "compute", {"formula_id": "annualize", "inputs": {"monthly": "30400"}})
 
-    first = investigate(ANSWER, (*HERO_CALLS[:3], surcharge))[1]
-    second = investigate(ANSWER, (*HERO_CALLS[:3], annualize))[1]
+    first = investigate(ANSWER, (*HERO_CALLS[:3], surcharge))
+    second = investigate(ANSWER, (*HERO_CALLS[:3], annualize))
 
-    assert first["investigation"]["problems"] == ["surcharge_rule does not fit this finding"]
-    assert second["investigation"]["problems"] == ["annualize does not decide a label"]
+    assert rejected(first[2]) == "surcharge_rule does not fit this finding"
+    assert rejected(second[2]) == "annualize does not decide a label"
+    assert_vero_steps_in(*first)
+    assert_vero_steps_in(*second)
 
 
 def test_the_cited_letter_becomes_visible_in_documents() -> None:
