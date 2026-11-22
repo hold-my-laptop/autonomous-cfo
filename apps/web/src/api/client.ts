@@ -54,6 +54,13 @@ import { verifyBackendChain, verifyMockChain } from "../lib/hashChain";
 /** The in-browser mock backend, loaded only in mock mode (it bundles the sample bank statement). */
 const mock = () => import("./mock");
 
+/** Mock suggestions shown next to the live decisions: the currency and tax agents have no backend yet. */
+const MOCK_SUGGESTIONS = new Set(["liq_chf", "fx_forward", "tax_prepay"]);
+const mockSuggestions = () =>
+  mock()
+    .then((m) => m.getDecisions())
+    .then((ds) => ds.filter((d) => MOCK_SUGGESTIONS.has(d.id)));
+
 export const API_URL: string = import.meta.env.VITE_API_URL ?? "/api/v1";
 export const USE_MOCK = import.meta.env.VITE_MOCK === "1";
 
@@ -122,7 +129,10 @@ const live = {
     return toCompany(c, m);
   },
   policy: async (): Promise<Policy> => toPolicy(await http<BeMandate>("/mandate")),
-  decisions: async (): Promise<Decision[]> => toDecisions(await http<BeOverview>("/overview")),
+  decisions: async (): Promise<Decision[]> => {
+    const [real, extra] = await Promise.all([http<BeOverview>("/overview").then(toDecisions), mockSuggestions()]);
+    return [...real, ...extra];
+  },
   forecast: async (): Promise<Forecast> =>
     toForecast(await http<BeForecast>("/forecast?weekly=true"), new Date().toISOString()),
   act: async (id: string, action: DecisionAction): Promise<Decision> =>
@@ -201,7 +211,7 @@ export const api = {
   },
 
   act: (id: string, action: DecisionAction): Promise<Decision> =>
-    USE_MOCK ? mock().then((m) => m.actOnDecision(id, action)) : live.act(id, action),
+    USE_MOCK || MOCK_SUGGESTIONS.has(id) ? mock().then((m) => m.actOnDecision(id, action)) : live.act(id, action),
 
   /** Mock only: test a customer or supplier contract on the forecast (the backend checks bills, not contracts). */
   uploadContract: (file: File): Promise<ContractCheckResult> =>
