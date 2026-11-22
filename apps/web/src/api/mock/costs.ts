@@ -1,80 +1,183 @@
 /**
- * Vero, the cost check, in mock mode. Recurring costs come from the Pizzeria Amalfi bank statement;
- * the rent notice and the lease are demo documents. All numbers come from engine.ts or the statement parser.
+ * Vero, the cost check, in mock mode: the reference demo of docs/PROOF.md §7, so mock and live tell the
+ * same story with the same numbers. The texts of the lease, the landlord's letter and the rent adjustment
+ * are the dataset's (services/api fixtures/proof/dataset.json). Every number comes from engine.ts
+ * (the backend's formulas) or the bank statement.
  *
  * Story
- *  - Known at the start: the bank statement only.
- *  - "Rent increase notice arrives": Main Street Real Estate asks for €4,104 instead of €3,800 from 1 June.
- *    With the lease on file (uploaded on Contract check) Vero reads §5 (index rent), gets the index change and
- *    computes the justified rent → "Conflicts with contract". Without the lease it stops at "Needs evidence"
- *    and asks for it; uploading the lease later finishes the check.
+ *  - Preloaded (reset): three changes handled quietly (Fattoria and Asimex price lists, the Asimex
+ *    surcharge found by a scripted investigation) and three routine checks (rent, utilities, CHF tranche).
+ *  - The upload: the landlord's rent adjustment (doc_rent_adjustment_2025_06.pdf) asks for 4.104,00 €
+ *    instead of 3.800,00 € from 1 June. Vero finds the landlord's letter in the grease-trap email thread,
+ *    reads lease §4.2 (adjustment only if the VPI moved at least 5 %), looks up the VPI (117.6 → 121.2,
+ *    3.06 %) and computes: no adjustment allowed, the rent stays 3.800,00 €. Conflicts with contract:
+ *    304 € a month disputed, 3.648 € a year, 912 € inside the 13-week window. Actions: keep paying
+ *    3.800,00 €, send a letter (German).
+ *
+ * The mock reads no PDF: every upload is treated as the demo rent adjustment.
  */
 import type {
-  Classification,
+  ActionDecisions,
   CostMemoryRow,
-  DigestRow,
-  DraftMessage,
+  Digest,
+  DigestChange,
+  EvidenceRef,
   Finding,
   FindingStatus,
   KnownDocument,
   RecommendedAction,
+  RoutineCheck,
   SourceDoc,
   TraceStep,
+  UploadRun,
 } from "../types";
+import { ApiError } from "../client";
 import { mockBus } from "../mockBus";
-import { cpiCappedIndexation, fxToEur, variance } from "../../features/vero/engine";
+import { annualize, paymentsInWindow, surchargeRule, variance, vpiThresholdIndexation } from "../../features/vero/engine";
 import { clone, delay, log, model, nowIso, status } from "./runtime";
-import { type Category, monthlyTotals, round2, TXNS } from "./statement";
+import { type Category, monthlyTotals, TXNS } from "./statement";
 
-const AS_OF = "2025-04-14";
-const seen = TXNS.filter((t) => t.date < AS_OF);
+const AS_OF = "2025-04-14"; // the mock's demo clock (Cost Memory is built from what was seen until then)
+/** The 13-week window of PROOF §7.1 (5 May – 3 Aug 2025): the backend's demo date. */
+const WINDOW_FROM = "2025-05-05";
+const WINDOW_DAYS = 91;
 
-const eur = (v: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: "EUR" }).format(v);
 const de = (v: number) => `${v.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 const deDate = (iso: string) => `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
 
-// ───────────── Inputs ─────────────
+// ───────────── The hero's inputs (PROOF §4, §7.1) ─────────────
 
 export const LANDLORD = "Main Street Real Estate GmbH";
-const RENT = -seen.filter((t) => t.category === "rent").at(-1)!.amountEur; // 3800, from the statement
-const NOTICE_PCT = 8;
-const NOTICED = round2(RENT * (1 + NOTICE_PCT / 100)); // 4104
-const VPI_PCT = 2.2; // demo dataset value, labelled as such in the UI
+const RENT = 3800; // lease §4.1, and what the statement shows every month
+const BILLED = 4104; // the rent adjustment, from 1 June
 const EFFECTIVE = "2025-06-01";
+const VPI = { base: 1176, current: 1212, basePeriod: "2024-01", currentPeriod: "2025-03" }; // tenths, demo values
+const THRESHOLD_BPS = 500; // lease §4.2
 
-export const rentCheck = cpiCappedIndexation(RENT, VPI_PCT, NOTICED);
-const rentVariance = variance(RENT, NOTICED);
+const rentVariance = variance(RENT, BILLED);
+const vpi = vpiThresholdIndexation(RENT, VPI.base, VPI.current, THRESHOLD_BPS);
+const disputedMonthly = Math.max(0, BILLED - vpi.justified);
+const windowPayments = paymentsInWindow(EFFECTIVE, 1, WINDOW_FROM, WINDOW_DAYS);
+const disputedInWindow = disputedMonthly * windowPayments.length;
 
-const STATEMENT_ID = "stmt_2025";
-const NOTICE_ID = "ntc_rent_2025_04";
-export const LEASE_ID = "lease_main_street";
-const FINDING_ID = "fnd_2025_04_rent_01";
+const LEASE_ID = "lease_main_street_2021";
+const NOTICE_ID = "ntc_main_street_2025_04";
+const NOTICE_EMAIL = "mail_main_street_2025_04_03";
+const UPLOAD_ID = "doc_rent_adjustment_2025_06";
+export const DEMO_UPLOAD_NAME = `${UPLOAD_ID}.pdf`;
+const HERO_ID = "fnd_rent_2025_06";
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+// ───────────── Documents Vero knows (as GET /documents lists them) ─────────────
+
+const doc = (doc_id: string, kind: KnownDocument["kind"], label: string, note: string, source: KnownDocument["source"], date: string): KnownDocument => ({
+  doc_id,
+  kind,
+  label,
+  note,
+  source,
+  added_at: `${date}T00:00:00Z`,
+});
+
+const PRELOADED_DOCS: KnownDocument[] = [
+  doc(LEASE_ID, "lease", "Commercial lease", LANDLORD, "history", "2021-01-15"),
+  doc("ctr_city_energy_2025", "contract", "Payment plan 2025", "City Energy & Utilities AG", "history", "2024-12-12"),
+  doc("ctr_luigi_2024", "contract", "Silent partnership agreement", "Luigi Amalfi (Luigi's Ristorante Zurich)", "history", "2024-12-10"),
+  doc("pl_fattoria_2025", "contract", "Price list 2025", "Fattoria La Vino GmbH", "history", "2025-03-18"),
+  doc("pl_asimex_2025_q2", "contract", "Price list Q2 2025", "Asimex Wholesale Ltd", "history", "2025-03-20"),
+  doc("terms_asimex_2025", "contract", "General terms of delivery and payment, valid from 1 May 2025", "Asimex Wholesale Ltd", "history", "2025-04-14"),
+  doc("inv_FLV-16261", "invoice", "Invoice", "Fattoria La Vino GmbH · FLV-16261", "history", "2025-03-07"),
+  doc("inv_FLV-94818", "invoice", "Invoice", "Fattoria La Vino GmbH · FLV-94818", "history", "2025-04-28"),
+  doc("inv_AS-80497", "invoice", "Invoice", "Asimex Wholesale Ltd · AS-80497", "history", "2025-03-08"),
+  doc("inv_AS-72217", "invoice", "Invoice", "Asimex Wholesale Ltd · AS-72217", "history", "2025-04-26"),
+  doc("inv_AS-11607", "invoice", "Invoice", "Asimex Wholesale Ltd · AS-11607", "history", "2025-05-03"),
+  doc(NOTICE_ID, "notice", "Notice about the lease", LANDLORD, "inbox", "2025-04-03"),
+];
+const UPLOAD_DOC = doc(UPLOAD_ID, "notice", "Rent adjustment", LANDLORD, "upload", "2025-04-30");
+
+const LETTERHEAD = { text: `${LANDLORD} · Hausverwaltung · Mainufer 18 · 60311 Frankfurt am Main`, muted: true };
+const RECIPIENT = { text: "Pizzeria Amalfi · Herrn Vincenzo Amalfi · Hauptstraße 12 · 60311 Frankfurt am Main", muted: true };
+
+const DOCS: Record<string, SourceDoc> = {
+  [LEASE_ID]: {
+    doc_id: LEASE_ID,
+    kind: "Lease",
+    title: "Gewerbemietvertrag",
+    meta: `Commercial lease · ${LANDLORD} · 15 Jan 2021 · consolidated version with addendum no. 1 of 25 Jan 2024`,
+    page: 1,
+    lines: [
+      LETTERHEAD,
+      {
+        text: "§4.1 Miete: Die Monatsmiete beträgt seit der letzten Anpassung zum 01.02.2024 3.800,00 €. Sie ist monatlich im Voraus bis zum 1. eines Monats zu zahlen.",
+        en: "Since the last adjustment on 1 Feb 2024 the monthly rent is 3,800.00 €, payable in advance by the 1st of each month.",
+        box: { label: "§4.1 rent", tone: "basis" },
+      },
+      {
+        text: "§4.2 Wertsicherung: Die Miete ist an den vom Statistischen Bundesamt ermittelten Verbraucherpreisindex für Deutschland (VPI, 2020 = 100) gebunden. Hat sich der Index gegenüber seinem Stand bei der letzten Anpassung (Januar 2024) um mindestens 5 % verändert, kann jede Partei durch schriftliche Erklärung eine Anpassung der Miete im gleichen prozentualen Verhältnis verlangen.",
+        en: "The rent is linked to the German consumer price index (VPI, 2020 = 100). If the index has changed by at least 5 % since the last adjustment (January 2024), either party may request in writing an adjustment in the same proportion.",
+        box: { label: "§4.2 basis", tone: "basis" },
+      },
+      {
+        text: "§4.3 Betriebskosten: Eine Erhöhung der Miete wegen gestiegener Betriebs- oder Bewirtschaftungskosten ist nur nach §4.2 möglich.",
+        en: "The rent can be increased because of higher operating or management costs only under §4.2.",
+      },
+      { text: "Frankfurt am Main, 15.01.2021 · Main Street Real Estate GmbH · Vincenzo Amalfi", muted: true },
+    ],
+  },
+  [NOTICE_ID]: {
+    doc_id: NOTICE_ID,
+    kind: "Notice",
+    title: "Mitteilung zum Mietverhältnis",
+    meta: `Notice about the lease · ${LANDLORD} · 3 Apr 2025 · attached to an email about the courtyard grease trap`,
+    page: 1,
+    lines: [
+      LETTERHEAD,
+      RECIPIENT,
+      { text: "Frankfurt am Main, 03.04.2025", muted: true },
+      {
+        text: "Erhöhung der Miete um 8 % ab 01.06.2025 aufgrund gestiegener Bewirtschaftungskosten.",
+        en: "Increase of the rent by 8 % from 1 Jun 2025 due to higher management costs. No index and no lease clause cited.",
+        box: { label: "Reason given", tone: "neutral" },
+      },
+      { text: "Die neue Monatsmiete teilen wir Ihnen mit gesondertem Schreiben mit.", en: "We will tell you the new monthly rent in a separate letter.", muted: true },
+    ],
+  },
+  [UPLOAD_ID]: {
+    doc_id: UPLOAD_ID,
+    kind: "Notice",
+    title: "Mietanpassung",
+    meta: `Rent adjustment · ${LANDLORD} · 30 Apr 2025 · uploaded`,
+    page: 1,
+    lines: [
+      LETTERHEAD,
+      RECIPIENT,
+      { text: "Frankfurt am Main, 30.04.2025", muted: true },
+      { text: "Sehr geehrter Herr Amalfi, wie angekündigt passen wir Ihre Miete wie folgt an:", en: "As announced we adjust your rent as follows:" },
+      { text: `Bisherige Miete ${de(RENT)}`, en: "Rent so far", box: { label: "Basis", tone: "basis" } },
+      { text: `Neue Miete ab ${deDate(EFFECTIVE)}: ${de(BILLED)}`, en: "New rent", strong: true, box: { label: "Billed", tone: "billed" } },
+      { text: "Bitte passen Sie Ihren Dauerauftrag entsprechend an.", en: "Please change your standing order accordingly.", muted: true },
+    ],
+  },
+};
 
 // ───────────── State ─────────────
 
 let docs: KnownDocument[] = [];
 let findings: Finding[] = [];
-let onRentApproved: (rent: number) => Promise<void> = async () => {};
-export const setRentApprovedHandler = (fn: (rent: number) => Promise<void>) => {
-  onRentApproved = fn;
-};
+/** Why each finding has its label, in one line (GET /digest's `reason`). */
+let reasons: Record<string, string> = {};
+let running = false;
 
 export function resetCosts() {
-  docs = [
-    {
-      doc_id: STATEMENT_ID,
-      kind: "statement",
-      label: "Bank statement 2025",
-      note: `1 Jan – 13 Apr · ${seen.length} transactions`,
-      source: "history",
-      added_at: "2025-04-14T06:00:00Z",
-    },
-  ];
-  findings = [];
+  docs = clone(PRELOADED_DOCS);
+  findings = preloadedFindings();
+  reasons = {
+    fnd_flv_94818: "Every difference matches the Price list 2025",
+    fnd_as_72217: "Every difference matches the Price list Q2 2025",
+    fnd_as_11607: `The surcharge of ${de(24.5)} applies: announced on 14 Apr, goods ${de(558.71)} under ${de(600)}`,
+  };
+  running = false;
 }
-resetCosts();
-
-export const hasLease = () => docs.some((d) => d.doc_id === LEASE_ID);
 
 // ───────────── Cost Memory (from the statement) ─────────────
 
@@ -82,14 +185,13 @@ export const hasLease = () => docs.some((d) => d.doc_id === LEASE_ID);
 // suppliers are checked per invoice. The CHF transfer is 4,166.67 CHF a month.
 const LAST_FULL_MONTH = "2025-03";
 const CHF_MONTHLY = 4166.67;
-const MEMORY: { ref: string; label: string; vendor: string; category: Category; kind: "fixed" | "supplier" }[] = [
-  { ref: "RENT", label: "Rent", vendor: LANDLORD, category: "rent", kind: "fixed" },
-  { ref: "UTIL", label: "Energy & utilities", vendor: "City Energy & Utilities AG", category: "utilities", kind: "fixed" },
-  { ref: "XFER", label: "CHF transfer", vendor: "Luigi Amalfi, Zurich", category: "fx_transfer", kind: "fixed" },
-  { ref: "SOC", label: "Social security", vendor: "Techniker Krankenkasse", category: "social_security", kind: "fixed" },
-  { ref: "ASIMEX", label: "Supplier", vendor: "Asimex Wholesale Ltd", category: "food", kind: "supplier" },
-  { ref: "FATTORIA", label: "Supplier", vendor: "Fattoria La Vino GmbH", category: "wine", kind: "supplier" },
-  { ref: "MARKET", label: "Supplier", vendor: "Central Wholesale Market", category: "produce", kind: "supplier" },
+const MEMORY: { ref: string; label: string; vendor: string; category: Category; kind: "fixed" | "supplier"; sources: CostMemoryRow["sources"] }[] = [
+  { ref: "RENT", label: "Rent", vendor: LANDLORD, category: "rent", kind: "fixed", sources: ["statement", "contract"] },
+  { ref: "UTIL", label: "Energy & utilities", vendor: "City Energy & Utilities AG", category: "utilities", kind: "fixed", sources: ["statement", "contract"] },
+  { ref: "XFER", label: "CHF transfer", vendor: "Luigi Amalfi, Zurich", category: "fx_transfer", kind: "fixed", sources: ["statement", "contract"] },
+  { ref: "SOC", label: "Social security", vendor: "Techniker Krankenkasse", category: "social_security", kind: "fixed", sources: ["statement"] },
+  { ref: "ASIMEX", label: "Supplier", vendor: "Asimex Wholesale Ltd", category: "food", kind: "supplier", sources: ["price_list", "invoice"] },
+  { ref: "FATTORIA", label: "Supplier", vendor: "Fattoria La Vino GmbH", category: "wine", kind: "supplier", sources: ["price_list", "invoice"] },
 ];
 
 export function getMemory(): CostMemoryRow[] {
@@ -108,134 +210,110 @@ export function getMemory(): CostMemoryRow[] {
             : { amount: march, currency: "EUR" }
           : undefined,
       prices: 0,
-      sources: ["statement"],
+      sources: m.sources,
     };
   });
 }
 
-// ───────────── Weekly digest: changes explained without bothering the owner ─────────────
+// ───────────── Preloaded findings (PROOF §7.2), handled quietly ─────────────
 
-function monthOf(category: Category, period: string) {
-  return seen.filter((t) => t.category === category && t.date.startsWith(period));
+function quietInvoice(id: string, vendor: string, number: string, billed: number, title: string, period: string, evidence: EvidenceRef[], extra: Partial<Finding> = {}): Finding {
+  return {
+    finding_id: id,
+    title,
+    status: "classified",
+    classification: "verified",
+    classification_history: ["verified"],
+    vendor,
+    cost_ref: vendor.startsWith("Asimex") ? "ASIMEX" : "FATTORIA",
+    source_doc_id: `inv_${number}`,
+    run_id: null,
+    quiet: true,
+    in_digest: true,
+    line_item: {
+      description: `Invoice ${number}`,
+      previous_value: null,
+      current_value: billed,
+      currency: "EUR",
+      unit: "invoice",
+      effective_from: period,
+      monthly_variance: 0,
+      variance_pct: null,
+    },
+    differences: [{ description: "Unit prices changed since the previous invoice", explained: true }],
+    investigation_trace: [],
+    evidence_refs: [{ kind: "document", doc_id: `inv_${number}`, label: `Invoice ${number}` }, ...evidence],
+    recommended_actions: [],
+    created_at: "2025-05-05T08:00:00Z",
+    ...extra,
+  };
 }
 
-export function getDigest(): DigestRow[] {
-  const [chfFeb] = monthOf("fx_transfer", "2025-02");
-  const [chfMar] = monthOf("fx_transfer", "2025-03");
-  const chf = variance(-chfFeb.amountEur, -chfMar.amountEur);
-
-  const taxFeb = -monthOf("wage_tax", "2025-02").concat(monthOf("trade_tax", "2025-02")).reduce((s, t) => s + t.amountEur, 0);
-  const wage = -monthOf("wage_tax", "2025-03")[0].amountEur;
-  const income = -monthOf("income_tax", "2025-03")[0].amountEur;
-
-  const wineFeb = monthOf("wine", "2025-02");
-  const wineMar = monthOf("wine", "2025-03");
-  const sum = (l: typeof seen) => -round2(l.reduce((s, t) => s + t.amountEur, 0));
-  const wine = variance(sum(wineFeb), sum(wineMar));
-  const avg = (l: typeof seen) => round2(sum(l) / l.length);
-
+function preloadedFindings(): Finding[] {
+  const surcharge = surchargeRule(558.71, "2025-05-03", 24.5, 600, "2025-05-01");
   return [
-    {
-      id: "dg_chf_2025_03",
-      classification: "verified",
-      title: `CHF transfer, March: ${eur(-chfMar.amountEur)} (${chf.pct > 0 ? "+" : ""}${chf.pct}%)`,
-      detail: "Same 4,166.67 CHF as every month. Only the exchange rate changed.",
-      doc_id: STATEMENT_ID,
-      calc: [
-        `February: ${chfFeb.amountOriginal * -1} CHF × ${chfFeb.fxRate} = ${eur(fxToEur(-chfFeb.amountOriginal, chfFeb.fxRate!))}`,
-        `March:    ${chfMar.amountOriginal * -1} CHF × ${chfMar.fxRate} = ${eur(fxToEur(-chfMar.amountOriginal, chfMar.fxRate!))}`,
+    quietInvoice("fnd_flv_94818", "Fattoria La Vino GmbH", "FLV-94818", 897.08, "Fattoria La Vino GmbH: new prices on FLV-94818", "2025-04-28", [
+      { kind: "price_list_item", doc_id: "pl_fattoria_2025", label: "Price list 2025" },
+    ]),
+    quietInvoice("fnd_as_72217", "Asimex Wholesale Ltd", "AS-72217", 687.23, "Asimex Wholesale Ltd: new prices on AS-72217", "2025-04-26", [
+      { kind: "price_list_item", doc_id: "pl_asimex_2025_q2", label: "Price list Q2 2025" },
+    ]),
+    quietInvoice(
+      "fnd_as_11607",
+      "Asimex Wholesale Ltd",
+      "AS-11607",
+      624.03,
+      `Asimex Wholesale Ltd: Logistikzuschlag (${de(24.5)}) on AS-11607`,
+      "2025-05-03",
+      [
+        { kind: "email", ref: "mail_asimex_2025_04_14", label: "Email of 14 Apr 2025" },
+        { kind: "clause", doc_id: "terms_asimex_2025", label: "Terms of delivery" },
       ],
-    },
-    {
-      id: "dg_tax_2025_03",
-      classification: "verified",
-      title: `Tax Office Frankfurt, March: ${eur(wage + income)} (February: ${eur(taxFeb)})`,
-      detail: "Quarterly income-tax prepayment, due every March, June, September and December.",
-      doc_id: STATEMENT_ID,
-      calc: [`Wage tax ${eur(wage)} + income-tax prepayment Q1 ${eur(income)} = ${eur(wage + income)}`],
-    },
-    {
-      id: "dg_wine_2025_03",
-      classification: "verified",
-      title: `Fattoria La Vino, March: ${eur(sum(wineMar))} (+${wine.pct}%)`,
-      detail: "More deliveries, not higher prices.",
-      doc_id: STATEMENT_ID,
-      calc: [
-        `February: ${wineFeb.length} invoices, average ${eur(avg(wineFeb))}`,
-        `March:    ${wineMar.length} invoices, average ${eur(avg(wineMar))}`,
-      ],
-    },
+      {
+        classification_history: ["unexplained", "verified"],
+        differences: [{ description: "Logistikzuschlag", explained: true }],
+        investigation: {
+          mode: "fallback",
+          formula: { formula_id: "surcharge_rule", net_goods: 558.71, below_net_goods: 600, surcharge: 24.5, applies: surcharge.applies },
+          billed: 24.5,
+          justified: surcharge.surcharge,
+          searched: [
+            "Searching your inbox for Logistikzuschlag from Asimex Wholesale Ltd",
+            "Reading the terms of delivery with Asimex Wholesale Ltd",
+            `The surcharge of ${de(24.5)} applies`,
+          ],
+          problems: [],
+        },
+      },
+    ),
   ];
 }
 
-// ───────────── Source documents ─────────────
+// ───────────── Routine checks (PROOF §7.3): April payments against their contract ─────────────
 
-const rentLines = seen.filter((t) => t.category === "rent");
+function routineChecks(): RoutineCheck[] {
+  const april = (c: Category) => TXNS.find((t) => t.category === c && t.date.startsWith("2025-04"));
+  const rent = april("rent");
+  const util = april("utilities");
+  const chf = april("fx_transfer");
+  const rows: RoutineCheck[] = [];
+  if (rent) rows.push({ cost_ref: "RENT", counterparty: LANDLORD, date: rent.date, paid: -rent.amountEur, expected: RENT, currency: "EUR", doc_id: LEASE_ID });
+  if (util) rows.push({ cost_ref: "UTIL", counterparty: "City Energy & Utilities AG", date: util.date, paid: -util.amountEur, expected: 650, currency: "EUR", doc_id: "ctr_city_energy_2025" });
+  if (chf)
+    rows.push({
+      cost_ref: "XFER",
+      counterparty: "Luigi Amalfi (Luigi's Ristorante Zurich)",
+      date: chf.date,
+      paid: -chf.amountOriginal,
+      expected: CHF_MONTHLY,
+      currency: "CHF",
+      eur_amount: -chf.amountEur,
+      doc_id: "ctr_luigi_2024",
+    });
+  return rows;
+}
 
-const DOCS: Record<string, SourceDoc> = {
-  [STATEMENT_ID]: {
-    doc_id: STATEMENT_ID,
-    kind: "Statement",
-    title: "Kontoauszug 2025 · DE89 3704 0044 0532 0130 00",
-    meta: "Bank feed · rent payments to Main Street Real Estate GmbH",
-    page: 1,
-    lines: [
-      { text: "Buchung    Verwendungszweck                          Betrag", muted: true },
-      ...rentLines.map((t, i) => ({
-        text: `${deDate(t.date)}  ${t.reference}  ${de(t.amountEur)}`,
-        ...(i === rentLines.length - 1
-          ? { en: "Rent paid every month since January: always €3,800.00", box: { label: "Paid today", tone: "neutral" as const } }
-          : { muted: true }),
-      })),
-    ],
-  },
-  [NOTICE_ID]: {
-    doc_id: NOTICE_ID,
-    kind: "Notice",
-    title: "Mieterhöhung_Pizzeria_Amalfi.pdf",
-    meta: `${LANDLORD} · received by e-mail on 14.04.2025 · demo document`,
-    page: 1,
-    lines: [
-      { text: `${LANDLORD} · Hausverwaltung · Frankfurt am Main`, muted: true },
-      { text: "Gewerbefläche Pizzeria Amalfi, Mieter: Vincenzo Amalfi", muted: true },
-      { text: "Mitteilung über die Anpassung der Miete", strong: true },
-      {
-        text: `Ab dem ${deDate(EFFECTIVE)} beträgt die monatliche Miete ${de(NOTICED)} statt bisher ${de(RENT)} (+${NOTICE_PCT} %).`,
-        en: `From 1 June 2025 the monthly rent is ${eur(NOTICED)} instead of ${eur(RENT)} (+${NOTICE_PCT}%).`,
-        box: { label: "Asked for", tone: "billed" },
-      },
-      {
-        text: "Grund: gestiegene Bewirtschaftungskosten.",
-        en: "Reason: higher operating costs. No index and no lease clause are cited.",
-        box: { label: "Reason given", tone: "neutral" },
-      },
-      { text: "Bitte passen Sie Ihren Dauerauftrag entsprechend an.", en: "Please change your standing order.", muted: true },
-    ],
-  },
-  [LEASE_ID]: {
-    doc_id: LEASE_ID,
-    kind: "Lease",
-    title: "Gewerbemietvertrag (Mietvertrag) · Pizzeria Amalfi",
-    meta: `${LANDLORD} and Vincenzo Amalfi · from Contract check · demo document`,
-    page: 2,
-    lines: [
-      { text: "§2 Mietbeginn: 01.01.2023, unbefristet.", muted: true, en: "Lease start 1 Jan 2023, open-ended." },
-      { text: `§3 Miete. Die monatliche Miete beträgt ${de(RENT)}, fällig am 1. eines Monats.`, muted: true, en: `Rent ${eur(RENT)} a month, due on the 1st.` },
-      {
-        text:
-          "§5 Indexmiete. Die Miete ändert sich im gleichen prozentualen Verhältnis wie der vom Statistischen Bundesamt ermittelte Verbraucherpreisindex für Deutschland (VPI).",
-        en: "§5 Index rent: the rent changes by the same percentage as the German consumer price index (VPI).",
-        box: { label: "§5 basis", tone: "basis" },
-      },
-      {
-        text: "§5.2 Eine Anpassung ist frühestens nach einem Jahr und nur durch schriftliche Erklärung unter Angabe der Indexänderung möglich.",
-        en: "At most once a year, in writing, stating the index change.",
-        box: { label: "§5.2 form", tone: "basis" },
-      },
-      { text: "§12 Kündigung: 6 Monate zum Quartalsende.", muted: true, en: "Notice: 6 months to the end of a quarter." },
-    ],
-  },
-};
+// ───────────── Reads ─────────────
 
 export function getDocument(id: string): SourceDoc {
   const d = DOCS[id];
@@ -246,290 +324,291 @@ export function getDocument(id: string): SourceDoc {
 export const getDocuments = () => clone(docs);
 export const getFindings = () => clone(findings);
 
-// ───────────── The rent check ─────────────
+const byPeriod = (f: Finding) => f.line_item.effective_from ?? f.created_at;
 
-const LETTER: DraftMessage = {
-  kind: "counter_proposal",
-  to: "hausverwaltung@mainstreet-realestate.example",
-  subject: "Ihre Mitteilung vom 14.04.2025 – Miete Gewerbefläche Pizzeria Amalfi",
-  body: `Sehr geehrte Damen und Herren,
+export function getDigest(): Digest {
+  const open = findings.filter((f) => f.in_digest).sort((a, b) => byPeriod(a).localeCompare(byPeriod(b)));
+  const changes: DigestChange[] = open.map((f) => ({
+    finding_id: f.finding_id,
+    title: f.title,
+    classification: f.classification,
+    quiet: f.quiet,
+    investigation_mode: f.investigation?.mode,
+    reason: reasons[f.finding_id] ?? "",
+    actions: f.recommended_actions.filter((a) => a.status === "pending").map((a) => ({ id: a.id, type: a.type, text: a.title })),
+  }));
+  const checks = routineChecks();
+  return {
+    as_of: WINDOW_FROM,
+    counts: {
+      changes: changes.length,
+      handled_quietly: changes.filter((c) => c.quiet).length,
+      needs_owner: changes.filter((c) => !c.quiet).length,
+      routine_checks: checks.length,
+    },
+    changes,
+    routine_checks: checks,
+  };
+}
 
-vielen Dank für Ihre Mitteilung vom 14.04.2025. Sie kündigen eine Miete von ${de(NOTICED)} statt ${de(RENT)} (+${NOTICE_PCT} %) ab dem ${deDate(EFFECTIVE)} an.
+// ───────────── The upload: the rent adjustment (PROOF §7.1) ─────────────
 
-Nach § 5 unseres Mietvertrags (Indexmiete) ändert sich die Miete nur im Verhältnis zum Verbraucherpreisindex für Deutschland (VPI). Die maßgebliche Indexänderung beträgt ${VPI_PCT.toLocaleString("de-DE")} %. Daraus ergibt sich eine Miete von höchstens ${de(rentCheck.justified)}.
+const LETTER_BODY = `Sehr geehrte Damen und Herren,
 
-Ab dem ${deDate(EFFECTIVE)} überweisen wir daher ${de(rentCheck.justified)} monatlich. Bitte nennen Sie uns die vertragliche Grundlage für den darüber hinausgehenden Betrag von ${de(rentCheck.disputedMonthly)}.
+mit Ihrem Schreiben vom 30.04.2025 teilen Sie uns eine Monatsmiete von ${de(BILLED)} ab dem ${deDate(EFFECTIVE)} mit; bisher beträgt sie ${de(RENT)}.
+
+Nach §4.2 unseres Mietvertrags kann die Miete nur angepasst werden, wenn sich der Verbraucherpreisindex (VPI) seit der letzten Anpassung (Januar 2024) um mindestens 5 % verändert hat. Der VPI ist von ${(VPI.base / 10).toLocaleString("de-DE")} auf ${(VPI.current / 10).toLocaleString("de-DE")} (März 2025) gestiegen, also um ${(vpi.changeBps / 100).toLocaleString("de-DE")} %. Eine Anpassung ist danach nach unserem Verständnis nicht möglich; die Miete beträgt weiterhin ${de(vpi.justified)}.
+
+Wir bitten Sie daher um eine kurze Erläuterung, auf welcher vertraglichen Grundlage die Änderung beruht, und um Ihre Berechnung. Sollten wir einen Umstand übersehen haben, freuen wir uns über Ihren Hinweis.
 
 Mit freundlichen Grüßen
+
 Vincenzo Amalfi
-Pizzeria Amalfi`,
-  english: {
-    subject: "Your notice of 14 April 2025 – rent for the Pizzeria Amalfi premises",
-    body: `Dear Sir or Madam,
+Pizzeria Amalfi`;
 
-Thank you for your notice of 14 April 2025. You announce a rent of ${eur(NOTICED)} instead of ${eur(RENT)} (+${NOTICE_PCT}%) from 1 June 2025.
-
-Under §5 of our lease (index rent) the rent only changes in line with the German consumer price index (VPI). The relevant index change is ${VPI_PCT}%, which gives a rent of at most ${eur(rentCheck.justified)}.
-
-From 1 June 2025 we will therefore transfer ${eur(rentCheck.justified)} a month. Please tell us the contractual basis for the remaining ${eur(rentCheck.disputedMonthly)}.
-
-Kind regards
-Vincenzo Amalfi
-Pizzeria Amalfi`,
+const heroActions = (): RecommendedAction[] => [
+  {
+    id: "rec_keep_rent",
+    type: "keep_payment",
+    title: `Keep paying ${de(RENT)} instead of ${de(BILLED)} from ${deDate(EFFECTIVE)}`,
+    detail: `The lease allows no adjustment yet, so the rent stays ${de(vpi.justified)}. Paying it keeps you out of arrears while the landlord explains.`,
+    lane: "needs_approval",
+    status: "pending",
   },
-};
+  {
+    id: "rec_letter_rent",
+    type: "send_letter",
+    title: `Send a letter to ${LANDLORD}, in German`,
+    detail: "Neutral, cites §4.2 of the lease and the index change, and asks for the basis of the increase.",
+    lane: "needs_approval",
+    status: "pending",
+    letter: {
+      to: LANDLORD,
+      subject: `Ihre Mietanpassung ab ${deDate(EFFECTIVE)} – Bitte um Erläuterung gemäß §4.2 Mietvertrag`,
+      body: LETTER_BODY,
+      language: "de",
+      source: "template",
+    },
+  },
+];
 
-function baseFinding(): Finding {
+function heroFinding(): Finding {
   return {
-    finding_id: FINDING_ID,
+    finding_id: HERO_ID,
+    title: `${LANDLORD}: rent ${de(RENT)} → ${de(BILLED)} from ${deDate(EFFECTIVE)}`,
     status: "ingested",
     classification: "unexplained",
     classification_history: [],
     vendor: LANDLORD,
-    billing_period: "2025-06",
-    source_doc_id: NOTICE_ID,
+    cost_ref: "RENT",
+    source_doc_id: UPLOAD_ID,
+    run_id: "run_rent_upload",
+    quiet: false,
+    in_digest: true,
     line_item: {
-      description: "Rent, commercial premises (Gewerbemiete)",
+      description: "Monthly rent from 1 Jun",
       previous_value: RENT,
-      current_value: NOTICED,
+      current_value: BILLED,
       currency: "EUR",
       unit: "month",
       effective_from: EFFECTIVE,
       monthly_variance: rentVariance.monthly,
       variance_pct: rentVariance.pct,
     },
+    differences: [{ description: "Monthly rent from 1 Jun", explained: false }],
     investigation_trace: [],
     evidence_refs: [
-      { type: "statement", doc_id: STATEMENT_ID, snippet: `Rent ${eur(RENT)} every month since January` },
-      { type: "notice", doc_id: NOTICE_ID, page: 1, snippet: `${de(NOTICED)} statt bisher ${de(RENT)} (+${NOTICE_PCT} %)` },
+      { kind: "document", doc_id: UPLOAD_ID, label: "Rent adjustment" },
+      { kind: "cost_item", label: "What you usually pay (RENT)" },
     ],
-    propagation: [],
     recommended_actions: [],
     created_at: nowIso(),
   };
 }
 
-const ACTIONS: RecommendedAction[] = [
+function upsert(f: Finding) {
+  findings = [...findings.filter((x) => x.finding_id !== f.finding_id), f];
+  mockBus.emit({ type: "finding.updated", data: clone(f) });
+}
+
+function patch(id: string, p: Partial<Finding>) {
+  const f = findings.find((x) => x.finding_id === id);
+  if (f) upsert({ ...f, ...p });
+}
+
+const hero = () => findings.find((f) => f.finding_id === HERO_ID)!;
+
+/** The visible investigation, step by step (the same labels the backend's tools write). */
+const HERO_STEPS: (Omit<TraceStep, "step"> & { cite?: EvidenceRef[] })[] = [
   {
-    type: "send_clarification_letter",
-    title: "Send a clarification letter to the landlord, in German",
-    detail: "Cites §5 of the lease and the index change. Pays the justified rent, so you are never in arrears.",
-    requires_approval: true,
-    execution: "simulated",
-    language: "de",
-    draft: LETTER,
+    hypothesis: "H1 · A letter or notice about the change",
+    tool: "search_inbox",
+    label: `Searching your inbox for rent increase from ${LANDLORD}`,
+    result: "Found 1 email: the landlord's letter, attached in the thread about the courtyard grease trap",
+    cite: [
+      { kind: "email", ref: NOTICE_EMAIL, label: "Email of 3 Apr 2025" },
+      { kind: "document", doc_id: NOTICE_ID, label: "Landlord's letter" },
+    ],
   },
   {
-    type: "update_standing_order",
-    title: `Set the rent standing order to ${eur(rentCheck.justified)} from 1 June`,
-    detail: `Instead of ${eur(NOTICED)}. The disputed ${eur(rentCheck.disputedMonthly)} a month waits for the landlord's answer.`,
-    requires_approval: true,
-    execution: "simulated",
+    hypothesis: "H2 · A contract clause that allows it",
+    tool: "read_clause",
+    label: `Reading §4.2 of the lease with ${LANDLORD}`,
+    result: "Index clause: an adjustment needs a VPI change of at least 5 % since January 2024",
+    cite: [{ kind: "clause", doc_id: LEASE_ID, item_id: "s4_2", ref: `${LEASE_ID}#s4_2`, label: "Lease §4.2" }],
   },
   {
-    type: "update_forecast",
-    title: `Use ${eur(rentCheck.justified)} rent in your 13-week forecast`,
-    detail: `+${eur(rentCheck.justifiedIncrease)} a month from June compared with today.`,
-    requires_approval: true,
-    execution: "simulated",
+    hypothesis: "H3 · The reference index then and now",
+    tool: "get_reference_index",
+    label: "Looking up the consumer price index for Jan 2024 and Mar 2025",
+    result: `${VPI.base / 10} in Jan 2024, ${VPI.current / 10} in Mar 2025 (demo values)`,
+    cite: [{ kind: "reference", ref: "ref_vpi_demo", label: "Consumer price index (demo values)" }],
+  },
+  {
+    hypothesis: "H3 · The reference index then and now",
+    tool: "compute",
+    label: `Index moved ${(vpi.changeBps / 100).toFixed(2)}%, less than ${(THRESHOLD_BPS / 100).toFixed(2)}%: the amount stays at ${de(vpi.justified)}`,
   },
 ];
 
-let current: Finding | null = null;
+async function runHero(onProgress: (latest: string) => void, speed = 1) {
+  const say = (msg: string, busy = true) => {
+    status("costs", msg, busy);
+    onProgress(msg);
+  };
+  docs = [...docs.filter((d) => d.doc_id !== UPLOAD_ID), UPLOAD_DOC];
+  mockBus.emit({ type: "document.added", data: clone(UPLOAD_DOC) });
 
-function publish(patch: Partial<Finding>) {
-  if (!current) return;
-  current = { ...current, ...patch };
-  findings = [current, ...findings.filter((f) => f.finding_id !== current!.finding_id)];
-  mockBus.emit({ type: "finding.updated", data: clone(current) });
-}
+  say("Reading the rent adjustment…");
+  upsert(heroFinding());
+  await delay(900 / speed);
+  patch(HERO_ID, { status: "extracted" });
+  await delay(800 / speed);
+  patch(HERO_ID, { status: "checked", classification: "unexplained", classification_history: ["unexplained"] });
+  reasons[HERO_ID] = `${de(BILLED)} from 1 Jun against ${de(RENT)} expected: +${rentVariance.pct.toLocaleString("de-DE")} %`;
+  say(`${de(BILLED)} instead of ${de(RENT)} from 1 June: looking for the reason…`);
+  await delay(800 / speed);
+  patch(HERO_ID, { status: "investigating" });
 
-function classify(c: Classification, statusNext: FindingStatus) {
-  if (!current) return;
-  publish({
-    classification: c,
-    classification_history: [...current.classification_history, c],
-    status: statusNext,
-  });
-}
+  for (const s of HERO_STEPS) {
+    await delay(1300 / speed);
+    const { cite, ...step } = s;
+    const f = hero();
+    const full: TraceStep = { ...step, step: f.investigation_trace.length + 1 };
+    patch(HERO_ID, {
+      investigation_trace: [...f.investigation_trace, full],
+      evidence_refs: [...f.evidence_refs, ...(cite ?? [])],
+    });
+    mockBus.emit({ type: "finding.step", data: { finding_id: HERO_ID, step: full } });
+    say(s.label);
+  }
 
-async function step(s: Omit<TraceStep, "step" | "model">, ms: number) {
-  if (!current) return;
-  await delay(ms);
-  const full: TraceStep = { ...s, step: current.investigation_trace.length + 1, model: model(`${FINDING_ID}-${s.tool}-${s.hypothesis}`) };
-  current = { ...current, investigation_trace: [...current.investigation_trace, full] };
-  findings = [current, ...findings.filter((f) => f.finding_id !== current!.finding_id)];
-  mockBus.emit({ type: "finding.step", data: { finding_id: FINDING_ID, step: full } });
-}
-
-async function checkAgainstLease(speed: number) {
-  await step(
-    {
-      hypothesis: "The lease allows a rent change",
-      tool: "search_documents",
-      input: { query: "Mietvertrag Main Street Real Estate", kind: "lease" },
-      result: `1 match: ${LEASE_ID} (uploaded on Contract check).`,
-      evidence_ref: `${LEASE_ID}#p1`,
+  await delay(600 / speed);
+  reasons[HERO_ID] = `Recomputed: ${de(vpi.justified)} allowed, ${de(BILLED)} billed`;
+  patch(HERO_ID, {
+    status: "classified",
+    classification: "conflict",
+    classification_history: ["unexplained", "conflict"],
+    investigation: {
+      mode: "fallback",
+      formula: {
+        formula_id: "vpi_threshold_indexation",
+        base_amount: RENT,
+        base_index: VPI.base / 10,
+        current_index: VPI.current / 10,
+        threshold_pct: THRESHOLD_BPS / 100,
+        change_pct: vpi.changeBps / 100,
+        adjustment_allowed: vpi.allowed,
+        justified: vpi.justified,
+      },
+      billed: BILLED,
+      justified: vpi.justified,
+      disputed: disputedMonthly,
+      searched: HERO_STEPS.map((s) => s.label),
+      problems: [],
     },
-    1300 / speed,
-  );
-  await step(
-    {
-      hypothesis: "Find the rule for rent changes",
-      tool: "read_clause",
-      input: { doc_id: LEASE_ID, section: "§5" },
-      result: "Index rent: the rent changes by the same percentage as the German consumer price index (VPI), at most once a year, in writing, stating the index change.",
-      evidence_ref: `${LEASE_ID}#p2`,
-    },
-    1500 / speed,
-  );
-  await step(
-    {
-      hypothesis: "Get the index change",
-      tool: "get_reference_index",
-      input: { name: "VPI_Germany", period: "2024-03..2025-03" },
-      result: `+${VPI_PCT}% (demo dataset value)`,
-      evidence_ref: "ref_vpi_2025_03",
-    },
-    1300 / speed,
-  );
-  await step(
-    {
-      hypothesis: "Compute the rent the lease allows",
-      tool: "compute",
-      input: { formula_id: "cpi_capped_indexation", base: RENT, cap_pct: VPI_PCT, billed: NOTICED },
-      result: `Justified rent ${eur(rentCheck.justified)}. Disputed ${eur(rentCheck.disputedMonthly)} a month.`,
-      evidence_ref: null,
-    },
-    1200 / speed,
-  );
-  await delay(500 / speed);
-  publish({
-    evidence_request: undefined,
-    evidence_refs: [
-      ...current!.evidence_refs.filter((e) => e.type !== "lease"),
-      { type: "lease", doc_id: LEASE_ID, page: 2, clause: "§5", snippet: "im gleichen prozentualen Verhältnis wie der … Verbraucherpreisindex (VPI)" },
-    ],
     financial_impact: {
-      justified_value: rentCheck.justified,
-      justified_increase_monthly: rentCheck.justifiedIncrease,
-      disputed_amount_monthly: rentCheck.disputedMonthly,
-      disputed_amount_annual: rentCheck.disputedAnnual,
-      assumption: "Disputed amount assumes the asked rent would be paid for 12 months",
+      billed: BILLED,
+      justified: vpi.justified,
+      disputed_monthly: disputedMonthly,
+      disputed_annual: annualize(disputedMonthly),
+      disputed_in_window: disputedInWindow,
     },
-    propagation: [
-      { target: "standing_order", id: "so_rent_main_street", old: RENT, new: rentCheck.justified, note: "Pay the justified rent; the disputed part waits for clarification" },
-      { target: "forecast", id: "fc_rent", delta_monthly: rentCheck.justifiedIncrease, from: EFFECTIVE, note: "Rent line in the 13-week forecast" },
-    ],
-    recommended_actions: ACTIONS,
+    payment: {
+      decision: "keep",
+      cost_ref: "RENT",
+      effective_from: EFFECTIVE,
+      current_amount: RENT,
+      billed_amount: BILLED,
+      // Keep: the rent stays what the forecast already has, so the forecast doesn't change.
+      proposed_amount: vpi.justified,
+    },
   });
-  classify("conflict", "classified");
   await delay(400 / speed);
-  publish({ status: "pending_approval" });
-  status("costs", "Rent increase conflicts with your lease. Actions prepared.", false);
-  await log("agent", `Rent notice ${eur(RENT)} → ${eur(NOTICED)}: conflicts with lease §5, justified ${eur(rentCheck.justified)}, disputed ${eur(rentCheck.disputedAnnual)} a year`, {
+  patch(HERO_ID, { status: "pending_approval", recommended_actions: heroActions() });
+  say("Rent increase conflicts with your lease. Actions prepared.", false);
+  await log("agent", `Rent ${de(RENT)} → ${de(BILLED)}: conflicts with lease §4.2, allowed ${de(vpi.justified)}, ${de(annualize(disputedMonthly))} a year disputed`, {
     agent: "costs",
     autonomy: "approval_required",
     execution: "simulated",
-    model: model(`${FINDING_ID}-classified`),
+    model: model(`${HERO_ID}-classified`),
   });
 }
 
-/** Demo event: the landlord's notice arrives by e-mail. */
-export async function runRentNotice(speed = 1) {
-  const notice: KnownDocument = {
-    doc_id: NOTICE_ID,
-    kind: "notice",
-    label: "Rent notice, Main Street Real Estate",
-    note: `+${NOTICE_PCT}% from 1 June`,
-    source: "inbox",
-    added_at: nowIso(),
-  };
-  docs = [...docs.filter((d) => d.doc_id !== NOTICE_ID), notice];
-  mockBus.emit({ type: "document.added", data: notice });
-  status("costs", "New document from the landlord. Reading it…", true);
-
-  current = baseFinding();
-  publish({ status: "ingested" });
-  await delay(900 / speed);
-  publish({ status: "extracted" });
-  await delay(900 / speed);
-  classify("unexplained", "checked");
-  await delay(900 / speed);
-  publish({ status: "investigating" });
-  status("costs", "Rent goes up 8%. Looking for the reason…", true);
-
-  await step(
-    {
-      hypothesis: "The notice gives a valid reason",
-      tool: "read_document",
-      input: { doc_id: NOTICE_ID },
-      result: `Rent ${eur(RENT)} → ${eur(NOTICED)} (+${NOTICE_PCT}%) from 1 June 2025. Reason given: "higher operating costs". No index and no lease clause cited.`,
-      evidence_ref: `${NOTICE_ID}#p1`,
-    },
-    1600 / speed,
-  );
-
-  if (hasLease()) {
-    await checkAgainstLease(speed);
-    return;
+/**
+ * Upload a bill or notice: the same rules as POST /documents (a PDF of at most 5 MB, one run at a time,
+ * a document only once). The mock treats every upload as the demo rent adjustment.
+ */
+export async function uploadBill(file: File, onProgress?: (run: UploadRun) => void, speed = 1): Promise<UploadRun> {
+  const path = "/documents";
+  if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(413, path, "The file is larger than 5 MB.", "FILE_TOO_LARGE");
+  if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") throw new ApiError(422, path, "Only PDF files can be checked.", "NOT_A_PDF");
+  if (running) throw new ApiError(409, path, "A check is already running.", "RUN_IN_PROGRESS");
+  if (findings.some((f) => f.finding_id === HERO_ID)) throw new ApiError(409, path, "This document was already processed.", "DOCUMENT_ALREADY_PROCESSED");
+  running = true;
+  const run = (p: Partial<UploadRun>): UploadRun => ({ run_id: "run_rent_upload", status: "running", finding_ids: [HERO_ID], ...p });
+  try {
+    await log("owner", `Uploaded ${file.name}`, { agent: "costs" });
+    await runHero((latest) => onProgress?.(run({ latest })), speed);
+    return run({ status: "succeeded", headline: `Rent conflicts with lease §4.2: keep paying ${de(RENT)}, ${de(disputedMonthly)} a month disputed.` });
+  } finally {
+    running = false;
   }
-
-  await step(
-    {
-      hypothesis: "The lease allows a rent change",
-      tool: "search_documents",
-      input: { query: "Mietvertrag Main Street Real Estate", kind: "lease" },
-      result: `No lease on file. The bank statement shows rent of ${eur(RENT)} every month since January, nothing else.`,
-      evidence_ref: `${STATEMENT_ID}#rent`,
-    },
-    1400 / speed,
-  );
-  await delay(400 / speed);
-  publish({
-    status: "classified",
-    evidence_request: {
-      message: "Vero can't tell if this increase is allowed without your lease. Nothing is changed until then.",
-      action_label: "Upload your lease on Contract check",
-      href: "/contract",
-    },
-  });
-  status("costs", "Needs your lease to finish the rent check.", false);
-  await log("agent", `Rent notice ${eur(RENT)} → ${eur(NOTICED)}: needs evidence, asked the owner for the lease`, {
-    agent: "costs",
-    autonomy: "analysis",
-    model: model(`${FINDING_ID}-needs-evidence`),
-  });
 }
 
-/** Called by Contract check when a lease is uploaded. Returns how many open checks it restarted. */
-export async function registerLease(): Promise<number> {
-  const lease: KnownDocument = {
-    doc_id: LEASE_ID,
-    kind: "lease",
-    label: "Lease, Main Street Real Estate",
-    note: "§5 index rent (VPI)",
-    source: "contract_check",
-    added_at: nowIso(),
-  };
-  docs = [...docs.filter((d) => d.doc_id !== LEASE_ID), lease];
-  mockBus.emit({ type: "document.added", data: lease });
+/** Demo button: the rent adjustment arrives as if uploaded. */
+export const runRentUpload = () => uploadBill(new File(["demo"], DEMO_UPLOAD_NAME, { type: "application/pdf" }));
 
-  const waiting = current && current.evidence_request && current.status !== "resolved";
-  if (waiting) {
-    publish({ status: "investigating" });
-    status("costs", "Lease received. Finishing the rent check…", true);
-    void checkAgainstLease(1);
-    return 1;
-  }
-  return 0;
-}
-
-export async function approveFinding(id: string, actions: RecommendedAction["type"][]): Promise<Finding> {
+/** Approve or reject each prepared action; the finding is resolved once every action is decided. */
+export async function decideActions(decisions: ActionDecisions): Promise<void> {
   await delay(400);
-  if (!current || current.finding_id !== id) throw new Error(`Finding ${id} not found`);
-  publish({ status: "resolved", resolved_at: nowIso(), recommended_actions: current.recommended_actions.filter((a) => actions.includes(a.type)) });
-  await log("owner", `Approved ${actions.length} rent actions (simulated): ${actions.join(", ")}`, { agent: "costs", autonomy: "approval_required", execution: "simulated" });
-  if (actions.includes("update_forecast")) await onRentApproved(rentCheck.justified);
-  return clone(current);
+  for (const [id, verdict] of Object.entries(decisions)) {
+    const f = findings.find((x) => x.recommended_actions.some((a) => a.id === id));
+    const a = f?.recommended_actions.find((x) => x.id === id);
+    if (!f || !a) throw new ApiError(404, `/recommendations/${id}/${verdict}`, `Action ${id} not found`, "NOT_FOUND");
+    if (a.status !== "pending") throw new ApiError(409, `/recommendations/${id}/${verdict}`, "Already decided", "NOT_PENDING");
+    const actions = f.recommended_actions.map((x) => (x.id === id ? { ...x, status: verdict === "approve" ? ("approved" as const) : ("rejected" as const) } : x));
+    const done = actions.every((x) => x.status !== "pending");
+    const next: Partial<Finding> = { recommended_actions: actions };
+    if (done) Object.assign(next, { status: "resolved" as FindingStatus, in_digest: false, resolved_at: nowIso() });
+    patch(f.finding_id, next);
+    await log("owner", `${verdict === "approve" ? "Approved" : "Rejected"}: ${a.title}${verdict === "approve" ? " (simulated)" : ""}`, {
+      agent: "costs",
+      autonomy: "approval_required",
+      execution: "simulated",
+      decisionId: id,
+    });
+  }
 }
+
+/** A quiet finding leaves the digest with one tap (POST /findings/{id}/acknowledge). */
+export async function acknowledgeFinding(id: string): Promise<void> {
+  await delay(250);
+  const f = findings.find((x) => x.finding_id === id);
+  if (!f) throw new ApiError(404, `/findings/${id}/acknowledge`, `Finding ${id} not found`, "NOT_FOUND");
+  if (!f.quiet || !f.in_digest) throw new ApiError(409, `/findings/${id}/acknowledge`, "Only a quiet finding can be acknowledged", "NOT_PENDING");
+  patch(id, { in_digest: false, status: "resolved", resolved_at: nowIso() });
+  await log("owner", `Acknowledged: ${f.title}`, { agent: "costs" });
+}
+
+resetCosts();

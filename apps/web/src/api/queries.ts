@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { ChatTurn, Decision, DecisionAction, Finding, RecommendedAction } from "./types";
+import type { ActionDecisions, ChatTurn, Decision, DecisionAction, UploadRun } from "./types";
 
 export const keys = {
   company: ["company"] as const,
@@ -60,22 +60,44 @@ export function useChat() {
   });
 }
 
-export function useApproveFinding() {
+/** Everything a cost-check decision can change: findings and digest, the Overview's lanes, the forecast and the log. */
+function invalidateAfterProof(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: keys.costs });
+  qc.invalidateQueries({ queryKey: keys.decisions });
+  qc.invalidateQueries({ queryKey: keys.forecast });
+  qc.invalidateQueries({ queryKey: keys.company });
+  qc.invalidateQueries({ queryKey: keys.audit });
+}
+
+/** Approve or reject each prepared action of a finding (live: one recommendation each). */
+export function useDecideActions() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, actions }: { id: string; actions: RecommendedAction["type"][] }) => api.approveFinding(id, actions),
-    onSuccess: (updated) => {
-      qc.setQueryData<Finding[]>(keys.findings, (old = []) => [updated, ...old.filter((f) => f.finding_id !== updated.finding_id)]);
-      qc.invalidateQueries({ queryKey: keys.audit });
-    },
+    mutationFn: (decisions: ActionDecisions) => api.decideActions(decisions),
+    // Refetch even after a partial failure: some actions may already be decided.
+    onSettled: () => invalidateAfterProof(qc),
   });
 }
 
-export function useContractUpload() {
+/** The owner's one tap on a change Vero handled quietly. */
+export function useAcknowledgeFinding() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => api.uploadContract(file),
-    // A new document can restart or finish a cost check.
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.costs }),
+    mutationFn: (findingId: string) => api.acknowledgeFinding(findingId),
+    onSettled: () => invalidateAfterProof(qc),
   });
+}
+
+/** Upload a bill or notice and follow its check; `onProgress` gets each poll of the run. */
+export function useUploadBill(onProgress?: (run: UploadRun) => void) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => api.uploadBill(file, onProgress),
+    onSettled: () => invalidateAfterProof(qc),
+  });
+}
+
+/** Mock only: test a customer contract on the forecast. */
+export function useContractSimulation() {
+  return useMutation({ mutationFn: (file: File) => api.simulateContract(file) });
 }

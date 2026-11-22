@@ -7,12 +7,13 @@
  *  reset         Calm Monday 14 April. Cash agent: the June shutdown pushes the account into overdraft
  *                → overdraft facility (needs approval), CHF deferral (suggestion). Currency agent: fix the
  *                CHF rate. Tax agent: lower the June prepayment. Small things done for you.
- *  rent_notice   The landlord asks for +8% rent from 1 June → Vero checks it against the lease (see costs.ts).
+ *  rent_notice   The landlord's rent adjustment arrives (4,104 € from 1 June) → Vero checks it against lease §4.2
+ *                and finds it conflicts (docs/PROOF.md §7.1, see costs.ts). Same as uploading it on "Upload a bill".
  *  fast_forward  Jump to 1 July 2025: weeks up to 29 June become actuals, the forecast stays as a line.
  */
 import type {
+  ActionDecisions,
   Company,
-  ContractCheckResult,
   ContractSimulation,
   Decision,
   DecisionAction,
@@ -20,9 +21,8 @@ import type {
   Forecast,
   ForecastDay,
   ForecastWeek,
-  LeaseCheck,
   Policy,
-  RecommendedAction,
+  UploadRun,
 } from "../types";
 import { mockBus } from "../mockBus";
 import { formatDate, formatEur, formatEurWhole } from "../../lib/format";
@@ -414,15 +414,6 @@ const onApprove: Record<string, () => Promise<void>> = {
   },
 };
 
-costs.setRentApprovedHandler(async (rent) => {
-  status("liquidity", "Updating the rent in the forecast…", true);
-  await delay(600);
-  adj = { ...adj, rentFromJune: rent };
-  setForecast();
-  await log("system", `Forecast updated: rent ${formatEur(rent)} from June`, { agent: "liquidity", autonomy: "analysis" });
-  status("liquidity", "Forecast updated", false);
-});
-
 function upsert(d: Decision, isNew: boolean) {
   decisions = [d, ...decisions.filter((x) => x.id !== d.id)];
   mockBus.emit({ type: isNew ? "decision.created" : "decision.updated", data: clone(d) });
@@ -473,43 +464,16 @@ export async function getCostMemory() { await delay(100); return costs.getMemory
 export async function getCostDocuments() { await delay(80); return costs.getDocuments(); }
 export async function getDigest() { await delay(100); return costs.getDigest(); }
 export async function getDocument(id: string) { await delay(80); return costs.getDocument(id); }
-export async function approveFinding(id: string, actions: RecommendedAction["type"][]) { return costs.approveFinding(id, actions); }
+export async function decideActions(decisions: ActionDecisions) { return costs.decideActions(decisions); }
+export async function acknowledgeFinding(id: string) { return costs.acknowledgeFinding(id); }
+export async function uploadBill(file: File, onProgress?: (run: UploadRun) => void) { return costs.uploadBill(file, onProgress); }
 
 // ───── Contract check ─────
 
-const isLease = (name: string) => /lease|miet/i.test(name);
-
-export async function uploadContract(file: File): Promise<ContractCheckResult> {
+/** Mock only: a customer contract tested on the 13-week forecast (the real backend checks bills, not contracts). */
+export async function simulateContract(file: File): Promise<ContractSimulation> {
   status("contract", "Reading the document…", true);
   await delay(1200);
-  if (isLease(file.name)) {
-    status("contract", "Lease found. Registering it for the cost check…", true);
-    await delay(900);
-    const triggered = await costs.registerLease();
-    status("contract", "Lease registered", false);
-    const result: LeaseCheck = {
-      kind: "lease",
-      contractId: newId("k"),
-      fileName: file.name,
-      documentId: costs.LEASE_ID,
-      costChecksTriggered: triggered,
-      model: model(`lease-${file.name}`),
-      lease: {
-        landlord: costs.LANDLORD,
-        monthlyRentEur: 3800,
-        indexClause: "§5 Indexmiete: the rent follows the German consumer price index (VPI), at most once a year, in writing.",
-        noticeRules: "§12: 6 months' notice to the end of a quarter.",
-        startDate: "2023-01-01",
-      },
-    };
-    await log("agent", `Read lease ${file.name}: rent €3,800.00, §5 index rent (VPI). Registered for the cost check`, {
-      agent: "contract",
-      autonomy: "analysis",
-      model: result.model,
-    });
-    return result;
-  }
-
   status("contract", "Testing it on your 13-week forecast…", true);
   await delay(1500);
   status("contract", "Contract checked", false);
@@ -545,8 +509,6 @@ export async function uploadContract(file: File): Promise<ContractCheckResult> {
     kind: "contract",
     contractId: newId("k"),
     fileName: file.name,
-    documentId: newId("doc"),
-    costChecksTriggered: 0,
     model: model(`contract-${file.name}`),
     extractedTerms: terms,
     baseline: weeks,
@@ -595,7 +557,7 @@ export async function runDemo(scenario: DemoScenario) {
     }
 
     case "rent_notice": {
-      await costs.runRentNotice();
+      await costs.runRentUpload();
       break;
     }
 

@@ -31,7 +31,7 @@ export function ClassificationBadge({ value, large }: { value: Classification; l
 }
 
 export const TOOL_ICON: Record<ToolName, IconName> = {
-  read_document: "file",
+  get_price_list: "file",
   search_inbox: "mail",
   search_documents: "search",
   read_clause: "file",

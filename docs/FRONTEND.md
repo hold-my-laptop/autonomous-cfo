@@ -29,8 +29,8 @@ The backend has no event stream, so live updates come from polling the latest ru
 | Route | What it shows |
 |---|---|
 | `/` Overview | One status sentence, 13-week cash chart (W1–W13), **Needs your OK**, **Suggestions**, **Done and checked** |
-| `/contract` | The only upload. Customer contract → cash impact → safer terms → email draft. Lease → registered for Vero |
-| `/costs` | Vero, the cost check: findings with a live investigation trace, evidence, prepared actions. `?doc=<id>` filters by document |
+| `/contract` | **Upload a bill or notice** (POST /documents, PDF up to 5 MB): Vero checks it and the page follows the run. Demo button: `doc_rent_adjustment_2025_06.pdf` (served from `public/demo`). Mock mode also has "Test a customer contract" (cash impact, safer terms, email draft) |
+| `/costs` | Vero, the cost check: digest counts, findings that need the owner with the investigation trace, evidence side by side, prepared actions (approve or decline each), **Handled quietly** (quiet findings, one tap to clear) and routine checks. `?doc=<id>` filters by document |
 | `/activity` | Sealed (hash-chained) history of everything agents and the owner did |
 
 Every item shows the challenge's four levels: **Checked on its own** (analysis), **Suggestion**,
@@ -48,12 +48,12 @@ Mock mode replays **Pizzeria Amalfi's 2025 bank statement** (`data/pizzeria-amal
 The demo replays 2025 from Monday 14 April; agents only see transactions before that date.
 
 - `src/api/mock/statement.ts`: CSV parser, daily balances, weekly forecast (mock forecast = 2025 actuals + approved decisions)
-- `src/api/mock/index.ts`: CFO story (Cash, Currency, Tax agents), contract check, presenter events
-- `src/api/mock/costs.ts`: Vero (rent notice → lease §5 → `engine.ts`)
+- `src/api/mock/index.ts`: CFO story (Cash, Currency, Tax agents), customer contract test, presenter events
+- `src/api/mock/costs.ts`: Vero, the reference demo of [PROOF.md §7](PROOF.md): three changes handled quietly, three routine checks, and the rent adjustment (4 104 € billed, lease §4.2, VPI 117.6 → 121.2 = 3.06 % < 5 % → 3 800 € allowed, 304 €/month, 3 648 €/year, 912 € in the window), with `engine.ts` (the backend's formulas)
 
-Presenter controls (`?demo=1`): **Rent increase notice arrives**, **Fast-forward to 1 July**, **Start again**.
-Upload the lease on Contract check first (demo button "Lease (Mietvertrag)") for the full rent story;
-without it Vero stops at "Needs evidence" and asks for the lease.
+Presenter controls (`?demo=1`): **Landlord's rent adjustment arrives** (same as uploading it), **Fast-forward to 1 July**, **Start again**.
+
+Live mode (`adapters.ts`): `GET /findings` + `GET /recommendations` + `GET /runs/{run_id}` → findings (quiet ones go to Handled quietly), `GET /digest` → the tiles (3 / 3 / 0 / 3 after a reset, 4 / 3 / 1 / 3 after the rent upload), `POST /recommendations/{id}/approve|reject` per action, `POST /findings/{id}/acknowledge` for a quiet one.
 
 Real-backend builds do not include the mock (it is loaded with a dynamic import only when `VITE_MOCK=1`).
 
