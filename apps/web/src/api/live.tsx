@@ -54,10 +54,12 @@ function pollRuns(qc: QueryClient, setState: Dispatch<SetStateAction<LiveState>>
           : run.status === "FAILED"
             ? `Couldn't finish: ${run.trigger.label}`
             : `Last check: ${run.trigger.label}`;
+        // CASH runs are the liquidity agent's, PROOF runs (a document's check) the cost agent's.
+        const agent: AgentId = run.kind === "PROOF" ? "costs" : "liquidity";
         setState((s) => ({
           ...s,
-          latest: { agent: "liquidity", message, busy },
-          agents: { ...s.agents, liquidity: { message, busy } },
+          latest: { agent, message, busy },
+          agents: { ...s.agents, [agent]: { message, busy } },
         }));
 
         const key = `${run.run_id}:${run.status}`;

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
-import type { ChatTurn, Decision, DecisionAction, Finding, RecommendedAction } from "./types";
+import type { ChatTurn, Decision, DecisionAction } from "./types";
 
 export const keys = {
   company: ["company"] as const,
@@ -60,22 +60,55 @@ export function useChat() {
   });
 }
 
-export function useApproveFinding() {
+/** Everything a cost decision can change: the checks, the Overview's items, the forecast and the log. */
+function refreshAfterCosts(qc: ReturnType<typeof useQueryClient>) {
+  qc.invalidateQueries({ queryKey: keys.costs });
+  qc.invalidateQueries({ queryKey: keys.decisions });
+  qc.invalidateQueries({ queryKey: keys.forecast });
+  qc.invalidateQueries({ queryKey: keys.audit });
+}
+
+/** Approve some of a finding's prepared actions and decline the others. */
+export function useDecideFinding() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, actions }: { id: string; actions: RecommendedAction["type"][] }) => api.approveFinding(id, actions),
-    onSuccess: (updated) => {
-      qc.setQueryData<Finding[]>(keys.findings, (old = []) => [updated, ...old.filter((f) => f.finding_id !== updated.finding_id)]);
-      qc.invalidateQueries({ queryKey: keys.audit });
-    },
+    mutationFn: ({ id, approve, reject }: { id: string; approve: string[]; reject: string[] }) => api.decideFinding(id, approve, reject),
+    // Also after a failure: some actions may have gone through before it.
+    onSettled: () => refreshAfterCosts(qc),
   });
 }
 
-export function useContractUpload() {
+/** One tap on a change Vero handled quietly. */
+export function useAcknowledgeFinding() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (file: File) => api.uploadContract(file),
-    // A new document can restart or finish a cost check.
-    onSuccess: () => qc.invalidateQueries({ queryKey: keys.costs }),
+    mutationFn: (id: string) => api.acknowledgeFinding(id),
+    onSettled: () => refreshAfterCosts(qc),
   });
+}
+
+/** Upload a bill or notice; follow its run with useDocumentRun. */
+export function useUploadDocument() {
+  return useMutation({ mutationFn: (file: File) => api.uploadDocument(file) });
+}
+
+/** The upload's run, polled until it has finished; then the checks are refreshed. */
+export function useDocumentRun(runId: string | null) {
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: ["runs", runId ?? ""] as const,
+    queryFn: async () => {
+      const run = await api.documentRun(runId!);
+      if (run.status !== "RUNNING") refreshAfterCosts(qc);
+      return run;
+    },
+    enabled: !!runId,
+    refetchInterval: (q) => (q.state.data?.status === "RUNNING" || !q.state.data ? 1000 : false),
+    refetchIntervalInBackground: true,
+  });
+}
+
+/** Mock only: a contract tested on the forecast. */
+export function useContractUpload() {
+  return useMutation({ mutationFn: (file: File) => api.uploadContract(file) });
 }

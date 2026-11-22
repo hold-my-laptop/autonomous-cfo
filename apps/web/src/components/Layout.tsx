@@ -75,7 +75,7 @@ function NavTabs() {
     >
       <span ref={pillRef} aria-hidden="true" className="nav-pill btn-primary nav-active absolute left-0 top-1 h-10 rounded-full opacity-0" />
       <NavLink to="/" end className={navClass}>Overview</NavLink>
-      <NavLink to="/contract" className={navClass}>Contract check</NavLink>
+      <NavLink to="/contract" className={navClass}>Upload a bill</NavLink>
       <NavLink to="/costs" className={navClass}>Cost changes</NavLink>
       <NavLink to="/activity" className={navClass}>Activity</NavLink>
     </nav>
@@ -85,7 +85,7 @@ function NavTabs() {
 const PAGES = ["/", "/contract", "/costs", "/activity"];
 const PAGE_NAMES: Record<string, string> = {
   "/": "Overview",
-  "/contract": "Contract check",
+  "/contract": "Upload a bill",
   "/costs": "Cost changes",
   "/activity": "Activity",
 };

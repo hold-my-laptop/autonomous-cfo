@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { useApproveFinding, useDocument } from "../../api/queries";
+import { useCostDocuments, useDecideFinding, useDocument } from "../../api/queries";
 import type { Finding, FindingStatus, RecommendedAction, TraceStep } from "../../api/types";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
-import { formatDate } from "../../lib/format";
 import { btnPrimary } from "../today/DecisionCard";
 import { ModelLine } from "../today/Reasoning";
 import { ClassificationBadge, classLabel, eur, eurDelta, PaperDoc, TOOL_ICON } from "./parts";
+import { clauseName } from "./story";
 
 const PIPELINE: { status: FindingStatus; label: string }[] = [
   { status: "ingested", label: "Read" },
@@ -19,7 +19,8 @@ const PIPELINE: { status: FindingStatus; label: string }[] = [
   { status: "resolved", label: "Done" },
 ];
 const MAX_TOOL_CALLS = 6;
-const num = (v: number) => v.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Static class names, so Tailwind generates them.
+const COLS: Record<number, string> = { 1: "sm:grid-cols-1", 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4", 5: "sm:grid-cols-5" };
 
 export const isWorking = (f: Finding) => ["ingested", "extracted", "checked", "investigating"].includes(f.status);
 
@@ -28,6 +29,7 @@ export function FindingView({ finding: f }: { finding: Finding }) {
   const statusIdx = PIPELINE.findIndex((p) => p.status === f.status);
   const li = f.line_item;
   const working = isWorking(f);
+  const sign = li.variance_pct > 0 ? "+" : "";
 
   return (
     <div className="space-y-4">
@@ -37,10 +39,10 @@ export function FindingView({ finding: f }: { finding: Finding }) {
             <p className="flex items-center gap-1.5 text-xs text-ink-soft">
               <Icon name="mail" size={13} />
               <span className="truncate">{f.vendor}</span>
-              <span className="font-mono text-[11px] text-ink-muted">· {f.source_doc_id}</span>
+              {f.source_doc_id && <span className="font-mono text-[11px] text-ink-muted">· {f.source_doc_id}</span>}
             </p>
             <h2 id={`inv-h-${f.finding_id}`} className="mt-1.5 text-[19px] font-semibold leading-snug">
-              {li.description} · from {formatDate(li.effective_from)}
+              {f.title}
             </h2>
           </div>
           <div className="flex flex-col items-end gap-1" aria-live="polite">
@@ -57,9 +59,9 @@ export function FindingView({ finding: f }: { finding: Finding }) {
 
         <dl className="glass-inset mt-4 grid grid-cols-3 rounded-xl">
           {[
-            { k: "Paid until now", v: eur(li.previous_value) },
-            { k: "Asked for", v: eur(li.current_value), bad: true },
-            { k: "Change", v: `${eurDelta(li.monthly_variance)} · +${li.variance_pct.toLocaleString("en-GB")}%`, bad: true },
+            { k: li.unit === "month" ? "Paid until now" : "Expected", v: eur(li.previous_value) },
+            { k: li.unit === "month" ? "Asked for" : "Billed", v: eur(li.current_value), bad: true },
+            { k: "Change", v: `${eurDelta(li.monthly_variance)} · ${sign}${li.variance_pct.toLocaleString("en-GB")}%`, bad: true },
           ].map((c, i) => (
             <div key={c.k} className={`px-3 py-3 sm:px-4 ${i ? "border-l border-line" : ""}`}>
               <dt className="text-xs text-ink-soft">{c.k}</dt>
@@ -89,6 +91,7 @@ export function FindingView({ finding: f }: { finding: Finding }) {
             );
           })}
         </ol>
+        {f.reason && !working && <p className="mt-3 text-[13px] text-ink-soft">{f.reason}</p>}
       </section>
 
       {f.evidence_request && (
@@ -106,41 +109,41 @@ export function FindingView({ finding: f }: { finding: Finding }) {
       )}
 
       <Trace
+        id={f.finding_id}
         steps={f.investigation_trace}
         running={f.status === "investigating"}
         visible={statusIdx >= 3 || f.investigation_trace.length > 0}
       />
 
-      {f.financial_impact && <Outcome key={f.finding_id} finding={f} />}
+      {!working && <Outcome key={f.finding_id} finding={f} />}
     </div>
   );
 }
 
-function Trace({ steps, running, visible }: { steps: TraceStep[]; running: boolean; visible: boolean }) {
+function Trace({ id, steps, running, visible }: { id: string; steps: TraceStep[]; running: boolean; visible: boolean }) {
   if (!visible) return null;
   const sorted = [...steps].sort((a, b) => a.step - b.step);
   return (
-    <section aria-labelledby="trace-h" className="liquid-glass-strong rounded-3xl p-5 sm:p-7">
+    <section aria-labelledby={`trace-h-${id}`} className="liquid-glass-strong rounded-3xl p-5 sm:p-7">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="trace-h" className="text-[20px] font-semibold">How Vero found out</h2>
+        <h2 id={`trace-h-${id}`} className="text-[20px] font-semibold">How Vero found out</h2>
         <p className="text-[11px] text-ink-soft">
           {sorted.length} of max {MAX_TOOL_CALLS} tool calls · read-only tools · maths by the deterministic engine
         </p>
       </div>
+      {sorted.length === 0 && !running && <p className="mt-3 text-[13px] text-ink-soft">No look-ups were needed: the evidence on file explained it.</p>}
       <ol className="mt-5 space-y-2" aria-live="polite">
         {sorted.map((s) => (
           <li key={s.step} className="glass-inset flex gap-4 rounded-xl p-3 sm:p-4">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-sand">
-              <Icon name={TOOL_ICON[s.tool]} size={15} />
+              <Icon name={s.tool ? TOOL_ICON[s.tool] : "search"} size={15} />
             </span>
             <div className="min-w-0 flex-1 pt-0.5">
               <p className="text-[13px] font-semibold">
-                {s.step}. {s.hypothesis}
+                {s.step}. {s.hypothesis || s.call}
               </p>
-              <p className="mt-1 break-words font-mono text-[11px] text-ask">
-                {s.tool}({Object.entries(s.input).map(([k, v]) => `${k}: ${typeof v === "string" ? `"${v}"` : v}`).join(", ")})
-              </p>
-              <p className="mt-1.5 text-[13px] text-ink-soft">{s.result}</p>
+              {s.hypothesis && <p className="mt-1 break-words text-[12px] text-ask">{s.call}</p>}
+              {s.result && <p className="mt-1.5 text-[13px] text-ink-soft">{s.result}</p>}
               {s.evidence_ref && <p className="mt-1 font-mono text-[11px] text-ink-soft">evidence → {s.evidence_ref}</p>}
               {s.model && <ModelLine model={s.model} className="mt-1" />}
             </div>
@@ -161,156 +164,202 @@ function Trace({ steps, running, visible }: { steps: TraceStep[]; running: boole
 
 function Outcome({ finding }: { finding: Finding }) {
   const toast = useToast();
-  const approve = useApproveFinding();
-  const fi = finding.financial_impact!;
-  const li = finding.line_item;
+  const decide = useDecideFinding();
+  const { data: docs } = useCostDocuments();
+  const v = finding.verdict;
   const resolved = finding.status === "resolved";
-  const capPct = Number(finding.investigation_trace.find((t) => t.tool === "compute")?.input.cap_pct ?? 0);
-  const capFactor = (1 + capPct / 100).toLocaleString("en-GB", { minimumFractionDigits: 3 });
+  const tone = finding.classification === "conflict" ? "border-short/25 bg-short-tint" : finding.classification === "verified" ? "border-safe/25 bg-safe-tint" : "border-ask/25 bg-cream";
 
-  const rightOptions = finding.evidence_refs.filter((e) => e.doc_id !== finding.source_doc_id);
-  const [right, setRight] = useState(rightOptions.find((e) => e.type === "lease")?.doc_id ?? rightOptions[0]?.doc_id ?? null);
+  // Only evidence with a document opens side by side; emails and reference values are listed by id.
+  const openable = finding.evidence_refs.filter((e) => e.doc_id && e.doc_id !== finding.source_doc_id);
+  const listed = finding.evidence_refs.filter((e) => !e.doc_id);
+  const docLabel = (id: string, fallback: string) => {
+    const known = docs?.find((d) => d.doc_id === id)?.label;
+    return known ?? fallback;
+  };
+  const [right, setRight] = useState(openable.find((e) => e.type === "lease")?.doc_id ?? openable[0]?.doc_id ?? null);
   const [english, setEnglish] = useState(true);
   const left = useDocument(finding.source_doc_id);
   const rightDoc = useDocument(right);
+  const rightRef = openable.find((e) => e.doc_id === right);
 
-  const [selected, setSelected] = useState<Record<string, boolean>>(() =>
-    Object.fromEntries(finding.recommended_actions.map((a) => [a.type, true])),
-  );
-  const chosen = finding.recommended_actions.filter((a) => selected[a.type]).map((a) => a.type);
-  const total = finding.recommended_actions.length;
+  const actions = finding.recommended_actions;
+  const pending = actions.filter((a) => a.status === "pending");
+  const [selected, setSelected] = useState<Record<string, boolean>>(() => Object.fromEntries(pending.map((a) => [a.id, true])));
+  const approve = pending.filter((a) => selected[a.id]).map((a) => a.id);
+  const reject = pending.filter((a) => !selected[a.id]).map((a) => a.id);
+  const buttonLabel =
+    approve.length === 0
+      ? `Decline ${reject.length === 1 ? "it" : `all ${reject.length}`}`
+      : reject.length === 0
+        ? `Approve ${approve.length === 1 ? "it" : `all ${approve.length}`}`
+        : `Approve ${approve.length}, decline ${reject.length}`;
 
   return (
     <>
-      <section aria-labelledby="verdict-h" className="rounded-3xl border border-short/25 bg-short-tint p-5 sm:p-6">
-        <h2 id="verdict-h" className="text-[20px] font-semibold leading-snug">
-          Your lease ties the rent to the price index. The landlord asks {eur(fi.disputed_amount_monthly)} a month too much.
-        </h2>
-        <p className="mt-1 text-[13px] text-ink-soft">
-          The notice gives no index or clause for +{li.variance_pct.toLocaleString("en-GB")}%. §5 allows the change of the German consumer
-          price index: {capPct.toLocaleString("en-GB")}% (demo dataset value).
-        </p>
-        <dl className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-line sm:grid-cols-4">
-          {[
-            { k: "Asked for", v: eur(li.current_value), calc: `${finding.source_doc_id}, p. 1` },
-            { k: "Justified", v: eur(fi.justified_value), calc: `${num(li.previous_value)} × ${capFactor}`, good: true },
-            { k: "Disputed / month", v: eur(fi.disputed_amount_monthly), calc: `${num(li.current_value)} − ${num(fi.justified_value)}`, bad: true },
-            { k: "Disputed / year", v: eur(fi.disputed_amount_annual), calc: `${num(fi.disputed_amount_monthly)} × 12`, bad: true },
-          ].map((c) => (
-            <div key={c.k} className="bg-surface px-4 py-3">
-              <dt className="text-xs text-ink-soft">{c.k}</dt>
-              <dd className={`num tight mt-0.5 text-lg font-semibold ${c.bad ? "text-short" : c.good ? "text-safe" : ""}`}>{c.v}</dd>
-              <dd className="font-mono text-[10.5px] text-ink-muted">{c.calc}</dd>
-            </div>
-          ))}
-        </dl>
-        <p className="mt-2 text-[11px] text-ink-muted">{fi.assumption}.</p>
-      </section>
-
-      <section aria-labelledby="ev-h">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 id="ev-h" className="text-[20px] font-semibold">Evidence</h2>
-          <div className="flex flex-wrap items-center gap-1">
-            {rightOptions.map((d) => (
-              <button
-                key={d.doc_id}
-                type="button"
-                aria-pressed={right === d.doc_id}
-                onClick={() => setRight(d.doc_id)}
-                className={`h-8 rounded-full px-3 text-xs font-medium ${right === d.doc_id ? "btn-primary" : "text-ink-soft hover:glass-inset"}`}
-              >
-                {d.type === "lease" ? `Lease ${d.clause ?? ""}` : d.type === "statement" ? "Bank statement" : d.doc_id}
-              </button>
+      {v && (
+        <section aria-labelledby={`verdict-h-${finding.finding_id}`} className={`rounded-3xl border p-5 sm:p-6 ${tone}`}>
+          <h2 id={`verdict-h-${finding.finding_id}`} className="text-[20px] font-semibold leading-snug">
+            {v.title}
+          </h2>
+          {v.detail && <p className="mt-1 text-[13px] text-ink-soft">{v.detail}</p>}
+          <dl className={`mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-line ${COLS[Math.min(v.cells.length, 5)]}`}>
+            {v.cells.map((c) => (
+              <div key={c.k} className="bg-surface px-4 py-3">
+                <dt className="text-xs text-ink-soft">{c.k}</dt>
+                <dd className={`num tight mt-0.5 text-lg font-semibold ${c.tone === "bad" ? "text-short" : c.tone === "good" ? "text-safe" : ""}`}>{c.v}</dd>
+                <dd className="font-mono text-[10.5px] text-ink-muted">{c.calc}</dd>
+              </div>
             ))}
-            <label className="ml-2 inline-flex items-center gap-1.5 text-xs text-ink-soft">
-              <input type="checkbox" checked={english} onChange={(e) => setEnglish(e.target.checked)} className="accent-link" />
-              English
-            </label>
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {left.data ? <PaperDoc doc={left.data} showEnglish={english} /> : <div className="h-64 animate-pulse rounded-3xl bg-sunk" />}
-          {rightDoc.data ? <PaperDoc doc={rightDoc.data} showEnglish={english} /> : <div className="h-64 animate-pulse rounded-3xl bg-sunk" />}
-        </div>
-      </section>
+          </dl>
+          {v.note && <p className="mt-2 text-[11px] text-ink-muted">{v.note}</p>}
+        </section>
+      )}
 
-      <section aria-labelledby="prop-h">
-        <h2 id="prop-h" className="mb-3 text-[20px] font-semibold">What changes downstream</h2>
-        <div className="liquid-glass-strong overflow-x-auto rounded-3xl">
-          <table className="w-full min-w-[520px] text-[13px]">
-            <thead className="glass-inset border-b border-line text-left text-xs text-ink-soft">
-              <tr>
-                <th scope="col" className="px-4 py-2 font-medium sm:px-5">Where</th>
-                <th scope="col" className="px-4 py-2 font-medium">Note</th>
-                <th scope="col" className="px-4 py-2 text-right font-medium sm:pr-5">Change a month</th>
-              </tr>
-            </thead>
-            <tbody className="num">
-              {finding.propagation.map((p) => (
-                <tr key={p.id} className="border-t border-line first:border-t-0">
-                  <td className="px-4 py-3 font-medium sm:px-5">
-                    {p.target === "standing_order" ? `Rent standing order: ${eur(p.old)} → ${eur(p.new)}` : `13-week forecast, from ${formatDate(p.from)}`}
-                  </td>
-                  <td className="px-4 py-3 text-ink-soft">{p.note}</td>
-                  <td className="px-4 py-3 text-right sm:pr-5">{eurDelta(p.target === "standing_order" ? p.new - p.old : p.delta_monthly)}</td>
-                </tr>
+      {(finding.source_doc_id || openable.length > 0) && (
+        <section aria-labelledby={`ev-h-${finding.finding_id}`}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <h2 id={`ev-h-${finding.finding_id}`} className="text-[20px] font-semibold">Evidence</h2>
+            <div className="flex flex-wrap items-center gap-1">
+              {openable.map((d) => (
+                <button
+                  key={d.doc_id}
+                  type="button"
+                  aria-pressed={right === d.doc_id}
+                  onClick={() => setRight(d.doc_id)}
+                  className={`h-8 rounded-full px-3 text-xs font-medium ${right === d.doc_id ? "btn-primary" : "text-ink-soft hover:glass-inset"}`}
+                >
+                  {d.item_id ? `${docLabel(d.doc_id!, d.label)} ${clauseName(d.item_id)}` : docLabel(d.doc_id!, d.label)}
+                </button>
               ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section aria-labelledby="act-h" className="liquid-glass-strong rounded-3xl p-5 sm:p-6">
-        <p className="flex items-center gap-1.5 text-[11px] font-semibold text-ask">
-          <span className="h-2 w-2 rounded-full bg-sand" aria-hidden="true" />
-          {resolved ? "Approved · simulated" : "Needs your OK"}
-        </p>
-        <h2 id="act-h" className="mt-2 text-[20px] font-semibold">Prepared actions</h2>
-        <ul className="glass-inset mt-3 divide-y divide-sand/40 rounded-xl">
-          {finding.recommended_actions.map((a) => (
-            <ActionRow key={a.type} a={a} resolved={resolved} checked={!!selected[a.type]} onCheck={(v) => setSelected((s) => ({ ...s, [a.type]: v }))} />
-          ))}
-        </ul>
-        {!resolved && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={chosen.length === 0 || approve.isPending}
-              onClick={async () => {
-                try {
-                  await approve.mutateAsync({ id: finding.finding_id, actions: chosen });
-                  toast(`Approved ${chosen.length} ${chosen.length === 1 ? "action" : "actions"} (simulated). Nothing was sent to the bank or the landlord.`);
-                } catch {
-                  toast("That didn't go through. Check the connection and try again.", "neutral");
-                }
-              }}
-              className={btnPrimary}
-            >
-              {approve.isPending
-                ? "Working…"
-                : `Approve ${chosen.length === total ? `all ${total}` : chosen.length} ${chosen.length === 1 ? "action" : "actions"}`}
-            </button>
-            <span className="self-center text-xs text-ink-soft">Simulated: nothing is sent to the bank or the landlord.</span>
+              <label className="ml-2 inline-flex items-center gap-1.5 text-xs text-ink-soft">
+                <input type="checkbox" checked={english} onChange={(e) => setEnglish(e.target.checked)} className="accent-link" />
+                English
+              </label>
+            </div>
           </div>
-        )}
-      </section>
+          <div className="grid gap-4 md:grid-cols-2">
+            {finding.source_doc_id &&
+              (left.data ? <PaperDoc doc={left.data} showEnglish={english} /> : left.isError ? <DocMissing id={finding.source_doc_id} /> : <div className="h-64 animate-pulse rounded-3xl bg-sunk" />)}
+            {right &&
+              (rightDoc.data ? (
+                <PaperDoc doc={rightDoc.data} showEnglish={english} focus={rightRef?.item_id} focusLabel={rightRef?.item_id ? `${clauseName(rightRef.item_id)} cited` : undefined} />
+              ) : rightDoc.isError ? (
+                <DocMissing id={right} />
+              ) : (
+                <div className="h-64 animate-pulse rounded-3xl bg-sunk" />
+              ))}
+          </div>
+          {listed.length > 0 && (
+            <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-ink-soft">
+              Also cited:
+              {listed.map((e) => (
+                <span key={`${e.type}-${e.ref}`} className="rounded-full bg-sunk px-2 py-0.5">
+                  {e.label}
+                  {e.ref && <span className="ml-1 font-mono text-[10.5px] text-ink-muted">{e.ref}</span>}
+                </span>
+              ))}
+            </p>
+          )}
+        </section>
+      )}
+
+      {finding.propagation.length > 0 && (
+        <section aria-labelledby={`prop-h-${finding.finding_id}`}>
+          <h2 id={`prop-h-${finding.finding_id}`} className="mb-3 text-[20px] font-semibold">What changes downstream</h2>
+          <div className="liquid-glass-strong overflow-x-auto rounded-3xl">
+            <table className="w-full min-w-[520px] text-[13px]">
+              <thead className="glass-inset border-b border-line text-left text-xs text-ink-soft">
+                <tr>
+                  <th scope="col" className="px-4 py-2 font-medium sm:px-5">Where</th>
+                  <th scope="col" className="px-4 py-2 font-medium">Note</th>
+                  <th scope="col" className="px-4 py-2 text-right font-medium sm:pr-5">Change</th>
+                </tr>
+              </thead>
+              <tbody className="num">
+                {finding.propagation.map((p) => (
+                  <tr key={p.id} className="border-t border-line first:border-t-0">
+                    <td className="px-4 py-3 font-medium sm:px-5">{p.where}</td>
+                    <td className="px-4 py-3 text-ink-soft">{p.note}</td>
+                    <td className="px-4 py-3 text-right sm:pr-5">{p.change === 0 ? "None" : eurDelta(p.change)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {actions.length > 0 && (
+        <section aria-labelledby={`act-h-${finding.finding_id}`} className="liquid-glass-strong rounded-3xl p-5 sm:p-6">
+          <p className="flex items-center gap-1.5 text-[11px] font-semibold text-ask">
+            <span className="h-2 w-2 rounded-full bg-sand" aria-hidden="true" />
+            {pending.length ? "Needs your OK" : resolved ? "Decided · simulated" : "Decided"}
+          </p>
+          <h2 id={`act-h-${finding.finding_id}`} className="mt-2 text-[20px] font-semibold">Prepared actions</h2>
+          <ul className="glass-inset mt-3 divide-y divide-sand/40 rounded-xl">
+            {actions.map((a) => (
+              <ActionRow key={a.id} a={a} checked={!!selected[a.id]} onCheck={(on) => setSelected((s) => ({ ...s, [a.id]: on }))} />
+            ))}
+          </ul>
+          {pending.length > 0 && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={decide.isPending}
+                onClick={async () => {
+                  try {
+                    await decide.mutateAsync({ id: finding.finding_id, approve, reject });
+                    toast(
+                      `${approve.length ? `Approved ${approve.length}` : ""}${approve.length && reject.length ? ", " : ""}${reject.length ? `declined ${reject.length}` : ""} (simulated). Nothing was sent to the bank or to ${finding.vendor}.`,
+                    );
+                  } catch {
+                    toast("That didn't go through. Check the connection and try again.", "neutral");
+                  }
+                }}
+                className={btnPrimary}
+              >
+                {decide.isPending ? "Working…" : buttonLabel}
+              </button>
+              <span className="self-center text-xs text-ink-soft">Untick what you don't want. Simulated: nothing is sent.</span>
+            </div>
+          )}
+        </section>
+      )}
     </>
   );
 }
 
-function ActionRow({ a, resolved, checked, onCheck }: { a: RecommendedAction; resolved: boolean; checked: boolean; onCheck: (v: boolean) => void }) {
+function DocMissing({ id }: { id: string }) {
+  return (
+    <div className="flex h-64 items-center justify-center rounded-3xl border border-dashed border-line-strong p-6 text-center text-[13px] text-ink-soft">
+      Couldn't open {id}.
+    </div>
+  );
+}
+
+const STATUS_TAG: Record<RecommendedAction["status"], { label: string; cls: string } | null> = {
+  pending: null,
+  approved: { label: "Approved (simulated)", cls: "bg-safe-tint text-safe" },
+  rejected: { label: "Declined", cls: "bg-sunk text-ink-soft" },
+  other: { label: "No longer needed", cls: "bg-sunk text-ink-soft" },
+};
+
+function ActionRow({ a, checked, onCheck }: { a: RecommendedAction; checked: boolean; onCheck: (v: boolean) => void }) {
   const [open, setOpen] = useState(false);
   const [lang, setLang] = useState<"de" | "en">("de");
   const d = a.draft;
   const text = d && lang === "en" && d.english ? d.english : d;
+  const tag = STATUS_TAG[a.status];
+  const decided = a.status !== "pending";
   return (
     <li className="px-4 py-3">
       <label className="flex items-start gap-3">
-        <input type="checkbox" disabled={resolved} checked={checked} onChange={(e) => onCheck(e.target.checked)} className="mt-1 h-4 w-4 accent-link" />
+        <input type="checkbox" disabled={decided} checked={decided ? a.status === "approved" : checked} onChange={(e) => onCheck(e.target.checked)} className="mt-1 h-4 w-4 accent-link" />
         <span className="min-w-0 flex-1">
           <span className="block text-[13px] font-semibold">
             {a.title}
-            {resolved && <span className="ml-2 rounded-full bg-safe-tint px-2 py-0.5 text-[10px] font-semibold text-safe">Done (simulated)</span>}
+            {tag && <span className={`ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold ${tag.cls}`}>{tag.label}</span>}
           </span>
           <span className="block text-xs text-ink-soft">{a.detail}</span>
         </span>
@@ -324,26 +373,35 @@ function ActionRow({ a, resolved, checked, onCheck }: { a: RecommendedAction; re
             className="inline-flex h-7 items-center gap-1 text-xs font-medium text-link hover:underline"
           >
             <Icon name="mail" size={13} />
-            Read the draft
+            Read the letter
             <Icon name="chevron" size={13} className={open ? "rotate-180" : ""} />
           </button>
           {open && (
             <div className="glass-inset mt-2 rounded-xl border border-line p-4">
-              <div className="mb-2 flex items-center gap-1">
-                {(["de", "en"] as const).map((l) => (
-                  <button
-                    key={l}
-                    type="button"
-                    aria-pressed={lang === l}
-                    onClick={() => setLang(l)}
-                    className={`h-6 rounded-full px-2.5 text-[11px] font-semibold uppercase ${lang === l ? "btn-primary" : "text-ink-soft hover:glass-inset"}`}
-                  >
-                    {l}
-                  </button>
-                ))}
+              <div className="mb-2 flex flex-wrap items-center gap-1">
+                {d.english ? (
+                  (["de", "en"] as const).map((l) => (
+                    <button
+                      key={l}
+                      type="button"
+                      aria-pressed={lang === l}
+                      onClick={() => setLang(l)}
+                      className={`h-6 rounded-full px-2.5 text-[11px] font-semibold uppercase ${lang === l ? "btn-primary" : "text-ink-soft hover:glass-inset"}`}
+                    >
+                      {l}
+                    </button>
+                  ))
+                ) : (
+                  <span className="text-[11px] text-ink-soft">In German. There is no English version.</span>
+                )}
+                {d.source && (
+                  <span className="ml-auto text-[11px] text-ink-muted">
+                    {d.source === "MODEL" ? "Drafted by the model, checked by Vero" : "Vero's template, from the computed amounts"}
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-ink-soft">To: {d.to}</p>
-              <div lang={lang === "en" && d.english ? "en" : (a.language ?? d.language ?? "de")}>
+              <div lang={lang === "en" && d.english ? "en" : (d.language ?? "de")}>
                 <p className="text-[13px] font-semibold">{text.subject}</p>
                 <p className="mt-2 whitespace-pre-line text-[13px]">{text.body}</p>
               </div>
@@ -354,3 +412,4 @@ function ActionRow({ a, resolved, checked, onCheck }: { a: RecommendedAction; re
     </li>
   );
 }
+

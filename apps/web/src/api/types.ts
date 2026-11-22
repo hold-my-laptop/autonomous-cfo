@@ -238,21 +238,11 @@ export interface ContractTerms {
   costEur: Eur;              // food, staff and material costs the owner pays first
 }
 
-export interface LeaseTerms {
-  landlord: string;
-  monthlyRentEur: Eur;
-  indexClause: string;       // "§5 Indexmiete: rent follows the German consumer price index (VPI)"
-  noticeRules: string;
-  startDate: ISODate;
-}
-
 interface ContractCheckBase {
   contractId: string;
   fileName: string;
   /** Registered in the document store; Vero can cite it. */
   documentId: string;
-  /** How many open cost checks were (re)started because of this document. */
-  costChecksTriggered: number;
   model?: ModelInfo;
 }
 
@@ -271,13 +261,8 @@ export interface ContractSimulation extends ContractCheckBase {
   counterProposal: DraftMessage;
 }
 
-/** A lease: its terms are registered so Vero can check rent changes against it. */
-export interface LeaseCheck extends ContractCheckBase {
-  kind: "lease";
-  lease: LeaseTerms;
-}
-
-export type ContractCheckResult = ContractSimulation | LeaseCheck;
+/** Mock only: a customer or supplier contract tested on the forecast. */
+export type ContractCheckResult = ContractSimulation;
 
 // ───────────────────────── Activity log (audit) ─────────────────────────
 
@@ -342,11 +327,13 @@ export type ToolName =
   | "get_reference_index"
   | "compute";
 
+/** One tool call of an investigation: the hypothesis it tests, what Vero looked up, what came back. */
 export interface TraceStep {
   step: number;
   hypothesis: string;
-  tool: ToolName;
-  input: Record<string, string | number>;
+  tool?: ToolName;
+  /** The call as a readable line, e.g. "Reading §4.2 of the lease with Main Street Real Estate GmbH". */
+  call: string;
   result: string;
   evidence_ref: string | null;
   model?: ModelInfo;
@@ -354,32 +341,49 @@ export interface TraceStep {
 
 export interface FinancialImpact {
   justified_value: number;
-  justified_increase_monthly: number;
   disputed_amount_monthly: number;
   disputed_amount_annual: number;
-  assumption: string;
+  /** Billed above what is allowed inside the 13-week forecast window. */
+  disputed_in_window?: number;
+}
+
+/** The outcome in words and numbers, every number with how it was computed. */
+export interface Verdict {
+  title: string;
+  detail: string;
+  cells: { k: string; v: string; calc: string; tone?: "good" | "bad" }[];
+  note?: string;
 }
 
 export interface EvidenceRef {
-  type: "statement" | "notice" | "lease" | "contract" | "invoice" | "reference";
-  doc_id: string;
-  page?: number;
-  clause?: string;
-  snippet: string;
+  type: "statement" | "notice" | "lease" | "contract" | "invoice" | "price_list" | "email" | "reference" | "cost_memory";
+  /** Only evidence with a document can be opened side by side (GET /documents/{id}). */
+  doc_id: string | null;
+  /** The cited part inside the document, e.g. clause "s4_2", shown as "§4.2". */
+  item_id?: string;
+  label: string;
+  /** Emails and reference values: the id an investigation tool returned. */
+  ref?: string;
 }
 
-export type Propagation =
-  | { target: "standing_order"; id: string; old: number; new: number; note: string }
-  | { target: "forecast"; id: string; delta_monthly: number; from: ISODate; note: string };
+/** One thing the outcome changes downstream, with its effect in euros. */
+export interface Propagation {
+  id: string;
+  where: string;
+  note: string;
+  change: number;
+}
 
 export interface RecommendedAction {
-  type: "send_clarification_letter" | "update_standing_order" | "update_forecast";
+  /** The backend's recommendation id (live) or the mock's action id. */
+  id: string;
+  kind: "keep_payment" | "update_amount" | "send_letter";
   title: string;
   detail: string;
-  requires_approval: true;
+  status: "pending" | "approved" | "rejected" | "other";
   execution: "simulated";
-  language?: "de" | "en";
-  draft?: DraftMessage;
+  /** A letter: German only on the backend; `english` only in mock mode. */
+  draft?: DraftMessage & { source?: "MODEL" | "TEMPLATE" };
 }
 
 export interface Finding {
@@ -388,15 +392,22 @@ export interface Finding {
   classification: Classification;
   classification_history: Classification[];
   vendor: string;
-  billing_period: string;
-  /** The document that triggered the check (notice, invoice, ...). */
-  source_doc_id: string;
+  /** One line, e.g. "Monthly rent from 1 Jun 2025". */
+  title: string;
+  /** The document that triggered the check (the upload, an invoice). */
+  source_doc_id: string | null;
   line_item: LineItem;
   investigation_trace: TraceStep[];
+  /** Why it has its label, in one line. */
+  reason: string;
+  verdict?: Verdict;
   financial_impact?: FinancialImpact;
   evidence_refs: EvidenceRef[];
   propagation: Propagation[];
   recommended_actions: RecommendedAction[];
+  /** Verified with nothing to decide: shown under "Handled quietly", not as a card. */
+  quiet: boolean;
+  acknowledged: boolean;
   /** Set when Vero cannot finish without more evidence from the owner. */
   evidence_request?: { message: string; action_label: string; href: string };
   created_at: ISODateTime;
@@ -408,13 +419,15 @@ export interface KnownDocument {
   doc_id: string;
   kind: "invoice" | "contract" | "lease" | "notice" | "statement";
   label: string;        // "Lease, Main Street Real Estate"
-  note: string;         // "§5 index rent (CPI)"
+  note: string;         // "§4.2 index clause (VPI)"
   source: "history" | "contract_check" | "inbox" | "upload";
   added_at: ISODateTime;
 }
 
 /** One line of a source document. `box` draws a highlight around it. */
 export interface DocLine {
+  /** Clause or block id, so a cited clause can be boxed. */
+  id?: string;
   text: string;
   /** English gloss shown under the line. */
   en?: string;
@@ -434,14 +447,49 @@ export interface SourceDoc {
   file_url?: string;
 }
 
-/** A recurring cost that changed and was explained without bothering the owner. */
+/** A change Vero explained without bothering the owner. One tap acknowledges it. */
 export interface DigestRow {
+  /** The finding id. */
   id: string;
   classification: Classification;
   title: string;
   detail: string;
-  doc_id: string;
+  doc_id: string | null;
   calc?: string[];
+}
+
+/** The latest payment of a fixed cost, compared with its contract. */
+export interface RoutineCheck {
+  cost_ref: string;
+  counterparty: string;
+  date: ISODate;
+  paid: string;       // "€3,800.00" or "4,166.67 CHF (€4,333.34)"
+  expected: string;
+  matches: boolean;
+  doc_id: string;
+}
+
+/** The weekly digest (GET /digest): counts for the tiles, quiet changes, routine checks. */
+export interface Digest {
+  counts: { changes: number; handled_quietly: number; needs_owner: number; routine_checks: number };
+  quiet: DigestRow[];
+  routine: RoutineCheck[];
+}
+
+/** An uploaded bill or notice and the Proof run that checks it (POST /documents, GET /runs/{id}). */
+export interface DocumentRun {
+  document_id: string;
+  run_id: string;
+  status: "RUNNING" | "SUCCEEDED" | "FAILED";
+  steps: string[];
+  headline?: string;
+  finding_ids: string[];
+  /** Whether Vero compared it with what you expect (false: stored without a check, or reading failed). */
+  checked: boolean;
+  /** Why reading failed: AGENT_DISABLED, AI_UNREACHABLE, DEADLINE_PASSED, UNREADABLE_DOCUMENT, INVALID_ANSWER, ... */
+  reason?: string;
+  /** The backend's explanation of what failed, e.g. the checks a reading did not pass. */
+  detail?: string;
 }
 
 /** What Vero expects a recurring cost to be, and the evidence it rests on (GET /cost-memory). */
@@ -475,7 +523,7 @@ export type ServerEvent =
 export type DemoScenario =
   | "reset"         // calm Monday 14 April 2025
   | "closure"       // live only: owner plans to close 1–30 June → POST /events CLOSURE_PLANNED
-  | "rent_notice"   // mock only: landlord announces +8% rent from 1 June → Vero investigates
+  | "rent_notice"   // mock only: the rent adjustment arrives (as the live upload) → Vero investigates
   | "fast_forward"; // mock only: jump to 1 July 2025: reveal actuals, forecast vs actual
 
 // ───────────────────────── Chat (AI service, POST /api/v1/chat via nginx) ─────────────────────────
@@ -512,7 +560,11 @@ export interface ChatResponse {
 // costMemory    ← GET /cost-memory
 // costDocuments ← GET /documents
 // document      ← GET /documents/{id} (text blocks + highlights; the PDF at /documents/{id}/file)
-// Not in the backend yet: findings (P07), digest (P15), upload (P08: POST /documents); contracts undecided.
+// findings  ← GET /findings + GET /recommendations + GET /runs/{run_id} (the investigation trace)
+// digest    ← GET /digest + GET /findings (the differences behind each quiet change)
+// upload    → POST /documents (PDF, Idempotency-Key), then GET /runs/{run_id} until it finishes
+// decide    → POST /recommendations/{id}/approve|reject for each of a finding's recommendation_ids
+// acknowledge → POST /findings/{id}/acknowledge (a quiet change)
 // The mapping lives in adapters.ts; the wire shapes in backend.ts.
 //
 // ───────────────────────── Mock API endpoints (all under /api/v1) ─────────────────────────
@@ -524,14 +576,14 @@ export interface ChatResponse {
 // POST /api/v1/decisions/{id}/reject                → Decision
 // GET  /api/v1/forecast                             → Forecast
 // GET  /api/v1/payments                             → ScheduledPayment[]
-// POST /api/v1/contracts (multipart)                → ContractCheckResult
+// POST /api/v1/contracts (multipart)                → ContractCheckResult (mock only: the contract simulation)
 // GET  /api/v1/audit                                → AuditEntry[]
 // GET  /api/v1/costs/findings                       → Finding[]
 // GET  /api/v1/costs/memory                         → CostMemoryRow[]
 // GET  /api/v1/costs/documents                      → KnownDocument[]
-// GET  /api/v1/costs/digest                         → DigestRow[]
+// GET  /api/v1/costs/digest                         → Digest
 // GET  /api/v1/documents/{doc_id}                   → SourceDoc
-// POST /api/v1/costs/findings/{finding_id}/approve  → Finding   (body: { actions: RecommendedAction["type"][] })
+// POST /api/v1/costs/findings/{finding_id}/decide   → Finding   (body: { approve: ids, reject: ids })
 // GET  /api/v1/events                               → text/event-stream of ServerEvent
 // POST /api/v1/demo/{scenario}                      → { ok: true }
 
