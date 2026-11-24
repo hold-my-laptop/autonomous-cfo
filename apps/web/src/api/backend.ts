@@ -109,6 +109,43 @@ export interface BeCreditLineSubject {
   shortfall: Cents;
 }
 
+/** Vero Proof: keep paying what the contract allows instead of what is billed. */
+export interface BeKeepPaymentSubject {
+  kind: "KEEP_PAYMENT";
+  finding_id: string;
+  cost_ref: string;
+  counterparty: string;
+  amount: Cents;
+  billed_amount: Cents;
+  effective_from: string | null;
+  payments: { outflow_id: string; ref: string; date: string }[];
+}
+
+/** Vero Proof: pay `to_amount` instead of `from_amount` from `effective_from`. */
+export interface BeUpdateAmountSubject {
+  kind: "UPDATE_RECURRING_AMOUNT";
+  finding_id: string;
+  cost_ref: string;
+  counterparty: string;
+  from_amount: Cents;
+  to_amount: Cents;
+  effective_from: string;
+  payments: { outflow_id: string; ref: string; date: string }[];
+}
+
+/** Vero Proof: a letter asking for the basis of a change. German only. */
+export interface BeLetterSubject {
+  kind: "SEND_LETTER";
+  finding_id: string;
+  counterparty: string;
+  letter_subject: string;
+  language: "de";
+  draft: string;
+  draft_source: "MODEL" | "TEMPLATE";
+}
+
+export type BeSubject = BeRescheduleSubject | BeCreditLineSubject | BeKeepPaymentSubject | BeUpdateAmountSubject | BeLetterSubject;
+
 export type BeLane = "DONE_WITHIN_MANDATE" | "NEEDS_APPROVAL" | "NOT_ALLOWED";
 export type BeRecommendationStatus =
   | "EXECUTED"
@@ -119,61 +156,22 @@ export type BeRecommendationStatus =
   | "STALE"
   | "SUPERSEDED";
 
-/** Vero Proof: keep paying `amount` (what the contract allows) instead of `billed_amount`. */
-export interface BeKeepPaymentSubject {
-  kind: "KEEP_PAYMENT";
-  finding_id: string;
-  cost_ref: string;
-  counterparty: string;
-  category: BeCategory | null;
-  amount: Cents;
-  billed_amount: Cents;
-  effective_from: string | null;
-  payments: { outflow_id: string; ref: string; date: string }[];
-}
-
-/** Vero Proof: pay `to_amount` instead of `from_amount` for these payments. */
-export interface BeUpdateAmountSubject {
-  kind: "UPDATE_RECURRING_AMOUNT";
-  finding_id: string;
-  cost_ref: string;
-  counterparty: string;
-  category: BeCategory | null;
-  from_amount: Cents;
-  to_amount: Cents;
-  effective_from: string;
-  payments: { outflow_id: string; ref: string; date: string }[];
-}
-
-/** Vero Proof: a letter asking the counterparty for the basis of a change. German only. */
-export interface BeLetterSubject {
-  kind: "SEND_LETTER";
-  finding_id: string;
-  counterparty: string;
-  counterparty_id: string | null;
-  letter_subject: string;
-  language: "de";
-  draft: string;
-  draft_source: "MODEL" | "TEMPLATE";
-}
-
-export type BeCashSubject = BeRescheduleSubject | BeCreditLineSubject;
-export type BeProofSubject = BeKeepPaymentSubject | BeUpdateAmountSubject | BeLetterSubject;
-
-export interface BeRecommendation<S = BeCashSubject | BeProofSubject> {
+export interface BeRecommendation {
   id: string;
   run_id: string;
-  kind: "RESCHEDULE_PAYMENT" | "CREDIT_LINE" | "KEEP_PAYMENT" | "UPDATE_RECURRING_AMOUNT" | "SEND_LETTER";
+  kind: BeSubject["kind"];
   lane: BeLane;
   status: BeRecommendationStatus;
-  subject: S;
-  reason: { first_breach: string | null; shortfall: Cents; requested_by?: "OWNER" | null };
+  subject: BeSubject;
+  reason: { first_breach: string | null; shortfall: Cents; requested_by?: "OWNER" | null; finding_id?: string | null; disputed?: Cents | null };
   checks: { rule: string; result: "PASS" | "FAIL" | "INFO"; effect: "NEEDS_APPROVAL" | "NOT_ALLOWED" | null; text: string }[];
   impact: { before: BeImpactState; after_if_executed: BeImpactState };
   explanation: BeExplanation;
   executed: { confirmation_ref: string; executed_by: "VERO" | "OWNER"; executed_at: string } | null;
   created_at: string;
   decided_at: string | null;
+  /** Vero Proof's actions: the finding they act on. */
+  finding_id?: string | null;
 }
 
 export interface BeOverview {
@@ -194,35 +192,42 @@ export interface BeDecisionResult {
 
 export type BeRunStatus = "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED";
 
-export interface BeTraceStep {
-  seq: number;
-  /** RECEIVE, EXTRACT, CHECK, INVESTIGATE, TOOL_CALL, TOOL_RESULT, GROUND, PROPAGATE, POLICY, SUMMARY, FALLBACK, THINK … */
-  kind: string;
-  source: string;
-  label: string;
-  tool: string | null;
-  data: Record<string, unknown> | null;
-  at: string;
-}
+export type BeTraceKind =
+  | "RECEIVE"
+  | "FALLBACK"
+  | "CHECK"
+  | "INVESTIGATE"
+  | "TOOL_CALL"
+  | "TOOL_RESULT"
+  | "GROUND"
+  | "PROPAGATE"
+  | "POLICY"
+  | "SUMMARY"
+  | (string & {});
 
 export interface BeRun {
   run_id: string;
-  /** CASH: Vero Cash's liquidity runs; PROOF: a document's check (the cost agent). */
+  /** CASH: Vero Cash's liquidity runs; PROOF: a document's check. */
   kind: "CASH" | "PROOF";
-  /** PROOF: the uploaded document. */
   document_id: string | null;
-  /** PROOF: the findings it created. */
   finding_ids: string[];
   status: BeRunStatus;
-  mode: "AGENT" | "FALLBACK" | string;
+  mode?: "AGENT" | "FALLBACK" | (string & {});
   trigger: { type: string; label: string };
-  trace: BeTraceStep[];
+  trace: { seq: number; kind: BeTraceKind; label: string; data?: { reason?: string } | null }[];
   result: { recommendation_ids: string[]; headline: BeExplanation | null } | null;
 }
 
 export interface BeRunAccepted {
   run_id: string;
   status: BeRunStatus;
+}
+
+/** POST /documents: 202, then poll GET /runs/{run_id}. */
+export interface BeUploadAccepted {
+  document_id: string;
+  run_id: string;
+  status: "RUNNING" | "SUCCEEDED" | "FAILED";
 }
 
 // ───────────────────────── Activity log (GET /audit, DATA_CONTRACTS §2.2 AuditEntry) ─────────────────────────
@@ -291,7 +296,7 @@ export interface BeDocument extends BeDocumentSummary {
   highlights: { ref: string; page: number; text: string; box: BeBox }[];
 }
 
-// ───────────────────────── Proof findings (GET /findings, docs/contracts ProofFinding) ─────────────────────────
+// ───────────────────────── Proof findings (GET /findings, schema ProofFinding) ─────────────────────────
 
 export type BeEvidenceKind =
   | "DOCUMENT"
@@ -303,15 +308,14 @@ export type BeEvidenceKind =
   | "COST_ITEM"
   | "REFERENCE_VALUE";
 
-/** Only refs with a document_id can be opened (GET /documents/{id}); EMAIL and REFERENCE_VALUE have only `ref`. */
 export interface BeEvidenceRef {
   kind: BeEvidenceKind;
-  document_id?: string | null;
-  item_id?: string | null;
-  transaction_id?: string | null;
-  cost_ref?: string | null;
-  /** The id a tool returned: an email, a reference series, or `document#clause`. */
-  ref?: string | null;
+  document_id: string | null;
+  item_id: string | null;
+  transaction_id: string | null;
+  cost_ref: string | null;
+  /** The id an investigation tool returned: an email, a reference series, or `document#clause`. */
+  ref: string | null;
 }
 
 export type BeClassification = "VERIFIED" | "UNEXPLAINED" | "CONFLICT";
@@ -326,22 +330,26 @@ export interface BeFinding {
   escalated: boolean;
   status: BeFindingStatus;
   counterparty: string;
-  counterparty_id: string | null;
   cost_ref: string;
   period_from: string | null;
-  period_to?: string | null;
-  /** The document that billed it. */
+  period_to: string | null;
   document_id: string | null;
-  previous_document_id?: string | null;
+  previous_document_id: string | null;
   differences: {
     kind: "PRICE_CHANGE" | "NEW_ITEM" | "NEW_CHARGE" | "AMOUNT_CHANGE";
     description: string;
+    line_id: string | null;
+    previous_unit_price: string | null;
+    unit_price: string | null;
+    quantity: string | null;
+    expected_amount: Cents | null;
+    billed_amount: Cents | null;
     delta: Cents;
-    bps?: number | null;
+    bps: number | null;
     explained: boolean;
     evidence: BeEvidenceRef[];
   }[];
-  impact: { currency: string; expected: Cents | null; billed: Cents | null; delta: Cents; bps: number | null } | null;
+  impact: { currency: string; expected: Cents | null; billed: Cents | null; delta: Cents; bps: number | null };
   evidence_refs: BeEvidenceRef[];
   investigation: {
     mode: "AGENT" | "FALLBACK";
@@ -368,7 +376,6 @@ export interface BeFinding {
     forecast: { payments: string[]; outflow_difference: Cents; lowest_before: Cents; lowest_after: Cents } | null;
   } | null;
   recommendation_ids: string[];
-  /** Uploads only; preloaded findings have no run. */
   run_id: string | null;
   acknowledged_at: string | null;
   created_at: string;
@@ -376,11 +383,11 @@ export interface BeFinding {
   history: { at: string; status: BeFindingStatus; classification: BeClassification | null; label: string }[];
   /** Handled without the owner: verified, nothing to decide. */
   quiet: boolean;
-  /** Shown until acknowledged (quiet) or its actions are decided (RESOLVED). */
+  /** Shown until acknowledged (quiet) or decided (RESOLVED). */
   in_digest: boolean;
 }
 
-// ───────────────────────── Digest (GET /digest) and upload (POST /documents) ─────────────────────────
+// ───────────────────────── Weekly digest (GET /digest) ─────────────────────────
 
 export interface BeDigest {
   as_of: string;
@@ -396,12 +403,11 @@ export interface BeDigest {
     quiet: boolean;
     investigation_mode: "AGENT" | "FALLBACK" | null;
     reason: string;
-    actions: { recommendation_id: string; kind: BeRecommendation["kind"]; lane: BeLane; text: string }[];
+    actions: { recommendation_id: string; kind: BeSubject["kind"]; lane: BeLane; text: string }[];
   }[];
   routine_checks: {
     cost_ref: string;
     counterparty: string;
-    transaction_id: string;
     date: string;
     paid: Cents;
     expected: Cents;
@@ -409,12 +415,7 @@ export interface BeDigest {
     eur_amount: Cents | null;
     fx_rate: string | null;
     document_id: string;
+    clause_id: string | null;
+    matches: boolean;
   }[];
-}
-
-/** 202 from POST /documents. Poll GET /runs/{run_id} until SUCCEEDED or FAILED. */
-export interface BeUploadAccepted {
-  document_id: string;
-  run_id: string;
-  status: "RUNNING" | "SUCCEEDED" | "FAILED";
 }

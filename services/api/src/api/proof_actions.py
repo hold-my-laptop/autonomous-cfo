@@ -252,7 +252,7 @@ def propose_actions(
             "recommendation_id": rec.id,
             "lane": rec.lane,
         }
-        record(state, now, proposer, f"Proposed to {subject_text(rec)}", model=model, **common)
+        record(state, now, proposer, f"Proposed: {subject_text(rec)}", model=model, **common)
         if rec.status is RecommendationStatus.BLOCKED:
             record(
                 state,

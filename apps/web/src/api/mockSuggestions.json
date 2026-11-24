@@ -1,0 +1,182 @@
+[
+  {
+    "id": "liq_chf",
+    "agent": "liquidity",
+    "autonomy": "recommendation",
+    "execution": "simulated",
+    "createdAt": "2025-04-14T07:50:46.000Z",
+    "model": {
+      "name": "granite-3.3-8b-instruct",
+      "servedBy": "vLLM on Red Hat OpenShift AI",
+      "traceId": "bc606b",
+      "guardrails": "passed"
+    },
+    "status": "pending",
+    "headline": "Ask Luigi to move the June and July CHF transfers to September",
+    "summary": "Two transfers of 4,166.67 CHF fall in the weakest weeks. Moving them to September eases the gap by about €8,650.",
+    "amountEur": 8650.01,
+    "facts": [
+      {
+        "label": "Relief in June and July",
+        "value": "≈ €8,650",
+        "tone": "good"
+      },
+      {
+        "label": "Rate used",
+        "value": "1.038 EUR/CHF (last transfer)"
+      }
+    ],
+    "reasoning": [
+      {
+        "kind": "analysis",
+        "title": "Silent partnership: 12 tranches in 2025",
+        "detail": "4,166.67 CHF on the 15th of each month to Luigi Amalfi, Zurich."
+      },
+      {
+        "kind": "calculation",
+        "title": "Two tranches in the gap",
+        "detail": "2 × 4,166.67 CHF × 1.038 = €8,650.01."
+      },
+      {
+        "kind": "recommendation",
+        "title": "September is safe again",
+        "detail": "Sales are back from July; the forecast stays positive by September."
+      }
+    ],
+    "draftMessage": {
+      "kind": "partner_request",
+      "to": "luigi@luigis-ristorante.example",
+      "subject": "Kapitalraten Juni und Juli – Verschiebung auf September?",
+      "body": "Lieber Luigi,\n\nim Juni ist die Pizzeria wegen Betriebsurlaub geschlossen. Wäre es möglich, die Raten für Juni und Juli (je 4'166.67 CHF) auf September zu verschieben? Ab Juli laufen die Umsätze wieder normal.\n\nViele Grüße\nVincenzo",
+      "english": {
+        "subject": "June and July capital tranches – move to September?",
+        "body": "Dear Luigi,\n\nThe pizzeria is closed for the June holiday. Could we move the June and July tranches (4,166.67 CHF each) to September? Sales are back to normal from July.\n\nBest regards\nVincenzo"
+      }
+    },
+    "approveLabel": "Send request",
+    "rejectLabel": "Not now",
+    "approvedMessage": "Request to Luigi prepared (simulated). The forecast now assumes the two transfers move to September.",
+    "rejectedMessage": "OK, the transfers stay on their dates."
+  },
+  {
+    "id": "fx_forward",
+    "agent": "fx",
+    "autonomy": "recommendation",
+    "execution": "simulated",
+    "createdAt": "2025-04-14T07:50:46.000Z",
+    "model": {
+      "name": "granite-3.3-8b-instruct",
+      "servedBy": "vLLM on Red Hat OpenShift AI",
+      "traceId": "f79ca9",
+      "guardrails": "passed"
+    },
+    "status": "pending",
+    "headline": "Fix the rate for the remaining 9 CHF transfers",
+    "summary": "This year the rate moved between 1.038 and 1.045 EUR/CHF. Fixing it now makes the next 9 transfers (37,500 CHF) cost the same every month.",
+    "amountEur": 39037.53,
+    "facts": [
+      {
+        "label": "Still to pay",
+        "value": "37,500 CHF"
+      },
+      {
+        "label": "Worst case (at 2025 high)",
+        "value": "€39,188",
+        "tone": "bad"
+      },
+      {
+        "label": "Best case (at 2025 low)",
+        "value": "€38,925",
+        "tone": "good"
+      }
+    ],
+    "reasoning": [
+      {
+        "kind": "analysis",
+        "title": "Rates paid this year",
+        "detail": "15 Jan: 1.042 · 15 Feb: 1.045 · 15 Mar: 1.038 EUR/CHF"
+      },
+      {
+        "kind": "calculation",
+        "title": "Exposure",
+        "detail": "9 × 4,166.67 CHF = 37,500.03 CHF."
+      },
+      {
+        "kind": "calculation",
+        "title": "Range in euros",
+        "detail": "€38,925.03 to €39,187.53. With a forward at 1.041 (example): €39,037.53."
+      }
+    ],
+    "offer": {
+      "kind": "fx_forward",
+      "name": "FX forward, 9 monthly dates",
+      "amountEur": 39037.53,
+      "termWeeks": 37,
+      "ratePct": 1.041,
+      "note": "Example rate for the demo"
+    },
+    "approveLabel": "Prepare FX forward",
+    "rejectLabel": "Not now",
+    "approvedMessage": "FX forward request prepared. This is a simulation, nothing was sent to the bank.",
+    "rejectedMessage": "OK. I'll keep paying at the day's rate and tell you if it moves a lot."
+  },
+  {
+    "id": "tax_prepay",
+    "agent": "tax",
+    "autonomy": "recommendation",
+    "execution": "simulated",
+    "createdAt": "2025-04-14T07:50:46.000Z",
+    "model": {
+      "name": "granite-3.3-8b-instruct",
+      "servedBy": "vLLM on Red Hat OpenShift AI",
+      "traceId": "261a63",
+      "guardrails": "passed"
+    },
+    "status": "pending",
+    "headline": "Ask the tax office to lower the June income-tax prepayment (€1,150)",
+    "summary": "The prepayment is based on last year's profit of €30k. With a month without sales, this year's profit will be lower, so you can ask for less.",
+    "amountEur": 1150,
+    "facts": [
+      {
+        "label": "Due 10 June",
+        "value": "€1,150.00"
+      },
+      {
+        "label": "Sales in June",
+        "value": "€0.00",
+        "tone": "bad"
+      }
+    ],
+    "reasoning": [
+      {
+        "kind": "analysis",
+        "title": "Quarterly prepayment",
+        "detail": "€1,150.00 on 10 March, June, September and December. Basis: last year's profit of €30k."
+      },
+      {
+        "kind": "analysis",
+        "title": "June shutdown",
+        "detail": "No card sales for a month means a lower profit for 2025."
+      },
+      {
+        "kind": "recommendation",
+        "title": "Ask, don't skip",
+        "detail": "Only the tax office can lower it. Until it agrees, the forecast keeps the full amount."
+      }
+    ],
+    "draftMessage": {
+      "kind": "tax_office_request",
+      "to": "Finanzamt Frankfurt am Main (via ELSTER)",
+      "subject": "Antrag auf Herabsetzung der Einkommensteuer-Vorauszahlung 2025",
+      "body": "Sehr geehrte Damen und Herren,\n\nwegen der Betriebsschließung der Pizzeria Amalfi im Juni 2025 wird der Gewinn 2025 niedriger ausfallen als im Vorjahr. Ich beantrage daher, die Einkommensteuer-Vorauszahlung zum 10.06.2025 zu senken.\n\nMit freundlichen Grüßen\nVincenzo Amalfi",
+      "english": {
+        "subject": "Request to lower the 2025 income-tax prepayment",
+        "body": "Dear Sir or Madam,\n\nBecause Pizzeria Amalfi closes in June 2025, this year's profit will be lower than last year's. I therefore ask you to lower the income-tax prepayment due on 10 June 2025.\n\nKind regards\nVincenzo Amalfi"
+      }
+    },
+    "approveLabel": "Prepare request",
+    "rejectLabel": "Not now",
+    "approvedMessage": "Request prepared (simulated). The forecast changes once the tax office agrees.",
+    "rejectedMessage": "OK, the prepayment stays as it is."
+  }
+]

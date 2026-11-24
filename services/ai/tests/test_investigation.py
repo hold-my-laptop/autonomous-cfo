@@ -82,7 +82,7 @@ def test_hero_investigation_completes_with_a_grounded_conflict(settings):
     assert done.classification == "CONFLICT" and done.evidence_refs == EVIDENCE
     assert done.compute_call_id == "c4"  # the id of the compute tool call
     assert done.letter_draft.startswith("Sehr geehrte") and done.tool_calls == 4
-    assert done.prompt_version == "investigation-2" and done.model == "scripted-model"
+    assert done.prompt_version == "investigation-3" and done.model == "scripted-model"
     assert backend.listed_for == "p1"  # the Proof tools of this run
     assert [n for n, _ in backend.calls] == ["search_inbox", "read_clause", "get_reference_index", "compute"]
 
@@ -195,3 +195,33 @@ def test_the_backends_cost_memory_context_reaches_the_model_and_the_number_check
     backend, llm = ProofBackend(), ScriptedLLM([only_expected])
     assert asyncio.run(run_investigation(start, llm, backend, settings)) == "COMPLETED"
     assert '"expected_amount": "380000"' in llm.seen_messages[0][1]["content"]
+
+
+WRONG_CLAUSE = ("read_clause", {"doc_id": "lease_main_street_2021", "section": "§4.1"})
+SIX_WITHOUT_COMPUTE = [HERO[0], WRONG_CLAUSE, WRONG_CLAUSE, WRONG_CLAUSE, HERO[1], HERO[2]]
+
+
+def test_spent_calls_and_a_conflict_without_compute_hand_over_at_once(settings):
+    status, backend, llm = run([*SIX_WITHOUT_COMPUTE, submit(), submit(), submit()], settings)
+    assert status == "FAILED" and backend.failed[0] == "TOOL_LIMIT_REACHED"
+    assert "needs a successful compute call" in backend.failed[1]
+    assert len(llm.seen_messages) == 7 and len(backend.calls) == 6
+
+
+def test_a_tool_call_after_the_last_one_hands_over_at_once(settings):
+    status, backend, llm = run([*SIX_WITHOUT_COMPUTE, HERO[3], HERO[3], submit()], settings)
+    assert status == "FAILED" and backend.failed[0] == "TOOL_LIMIT_REACHED"
+    assert len(llm.seen_messages) == 7 and len(backend.calls) == 6
+
+
+def test_no_answer_after_the_last_call_hands_over_at_once(settings):
+    status, backend, llm = run([*SIX_WITHOUT_COMPUTE, "I am still thinking.", submit()], settings)
+    assert status == "FAILED" and backend.failed[0] == "TOOL_LIMIT_REACHED"
+    assert len(llm.seen_messages) == 7
+
+
+def test_a_valid_answer_with_the_last_call_still_completes(settings):
+    status, backend, _ = run([HERO[0], WRONG_CLAUSE, HERO[1], HERO[2], WRONG_CLAUSE, HERO[3], submit()],
+                             settings)
+    assert status == "COMPLETED" and backend.completed.classification == "CONFLICT"
+    assert backend.completed.compute_call_id == "c6" and backend.completed.tool_calls == 6

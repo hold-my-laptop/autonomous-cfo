@@ -31,7 +31,7 @@ export function ClassificationBadge({ value, large }: { value: Classification; l
 }
 
 export const TOOL_ICON: Record<ToolName, IconName> = {
-  get_price_list: "file",
+  read_document: "file",
   search_inbox: "mail",
   search_documents: "search",
   read_clause: "file",
@@ -45,8 +45,11 @@ const BOX_TONE = {
   neutral: { ring: "ring-ask", tag: "bg-ask text-on-fill" },
 } as const;
 
-/** A source document with the cited snippet boxed, like a highlighted PDF. Solid on purpose: it is paper, not a glass surface. */
-export function PaperDoc({ doc, showEnglish }: { doc: SourceDoc; showEnglish: boolean }) {
+/**
+ * A source document with the cited snippet boxed, like a highlighted PDF. Solid on purpose: it is paper,
+ * not a glass surface. `focus` boxes one more line, a cited clause (e.g. "s4_2").
+ */
+export function PaperDoc({ doc, showEnglish, focus, focusLabel }: { doc: SourceDoc; showEnglish: boolean; focus?: string; focusLabel?: string }) {
   return (
     <figure className="flex h-full flex-col overflow-hidden rounded-3xl border border-line bg-surface">
       <figcaption className="flex items-center gap-2 border-b border-line bg-sunk/60 px-4 py-2.5 text-xs">
@@ -64,7 +67,9 @@ export function PaperDoc({ doc, showEnglish }: { doc: SourceDoc; showEnglish: bo
         <p className="font-sans text-sm font-semibold" lang="de">{doc.title}</p>
         <p className="font-sans text-[11px] text-ink-muted">{doc.meta}</p>
         <div className="space-y-2 pt-2">
-          {doc.lines.map((l, i) =>
+          {doc.lines
+            .map((l) => (focus && l.id === focus && !l.box ? { ...l, box: { label: focusLabel ?? "Cited", tone: "basis" as const } } : l))
+            .map((l, i) =>
             l.box ? (
               <div key={i} className={`relative rounded-md bg-surface px-3 pb-2 pt-3 ring-2 ${BOX_TONE[l.box.tone].ring}`}>
                 <span

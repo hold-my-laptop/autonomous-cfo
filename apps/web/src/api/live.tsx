@@ -49,14 +49,13 @@ function pollRuns(qc: QueryClient, setState: Dispatch<SetStateAction<LiveState>>
       setState((s) => (s.connection === "live" ? s : { ...s, connection: "live" }));
       if (run) {
         busy = run.status === "QUEUED" || run.status === "RUNNING";
-        // PROOF runs are the cost agent's (a bill's check); CASH runs the liquidity agent's.
-        const proof = run.kind === "PROOF";
-        const agent: AgentId = proof ? "costs" : "liquidity";
         const message = busy
           ? (run.trace.at(-1)?.label ?? run.trigger.label)
           : run.status === "FAILED"
             ? `Couldn't finish: ${run.trigger.label}`
             : `Last check: ${run.trigger.label}`;
+        // CASH runs are the liquidity agent's, PROOF runs (a document's check) the cost agent's.
+        const agent: AgentId = run.kind === "PROOF" ? "costs" : "liquidity";
         setState((s) => ({
           ...s,
           latest: { agent, message, busy },
@@ -65,17 +64,13 @@ function pollRuns(qc: QueryClient, setState: Dispatch<SetStateAction<LiveState>>
 
         const key = `${run.run_id}:${run.status}`;
         if (!first && key !== seen && !busy) {
-          const ids = proof ? [] : (run.result?.recommendation_ids ?? []);
+          const ids = run.result?.recommendation_ids ?? [];
           announce(
             run.status === "FAILED"
               ? "Vero couldn't finish the check."
-              : proof
-                ? run.finding_ids.length
-                  ? `Vero finished checking the document: ${run.finding_ids.length === 1 ? "1 change" : `${run.finding_ids.length} changes`} on Cost check.`
-                  : "Vero finished checking the document. It matches what you expect."
-                : ids.length
-                  ? `Vero finished checking: ${ids.length} new ${ids.length === 1 ? "item" : "items"} on the Overview.`
-                  : "Vero finished checking. Nothing new.",
+              : ids.length
+                ? `Vero finished checking: ${ids.length} new ${ids.length === 1 ? "item" : "items"} on the Overview.`
+                : "Vero finished checking. Nothing new.",
           );
           setState((s) => ({ ...s, arrived: new Set([...s.arrived, ...ids]) }));
           qc.invalidateQueries({ queryKey: keys.decisions });

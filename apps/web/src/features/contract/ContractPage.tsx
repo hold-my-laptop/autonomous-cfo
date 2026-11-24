@@ -1,8 +1,8 @@
 import { useState, type DragEvent } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, MAX_UPLOAD_BYTES, USE_MOCK } from "../../api/client";
-import { useContractSimulation, useFindings, useUploadBill } from "../../api/queries";
-import type { ContractSimulation, UploadRun } from "../../api/types";
+import { ApiError, USE_MOCK } from "../../api/client";
+import { useContractUpload, useDocumentRun, useUploadDocument } from "../../api/queries";
+import type { ContractSimulation } from "../../api/types";
 import { AutonomyBadge, ExecutionBadge } from "../../components/Badges";
 import { Icon } from "../../components/Icon";
 import { useToast } from "../../components/Toast";
@@ -10,42 +10,47 @@ import { formatDate, formatEurWhole } from "../../lib/format";
 import { WeeklyCashChart, WeeklyChartLegend } from "../cash/CashChart";
 import { btnPrimary } from "../today/DecisionCard";
 import { ModelLine } from "../today/Reasoning";
-import { ClassificationBadge } from "../vero/parts";
 
-/** The demo document of PROOF §7.1, served from public/demo (byte-identical to the backend's fixture). */
+const MAX_BYTES = 5 * 1024 * 1024;
+/** The demo bill: the landlord's rent adjustment (docs/PROOF.md §7.1). Leases and contracts are already on file. */
 const DEMO_FILE = "doc_rent_adjustment_2025_06.pdf";
 
-/** What the owner reads when an upload is refused (POST /documents error codes). */
-function uploadError(err: unknown): { text: string; toCosts?: boolean } {
-  if (err instanceof ApiError) {
-    if (err.code === "RUN_IN_PROGRESS") return { text: "Vero is still checking something else. Try again in a moment." };
-    if (err.code === "DOCUMENT_ALREADY_PROCESSED")
-      return { text: "Vero already has this document. Its check is on Cost check.", toCosts: true };
-    if (err.code === "FILE_TOO_LARGE" || err.status === 413) return { text: "That file is larger than 5 MB. Try a smaller PDF." };
-    if (err.status === 422) return { text: "That isn't a PDF Vero can read. Upload the bill or notice as a PDF." };
+/** What an upload error means for the owner (POST /documents: 409, 413, 422). */
+function uploadError(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.code === "DOCUMENT_ALREADY_PROCESSED")
+      return "Vero already has this document. Its check is on Cost changes. To run the demo again, press Start again on the presenter panel (?demo=1) first.";
+    if (e.code === "RUN_IN_PROGRESS") return "Vero is still working on another check. Try again in a moment.";
+    if (e.code === "FILE_TOO_LARGE" || e.status === 413) return "That file is larger than 5 MB.";
+    if (e.status === 422) return "That isn't a PDF Vero can read. Upload the bill or notice as a PDF.";
   }
-  if (err instanceof Error && !(err instanceof ApiError)) return { text: err.message };
-  return { text: "Couldn't upload that file. Check that the backend is running." };
+  if (e instanceof Error && e.message && !(e instanceof ApiError)) return e.message;
+  return "Couldn't upload that file. Check that the backend is running and try again.";
 }
 
-/**
- * Upload a bill or notice: Vero reads it, checks it against Cost Memory and, if something changed
- * without a reason on file, investigates. Only bills are checked (the rent adjustment, invoices);
- * leases and contracts are already loaded, so uploading them again gives "already processed".
- */
+/** Why reading an upload failed (the run's FALLBACK reason), and what the owner can do. */
+const READ_FAILED: Record<string, string> = {
+  AGENT_DISABLED:
+    "Reading with the AI model is off on this backend, so Vero can only read the demo documents. Upload the demo rent adjustment, or start the AI service to read your own bills.",
+  AI_UNREACHABLE: "The AI service didn't answer. Try again in a moment.",
+  DEADLINE_PASSED: "Reading took too long. Try again in a moment.",
+  UNREADABLE_DOCUMENT: "Vero couldn't read the text of this PDF. A scan or a protected PDF can't be read.",
+  INVALID_ANSWER: "What Vero read from it didn't pass its checks, so nothing was changed.",
+  SERVICE_RESTARTED: "Vero restarted while reading it. Upload it again.",
+};
+
+/** Upload a bill or notice: Vero reads it, checks it against your contracts, and shows what it found. */
 export function ContractPage() {
-  const [progress, setProgress] = useState<UploadRun | null>(null);
-  const upload = useUploadBill(setProgress);
+  const upload = useUploadDocument();
+  const run = useDocumentRun(upload.data?.run_id ?? null);
   const [dragging, setDragging] = useState(false);
-  const [refused, setRefused] = useState<string | null>(null);
-  const [fetchingDemo, setFetchingDemo] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   const onFile = (file?: File) => {
     if (!file) return;
-    setRefused(null);
-    setProgress(null);
-    if (file.size > MAX_UPLOAD_BYTES) return setRefused("That file is larger than 5 MB. Try a smaller PDF.");
-    if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") return setRefused("Only PDF files can be checked.");
+    setProblem(null);
+    if (file.size > MAX_BYTES) return setProblem("That file is larger than 5 MB.");
+    if (file.type && file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) return setProblem("Only PDFs can be checked.");
     upload.mutate(file);
   };
   const onDrop = (e: DragEvent) => {
@@ -54,29 +59,27 @@ export function ContractPage() {
     onFile(e.dataTransfer.files[0]);
   };
   const demo = async () => {
-    if (USE_MOCK) return onFile(new File(["demo"], DEMO_FILE, { type: "application/pdf" }));
-    setFetchingDemo(true);
+    setProblem(null);
     try {
       const res = await fetch(`${import.meta.env.BASE_URL}demo/${DEMO_FILE}`);
       if (!res.ok) throw new Error();
       onFile(new File([await res.blob()], DEMO_FILE, { type: "application/pdf" }));
     } catch {
-      setRefused("Couldn't load the demo document.");
-    } finally {
-      setFetchingDemo(false);
+      setProblem("Couldn't load the demo file.");
     }
   };
 
-  const busy = upload.isPending || fetchingDemo;
-  const error = upload.isError ? uploadError(upload.error) : null;
-  const done = upload.data;
+  const r = run.data;
+  const working = upload.isPending || (!!upload.data && (!r || r.status === "RUNNING"));
+  const error = problem ?? (upload.isError ? uploadError(upload.error) : run.isError ? uploadError(run.error) : null);
 
   return (
     <div className="max-w-4xl">
       <h1 className="text-[32px] font-semibold leading-[1.1] tracking-[-0.025em] sm:text-[44px] lg:text-[48px]">Upload a bill or notice</h1>
       <p className="mt-2 max-w-[66ch] text-ink-soft">
-        Vero reads it, checks it against what you usually pay, your contracts and your price lists, and finds out why
-        anything changed. Your lease, contracts and price lists are already on file.
+        Vero reads it, compares it with what you usually pay and with your contracts, and looks for the reason when
+        something changed. Your lease and contracts are already on file. Bills usually arrive by themselves; use this
+        when one came by post.
       </p>
 
       <label
@@ -86,10 +89,18 @@ export function ContractPage() {
         }}
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
-        aria-disabled={busy}
-        className={`liquid-glass liquid-hover mt-6 block rounded-3xl p-2 focus-within:outline-3 focus-within:outline-action ${busy ? "pointer-events-none opacity-60" : "cursor-pointer"}`}
+        className="liquid-glass liquid-hover mt-6 block cursor-pointer rounded-3xl p-2 focus-within:outline-3 focus-within:outline-action"
       >
-        <input type="file" accept=".pdf,application/pdf" disabled={busy} className="sr-only" onChange={(e) => onFile(e.target.files?.[0])} />
+        <input
+          type="file"
+          accept=".pdf,application/pdf"
+          className="sr-only"
+          disabled={working}
+          onChange={(e) => {
+            onFile(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
         <span
           className={`flex flex-col items-center justify-center rounded-xl border border-dashed px-6 py-8 text-center transition-colors ${
             dragging ? "border-action bg-action-tint" : "border-line-strong"
@@ -97,98 +108,105 @@ export function ContractPage() {
         >
           <Icon name="upload" size={22} className="text-ink-soft" />
           <span className="mt-2 text-base font-semibold">Choose a PDF or drag it here</span>
-          <span className="mt-1 text-ink-soft">A bill, invoice or rent adjustment. PDF, up to 5 MB.</span>
+          <span className="mt-1 text-ink-soft">A bill, invoice or notice. PDF, at most 5 MB.</span>
+          <span className="mt-1 text-xs text-ink-muted">
+            Checked: invoices and rent notices from suppliers and the landlord Vero knows, dated up to today. Contracts and leases aren't checked.
+          </span>
         </span>
       </label>
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
         <span>Demo document:</span>
-        <button type="button" disabled={busy} onClick={demo} className="liquid-glass-pill h-8 rounded-full px-3 font-medium text-ink disabled:opacity-50">
+        <button type="button" disabled={working} onClick={demo} className="liquid-glass-pill h-8 rounded-full px-3 font-medium text-ink">
           Rent adjustment from the landlord
         </button>
         <span className="font-mono text-[11px] text-ink-muted">{DEMO_FILE}</span>
-        {USE_MOCK && <span>Demo mode reads every upload as this rent adjustment.</span>}
       </div>
 
-      <div aria-live="polite">
-        {busy && (
-          <p role="status" className="mt-6 flex items-center gap-2 text-sm">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-ask" aria-hidden="true" />
-            {progress?.latest ?? "Uploading…"}
-          </p>
-        )}
-        {refused && <p role="alert" className="mt-6 text-short">{refused}</p>}
-        {error && (
-          <p role="alert" className="mt-6 text-short">
-            {error.text}{" "}
-            {error.toCosts && (
-              <Link to="/costs" className="font-medium text-link underline">
-                Open Cost check
-              </Link>
-            )}
-          </p>
-        )}
-        {done && <UploadResult run={done} />}
-      </div>
+      {error && (
+        <p role="alert" className="mt-6 text-short">
+          {error}
+          {/already has this document/.test(error) && (
+            <Link to="/costs" className="ml-2 font-medium text-link hover:underline">
+              Open Cost changes
+            </Link>
+          )}
+        </p>
+      )}
 
-      {USE_MOCK && <ContractSimulationSection />}
+      {upload.data && <RunProgress steps={r?.steps ?? []} working={working} />}
+
+      {r && r.status === "SUCCEEDED" && (
+        <div className="liquid-glass mt-4 flex flex-col gap-3 rounded-3xl p-5 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <div>
+            <p className="text-[15px] font-semibold">{r.headline ?? "Checked."}</p>
+            <p className="mt-0.5 text-[13px] text-ink-soft">
+              {r.finding_ids.length
+                ? "Open Cost changes for the evidence, what changes downstream and the prepared actions."
+                : r.checked
+                  ? "Nothing differs from what you expect."
+                  : "Vero kept the document but didn't check it: the sender isn't a supplier or landlord it knows."}
+            </p>
+          </div>
+          <Link to={`/costs?doc=${encodeURIComponent(r.document_id)}`} className={`${btnPrimary} shrink-0`}>
+            Open Cost changes
+          </Link>
+        </div>
+      )}
+      {r && r.status === "FAILED" && (
+        <div role="alert" className="mt-4 rounded-3xl border border-short/25 bg-short-tint p-5 sm:px-6">
+          <p className="text-[15px] font-semibold">{r.headline ?? "Vero couldn't read this document."}</p>
+          <p className="mt-1 text-[13px]">{(r.reason && READ_FAILED[r.reason]) ?? "Nothing was changed. Try again, or upload the demo rent adjustment."}</p>
+          {r.detail && r.reason !== "AGENT_DISABLED" && <p className="mt-1 text-[12px] text-ink-soft">Details: {r.detail}</p>}
+        </div>
+      )}
+
+      {USE_MOCK && <ContractSimulator />}
     </div>
   );
 }
 
-/** What the check found, with a way to the full card on Cost check. */
-function UploadResult({ run }: { run: UploadRun }) {
-  const { data: findings } = useFindings();
-  const found = (findings ?? []).filter((f) => run.finding_ids.includes(f.finding_id));
-  if (run.status === "failed") {
-    return (
-      <section className="liquid-glass-strong mt-6 rounded-3xl p-5 sm:px-6">
-        <p className="text-[15px] font-semibold">Vero couldn't finish checking this document.</p>
-        {run.headline && <p className="mt-1 text-[13px] text-ink-soft">{run.headline}</p>}
-      </section>
-    );
-  }
+function RunProgress({ steps, working }: { steps: string[]; working: boolean }) {
   return (
-    <section aria-labelledby="upload-h" className="liquid-glass-strong mt-6 space-y-3 rounded-3xl p-5 sm:p-6">
-      <h2 id="upload-h" className="text-[18px] font-semibold leading-snug">
-        {found.length ? "Checked." : run.finding_ids.length ? "Checked. Loading what Vero found…" : "Checked: it matches what you expect."}
+    <section aria-labelledby="run-h" className="liquid-glass-strong mt-6 rounded-3xl p-5 sm:p-6">
+      <h2 id="run-h" className="flex items-center gap-2 text-[15px] font-semibold">
+        {working ? <span className="h-2 w-2 animate-pulse rounded-full bg-ask" aria-hidden="true" /> : <Icon name="check" size={14} className="text-safe" />}
+        {working ? "Vero is checking it…" : "What Vero did"}
       </h2>
-      {run.headline && <p className="text-[13px] text-ink-soft">{run.headline}</p>}
-      {found.length > 0 && (
-        <ul className="space-y-2">
-          {found.map((f) => (
-            <li key={f.finding_id} className="glass-inset flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3">
-              <span className="text-[13px] font-semibold">{f.title}</span>
-              <ClassificationBadge value={f.classification} />
-            </li>
-          ))}
-        </ul>
-      )}
-      <Link to="/costs" className={`${btnPrimary} inline-flex`}>
-        See the check on Cost check
-      </Link>
+      <ol className="mt-3 space-y-1 text-[13px] text-ink-soft" aria-live="polite">
+        {steps.map((s, i) => (
+          <li key={i} className="flex gap-2">
+            <span className="num w-5 shrink-0 text-right text-ink-muted">{i + 1}.</span>
+            <span>{s}</span>
+          </li>
+        ))}
+        {working && steps.length === 0 && <li>Uploading…</li>}
+      </ol>
     </section>
   );
 }
 
-/** Mock only: a customer contract tested on the 13-week forecast. */
-function ContractSimulationSection() {
-  const sim = useContractSimulation();
+/** Mock only: a customer or supplier contract, tested on the 13-week forecast. */
+function ContractSimulator() {
+  const upload = useContractUpload();
+  const result = upload.data;
   return (
     <section aria-labelledby="sim-h" className="mt-14 border-t border-line pt-8">
-      <h2 id="sim-h" className="text-[20px] font-semibold">Test a customer contract</h2>
-      <p className="mt-1 max-w-[66ch] text-[13px] text-ink-soft">
-        Demo mode only: see what a catering contract does to your 13-week cash forecast before you sign.
-      </p>
+      <h2 id="sim-h" className="text-[20px] font-semibold">Test a contract on your forecast</h2>
+      <p className="mt-1 max-w-[66ch] text-[13px] text-ink-soft">Demo only: the real backend checks bills, not contracts.</p>
       <button
         type="button"
-        disabled={sim.isPending}
-        onClick={() => sim.mutate(new File(["demo"], "Catering_Rhein-Main_Event.pdf", { type: "application/pdf" }))}
-        className="liquid-glass-pill mt-3 h-9 rounded-full px-4 text-[13px] font-semibold disabled:opacity-50"
+        onClick={() => upload.mutate(new File(["demo"], "Catering_Rhein-Main_Event.pdf", { type: "application/pdf" }))}
+        className="liquid-glass-pill mt-3 h-8 rounded-full px-3 text-xs font-medium text-ink"
       >
-        {sim.isPending ? "Testing it on your forecast…" : "Test the summer catering contract"}
+        Summer catering contract
       </button>
-      {sim.isError && <p role="alert" className="mt-4 text-short">Couldn't test that contract.</p>}
-      {sim.data && <ContractResult sim={sim.data} />}
+      {upload.isPending && (
+        <p role="status" className="mt-6 animate-pulse text-sm">
+          Reading the contract…
+        </p>
+      )}
+      {upload.isError && <p role="alert" className="mt-6 text-short">Couldn't read that contract.</p>}
+      {result && <ContractResult sim={result} />}
     </section>
   );
 }

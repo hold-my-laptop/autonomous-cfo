@@ -5,7 +5,8 @@ run. The label rests on one `compute` call, named by the completion: each of its
 come from Cost Memory, the billing document or the finding, or from a tool result earlier in
 the run of the kind the input needs: what the cost was before the change (never the billed
 amount), dates of the document, index values from `get_reference_index`, clause terms from
-`read_clause`'s parameters. The formula is then recomputed from those inputs and the
+`read_clause`'s parameters; an index value also only for its month (the clause's base period,
+the latest value up to `as_of`). The formula is then recomputed from those inputs and the
 billed amount compared with the justified one; numbers written in the completion are never
 used."""
 
@@ -86,6 +87,9 @@ class Rule:
     covers: frozenset[DifferenceKind]
     billed: Callable[[ProofFinding], Cents | None]
     justified: Callable[[dict[str, Any]], Cents]
+    check: Callable[[dict[str, Any], list[Call], ProofDataset, date], list[str]] = (
+        lambda inputs, calls, proof, as_of: []
+    )
 
 
 def _recurring_billed(finding: ProofFinding) -> Cents | None:
@@ -97,6 +101,38 @@ def _charges_billed(finding: ProofFinding) -> Cents | None:
         d for d in finding.differences if d.kind is DifferenceKind.NEW_CHARGE and not d.explained
     ]
     return sum(d.delta for d in charges) if charges else None
+
+
+def _index_months(
+    inputs: dict[str, Any], calls: list[Call], proof: ProofDataset, as_of: date
+) -> list[str]:
+    """An index value is a source only for its month: the base is the value of the clause's
+    base period, the current one the latest value published up to `as_of`."""
+    terms = next(
+        (
+            call.result["parameters"]
+            for call in reversed(calls)
+            if call.ok
+            and call.tool == "read_clause"
+            and isinstance(call.result, dict)
+            and {"index", "base_period"} <= set(call.result.get("parameters") or {})
+        ),
+        None,
+    )
+    series = next((s for s in proof.reference_values if terms and s.name == terms["index"]), None)
+    if series is None:
+        return []
+    values = {v.period: canon(v.value) for v in series.values}
+    latest = max((p for p in values if p <= f"{as_of:%Y-%m}"), default=None)
+    expected = (
+        ("base_index", terms["base_period"], "the clause's base period"),
+        ("current_index", latest, f"the latest published up to {as_of:%d %b %Y}"),
+    )
+    return [
+        f"{field} {inputs.get(field)!r} is not the {series.name} value for {period}, {which}"
+        for field, period, which in expected
+        if period is None or canon(inputs.get(field)) != values.get(period)
+    ]
 
 
 _TERM = frozenset({Source.CLAUSE})
@@ -111,6 +147,7 @@ RULES: dict[str, Rule] = {
         covers=frozenset({DifferenceKind.AMOUNT_CHANGE}),
         billed=_recurring_billed,
         justified=lambda outputs: int(outputs["justified"]),
+        check=_index_months,
     ),
     "surcharge_rule": Rule(
         inputs={
@@ -317,6 +354,9 @@ def ground(
                         f"{field} {inputs.get(field)!r} has no source in Cost Memory, the "
                         "document or an earlier tool result"
                     )
+            if not problems:
+                earlier_calls = [c for c in calls if c.seq < call.seq]
+                problems.extend(rule.check(inputs, earlier_calls, proof, forecast.as_of))
             if not problems:
                 try:
                     result = compute(formula_id, inputs, forecast)

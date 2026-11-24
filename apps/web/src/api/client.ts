@@ -1,26 +1,24 @@
 import type {
-  ActionDecisions,
   AuditLog,
   ChatRequest,
   ChatResponse,
   Company,
-  ContractSimulation,
+  ContractCheckResult,
   CostCheck,
   CostMemoryRow,
   Decision,
   DecisionAction,
   DemoScenario,
   Digest,
+  DocumentRun,
   Finding,
   Forecast,
   KnownDocument,
   Policy,
   SourceDoc,
-  UploadRun,
 } from "./types";
 import type {
   BeAuditEntry,
-  BeCashSubject,
   BeCompany,
   BeCostItem,
   BeDecisionResult,
@@ -45,16 +43,36 @@ import {
   toDecision,
   toDecisions,
   toDigest,
+  toDocumentRun,
   toFinding,
   toForecast,
   toKnownDocument,
   toPolicy,
   toSourceDoc,
-  toUploadRun,
 } from "./adapters";
 import { verifyBackendChain, verifyMockChain } from "../lib/hashChain";
+import mockSuggestionData from "./mockSuggestions.json";
 /** The in-browser mock backend, loaded only in mock mode (it bundles the sample bank statement). */
 const mock = () => import("./mock");
+
+/**
+ * Mock suggestions shown next to the live decisions: the currency and tax agents have no backend yet.
+ * Static copies of the mock's cards, so the live bundle never loads the mock or its bank statement.
+ */
+const mockSuggestionList = mockSuggestionData as unknown as Decision[];
+const MOCK_SUGGESTIONS = new Set(mockSuggestionList.map((d) => d.id));
+const mockSuggestions = async () => mockSuggestionList.map((d) => ({ ...d }));
+const actOnMockSuggestion = async (id: string, action: DecisionAction): Promise<Decision> => {
+  const i = mockSuggestionList.findIndex((d) => d.id === id);
+  const updated: Decision = {
+    ...mockSuggestionList[i],
+    status: action === "approve" ? "approved" : "rejected",
+    resolvedAt: new Date().toISOString(),
+    resolvedBy: "owner",
+  };
+  mockSuggestionList[i] = updated;
+  return { ...updated };
+};
 
 export const API_URL: string = import.meta.env.VITE_API_URL ?? "/api/v1";
 export const USE_MOCK = import.meta.env.VITE_MOCK === "1";
@@ -63,7 +81,7 @@ export const USE_MOCK = import.meta.env.VITE_MOCK === "1";
 export class ApiError extends Error {
   readonly status: number;
   readonly path: string;
-  /** Problem-details `code`, e.g. RUN_IN_PROGRESS, DOCUMENT_ALREADY_PROCESSED, FILE_TOO_LARGE. */
+  /** e.g. RUN_IN_PROGRESS, DOCUMENT_ALREADY_PROCESSED, FILE_TOO_LARGE */
   readonly code?: string;
   constructor(status: number, path: string, message: string, code?: string) {
     super(message);
@@ -124,13 +142,14 @@ const live = {
     return toCompany(c, m);
   },
   policy: async (): Promise<Policy> => toPolicy(await http<BeMandate>("/mandate")),
-  decisions: async (): Promise<Decision[]> => toDecisions(await http<BeOverview>("/overview")),
+  decisions: async (): Promise<Decision[]> => {
+    const [real, extra] = await Promise.all([http<BeOverview>("/overview").then(toDecisions), mockSuggestions()]);
+    return [...real, ...extra];
+  },
   forecast: async (): Promise<Forecast> =>
     toForecast(await http<BeForecast>("/forecast?weekly=true"), new Date().toISOString()),
   act: async (id: string, action: DecisionAction): Promise<Decision> =>
-    toDecision(
-      (await command<BeDecisionResult>(`/recommendations/${encodeURIComponent(id)}/${action}`)).recommendation as BeRecommendation<BeCashSubject>,
-    ),
+    toDecision((await command<BeDecisionResult>(`/recommendations/${encodeURIComponent(id)}/${action}`)).recommendation),
   demo: async (scenario: DemoScenario): Promise<{ ok: true }> => {
     if (scenario === "reset") {
       await http("/demo/reset", { method: "POST" });
@@ -148,60 +167,37 @@ const live = {
   },
   latestRun: async (): Promise<BeRun | null> => (await http<BeRun[]>("/runs?limit=1"))[0] ?? null,
 
-  /**
-   * Findings with what the cards need: the prepared actions (GET /recommendations, by the finding's
-   * recommendation_ids), the documents for the evidence labels, and the run of each upload for
-   * "How Vero found out" (preloaded findings have no run; their search list is used instead).
-   */
+  /** Findings with their recommendations, and for an upload its run's trace ("How Vero found out"). */
   findings: async (): Promise<Finding[]> => {
-    const [raw, recs, docs] = await Promise.all([
-      http<BeFinding[]>("/findings"),
-      http<BeRecommendation[]>("/recommendations"),
-      http<BeDocumentSummary[]>("/documents"),
-    ]);
-    const runIds = [...new Set(raw.filter((f) => f.run_id && !f.quiet).map((f) => f.run_id!))];
-    const runs = await Promise.all(runIds.map((id) => http<BeRun>(`/runs/${encodeURIComponent(id)}`).catch(() => null)));
-    const ctx = {
-      recommendations: new Map(recs.map((r) => [r.id, r])),
-      runs: new Map(runs.filter((r): r is BeRun => r !== null).map((r) => [r.run_id, r])),
-      documents: new Map(docs.map((d) => [d.id, d])),
-    };
-    return raw.map((f) => toFinding(f, ctx));
+    const [findings, recs] = await Promise.all([http<BeFinding[]>("/findings"), http<BeRecommendation[]>("/recommendations")]);
+    const byId = new Map(recs.map((r) => [r.id, r]));
+    const runIds = [...new Set(findings.filter((f) => !f.quiet && f.run_id).map((f) => f.run_id!))];
+    const runs = new Map(
+      await Promise.all(runIds.map(async (id) => [id, await http<BeRun>(`/runs/${id}`).catch(() => null)] as const)),
+    );
+    return findings.map((f) => toFinding(f, byId, f.run_id ? runs.get(f.run_id) : null));
   },
-
-  /** Approve or reject each prepared action (one recommendation each); the finding is RESOLVED once all are decided. */
-  decideActions: async (decisions: ActionDecisions): Promise<void> => {
-    for (const [id, verdict] of Object.entries(decisions)) {
-      await command<BeDecisionResult>(`/recommendations/${encodeURIComponent(id)}/${verdict}`);
-    }
+  digest: async (): Promise<Digest> => {
+    const [digest, findings] = await Promise.all([http<BeDigest>("/digest"), http<BeFinding[]>("/findings")]);
+    return toDigest(digest, findings);
   },
-
-  /**
-   * POST /documents (multipart PDF, Idempotency-Key) → 202 {document_id, run_id}; then poll
-   * GET /runs/{run_id} until SUCCEEDED or FAILED. 409 RUN_IN_PROGRESS / DOCUMENT_ALREADY_PROCESSED,
-   * 413 FILE_TOO_LARGE and 422 (not a PDF) come back as ApiError with their code.
-   */
-  uploadBill: async (file: File, onProgress?: (run: UploadRun) => void): Promise<UploadRun> => {
+  /** POST /documents: a PDF of at most 5 MB, answered 202; the check runs in GET /runs/{run_id}. */
+  uploadDocument: async (file: File): Promise<DocumentRun> => {
     const body = new FormData();
     body.append("file", file);
-    const accepted = await http<BeUploadAccepted>("/documents", { method: "POST", headers: { "Idempotency-Key": uuid() }, body });
-    const started = Date.now();
-    for (;;) {
-      const run = toUploadRun(await http<BeRun>(`/runs/${encodeURIComponent(accepted.run_id)}`));
-      onProgress?.(run);
-      if (run.status !== "running") return run;
-      if (Date.now() - started > UPLOAD_TIMEOUT_MS) {
-        throw new Error("The check is taking longer than usual. It goes on in the background: look at Cost check in a minute.");
-      }
-      await new Promise((r) => setTimeout(r, UPLOAD_POLL_MS));
-    }
+    const r = await http<BeUploadAccepted>("/documents", { method: "POST", headers: { "Idempotency-Key": uuid() }, body });
+    return { ...r, steps: [], finding_ids: [], checked: false };
+  },
+  documentRun: async (runId: string): Promise<DocumentRun> => toDocumentRun(await http<BeRun>(`/runs/${encodeURIComponent(runId)}`)),
+  /** Each of a finding's actions is a recommendation; the finding is RESOLVED once all are decided. */
+  decideFinding: async (approve: string[], reject: string[]): Promise<void> => {
+    for (const id of approve) await command(`/recommendations/${encodeURIComponent(id)}/approve`);
+    for (const id of reject) await command(`/recommendations/${encodeURIComponent(id)}/reject`);
+  },
+  acknowledgeFinding: async (id: string): Promise<void> => {
+    await command(`/findings/${encodeURIComponent(id)}/acknowledge`);
   },
 };
-
-/** The backend refuses PDFs above 5 MB (413 FILE_TOO_LARGE); the page checks this before sending. */
-export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
-const UPLOAD_POLL_MS = 1000;
-const UPLOAD_TIMEOUT_MS = 120_000;
 
 const mockChatAnswer: ChatResponse = {
   answer: "Questions need the real AI service. Start the app without VITE_MOCK=1 to chat with Vero.",
@@ -228,16 +224,17 @@ export const api = {
   },
 
   act: (id: string, action: DecisionAction): Promise<Decision> =>
-    USE_MOCK ? mock().then((m) => m.actOnDecision(id, action)) : live.act(id, action),
+    USE_MOCK
+      ? mock().then((m) => m.actOnDecision(id, action))
+      : MOCK_SUGGESTIONS.has(id)
+        ? actOnMockSuggestion(id, action)
+        : live.act(id, action),
 
-  /** Mock only: a customer contract tested on the forecast. The real backend checks bills and notices, not contracts. */
-  simulateContract: (file: File): Promise<ContractSimulation> =>
-    USE_MOCK ? mock().then((m) => m.simulateContract(file)) : Promise.reject(new Error("Contract tests exist in demo mode only.")),
+  /** Mock only: test a customer or supplier contract on the forecast (the backend checks bills, not contracts). */
+  uploadContract: (file: File): Promise<ContractCheckResult> =>
+    USE_MOCK ? mock().then((m) => m.uploadContract(file)) : Promise.reject(new Error("Contract simulation only exists in mock mode.")),
 
-  // ───── Vero: cost check ─────
-  /** Upload a bill or notice and wait for its check. Only bills are checked (the rent adjustment, invoices). */
-  uploadBill: (file: File, onProgress?: (run: UploadRun) => void): Promise<UploadRun> =>
-    USE_MOCK ? mock().then((m) => m.uploadBill(file, onProgress)) : live.uploadBill(file, onProgress),
+  // Vero: cost check. Bills reach it by themselves (bank feed, e-mail) or by upload.
   findings: (): Promise<Finding[]> => (USE_MOCK ? mock().then((m) => m.getFindings()) : live.findings()),
   /** Checked cost changes, summarised for the Overview (real GET /findings, or the mock's findings). */
   costChecks: async (): Promise<CostCheck[]> =>
@@ -248,17 +245,18 @@ export const api = {
     USE_MOCK ? mock().then((m) => m.getCostMemory()) : (await http<BeCostItem[]>("/cost-memory")).map(toCostMemoryRow),
   costDocuments: async (): Promise<KnownDocument[]> =>
     USE_MOCK ? mock().then((m) => m.getCostDocuments()) : (await http<BeDocumentSummary[]>("/documents")).map(toKnownDocument),
-  digest: async (): Promise<Digest> => (USE_MOCK ? mock().then((m) => m.getDigest()) : toDigest(await http<BeDigest>("/digest"))),
+  digest: (): Promise<Digest> => (USE_MOCK ? mock().then((m) => m.getDigest()) : live.digest()),
   document: async (docId: string): Promise<SourceDoc> =>
     USE_MOCK ? mock().then((m) => m.getDocument(docId)) : toSourceDoc(await http<BeDocument>(`/documents/${encodeURIComponent(docId)}`)),
-  /** Approve or reject each of a finding's prepared actions, by action id. */
-  decideActions: (decisions: ActionDecisions): Promise<void> =>
-    USE_MOCK ? mock().then((m) => m.decideActions(decisions)) : live.decideActions(decisions),
-  /** A quiet finding leaves the digest with one tap. */
-  acknowledgeFinding: async (findingId: string): Promise<void> => {
-    if (USE_MOCK) return mock().then((m) => m.acknowledgeFinding(findingId));
-    await command(`/findings/${encodeURIComponent(findingId)}/acknowledge`);
-  },
+  /** Upload a bill or notice. Only bills are checked: the rent adjustment and invoices. */
+  uploadDocument: (file: File): Promise<DocumentRun> => (USE_MOCK ? mock().then((m) => m.uploadDocument(file)) : live.uploadDocument(file)),
+  documentRun: (runId: string): Promise<DocumentRun> => (USE_MOCK ? mock().then((m) => m.getDocumentRun(runId)) : live.documentRun(runId)),
+  /** Approve some of a finding's prepared actions and decline the rest. */
+  decideFinding: (findingId: string, approve: string[], reject: string[]): Promise<void> =>
+    USE_MOCK ? mock().then((m) => m.decideFinding(findingId, approve, reject)) : live.decideFinding(approve, reject),
+  /** A change Vero handled quietly: one tap clears it from the digest. */
+  acknowledgeFinding: (findingId: string): Promise<void> =>
+    USE_MOCK ? mock().then((m) => m.acknowledgeFinding(findingId)) : live.acknowledgeFinding(findingId),
 
   demo: (scenario: DemoScenario): Promise<{ ok: true }> =>
     USE_MOCK ? mock().then((m) => m.runDemo(scenario)) : live.demo(scenario),

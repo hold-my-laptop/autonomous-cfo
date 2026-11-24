@@ -143,11 +143,7 @@ export function costCheckRow(c: CostCheck, at: string): Decision {
       : c.outcome === "conflict"
         ? `${amount}. ${checked}: it is more than your contract allows.`
         : `${amount}. ${checked} but found no reason for it yet.`;
-  const todo = c.needsOwner
-    ? "Vero needs your input on this one."
-    : c.outcome === "matches"
-      ? "Nothing: it can be paid as billed."
-      : "Nothing: you already decided what to do.";
+  const todo = c.needsOwner ? "Vero needs your input on this one." : "Nothing: it can be paid as billed.";
   return {
     id: `cost-${c.id}`,
     agent: "costs",
@@ -168,7 +164,7 @@ export function checkedLine(costChecks: CostCheck[] | undefined): string {
   const fine = costChecks.filter((c) => !c.needsOwner).length;
   return fine === costChecks.length
     ? `Vero checked ${plural(costChecks.length, "bill that changed", "bills that changed")}: ${
-        costChecks.length === 1 ? "the change is handled" : "every change is handled"
+        costChecks.length === 1 ? "the change is explained" : "every change is explained"
       }.`
-    : `Vero checked ${plural(costChecks.length, "bill that changed", "bills that changed")}: ${fine} handled.`;
+    : `Vero checked ${plural(costChecks.length, "bill that changed", "bills that changed")}: ${fine} explained.`;
 }

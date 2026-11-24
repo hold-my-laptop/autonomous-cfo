@@ -7,13 +7,12 @@
  *  reset         Calm Monday 14 April. Cash agent: the June shutdown pushes the account into overdraft
  *                → overdraft facility (needs approval), CHF deferral (suggestion). Currency agent: fix the
  *                CHF rate. Tax agent: lower the June prepayment. Small things done for you.
- *  rent_notice   The landlord's rent adjustment arrives (4,104 € from 1 June) → Vero checks it against lease §4.2
- *                and finds it conflicts (docs/PROOF.md §7.1, see costs.ts). Same as uploading it on "Upload a bill".
+ *  rent_notice   The landlord asks for +8% rent from 1 June → Vero checks it against the lease (see costs.ts).
  *  fast_forward  Jump to 1 July 2025: weeks up to 29 June become actuals, the forecast stays as a line.
  */
 import type {
-  ActionDecisions,
   Company,
+  ContractCheckResult,
   ContractSimulation,
   Decision,
   DecisionAction,
@@ -22,7 +21,6 @@ import type {
   ForecastDay,
   ForecastWeek,
   Policy,
-  UploadRun,
 } from "../types";
 import { mockBus } from "../mockBus";
 import { formatDate, formatEur, formatEurWhole } from "../../lib/format";
@@ -464,14 +462,14 @@ export async function getCostMemory() { await delay(100); return costs.getMemory
 export async function getCostDocuments() { await delay(80); return costs.getDocuments(); }
 export async function getDigest() { await delay(100); return costs.getDigest(); }
 export async function getDocument(id: string) { await delay(80); return costs.getDocument(id); }
-export async function decideActions(decisions: ActionDecisions) { return costs.decideActions(decisions); }
+export async function decideFinding(id: string, approve: string[], reject: string[]) { return costs.decideFinding(id, approve, reject); }
 export async function acknowledgeFinding(id: string) { return costs.acknowledgeFinding(id); }
-export async function uploadBill(file: File, onProgress?: (run: UploadRun) => void) { return costs.uploadBill(file, onProgress); }
+export async function uploadDocument(file: File) { return costs.uploadDocument(file); }
+export async function getDocumentRun(id: string) { return costs.getDocumentRun(id); }
 
 // ───── Contract check ─────
 
-/** Mock only: a customer contract tested on the 13-week forecast (the real backend checks bills, not contracts). */
-export async function simulateContract(file: File): Promise<ContractSimulation> {
+export async function uploadContract(file: File): Promise<ContractCheckResult> {
   status("contract", "Reading the document…", true);
   await delay(1200);
   status("contract", "Testing it on your 13-week forecast…", true);
@@ -509,6 +507,7 @@ export async function simulateContract(file: File): Promise<ContractSimulation> 
     kind: "contract",
     contractId: newId("k"),
     fileName: file.name,
+    documentId: newId("doc"),
     model: model(`contract-${file.name}`),
     extractedTerms: terms,
     baseline: weeks,
@@ -557,7 +556,7 @@ export async function runDemo(scenario: DemoScenario) {
     }
 
     case "rent_notice": {
-      await costs.runRentUpload();
+      await costs.runRentNotice();
       break;
     }
 

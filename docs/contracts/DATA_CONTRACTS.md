@@ -707,7 +707,7 @@ Response: `{ document_id, status: "OK" | "FAILED", errors[], pages[{ page, width
 | Field | Type | Description |
 |---|---|---|
 | `cost_item` | **CostItem**? | What Cost Memory expects for `finding.cost_ref` (e.g. `RENT`: `expected_amount "380000"`, its sources). Values from here and from the finding count as sources for `compute` inputs (P11) |
-| `hypotheses` | string[] | The order the scripted fallback follows: `NOTICE`, `CLAUSE`, `REFERENCE_OR_PRICE_LIST`, `QUANTITY`. The agent may choose its own |
+| `hypotheses` | string[] | The order the scripted fallback follows, as plain sentences for the prompt (`proof_runs.HYPOTHESES`): a notice announcing the change; a clause that allows the amount to change (not the one stating the current amount); the index or price list it names, then `compute`; a change in quantity. The agent may choose its own |
 
 Email and document text in tool results is untrusted data: the investigation prompt must say so, and nothing in it can set a label.
 
@@ -761,7 +761,7 @@ Error codes: `INVALID_ARGUMENT`, `UNKNOWN_TOOL`, `STALE_RUN`, `TOOL_LIMIT_REACHE
 | `net_goods` | The finding's expected amount (the goods without the new charge) |
 | `date` | The document's date, the finding's period, the adjustment's `effective_from` |
 
-Values compare by value (`380000` = `"380000"`). The backend then recomputes the formula: billed above justified → `CONFLICT`; otherwise → `VERIFIED` (the covered differences become `explained`). Anything unusable → `UNEXPLAINED`, `escalated`, with `investigation.problems` and `searched`. The agent's `classification` is only recorded as `proposed`. Without the agent (deadline, `/fail`, unreachable, restart, `DATA_CHANGED`, `AGENT_DISABLED`) the backend runs its scripted investigation (P12): the same tools in a fixed order, then the same check, with `investigation.mode: FALLBACK`. At load and reset the preloaded findings CHECK leaves unexplained get it too, so the Asimex surcharge starts `VERIFIED`.
+Values compare by value (`380000` = `"380000"`). The backend then recomputes the formula: billed above justified → `CONFLICT`; otherwise → `VERIFIED` (the covered differences become `explained`). An answer the check can't use (any problem above, or an agent that labels the change `UNEXPLAINED`, which names no compute call) is not the end: the run's trace shows why ("Can't use the answer: …") and the backend runs its scripted investigation (reason `AGENT_INCONCLUSIVE`), so the finding is `UNEXPLAINED`, `escalated`, with `investigation.problems` and `searched` only when Vero's own steps find nothing either. The agent's `classification` is only recorded as `proposed`. Without the agent (deadline, `/fail`, unreachable, restart, `DATA_CHANGED`, `AGENT_DISABLED`) the backend runs its scripted investigation (P12) too: the same tools in a fixed order, then the same check, with `investigation.mode: FALLBACK`. At load and reset the preloaded findings CHECK leaves unexplained get it too, so the Asimex surcharge starts `VERIFIED`.
 
 #### Agent failure
 `{ reason: "MODEL_TIMEOUT" | "MODEL_ERROR" | "INVALID_TOOL_CALLS" | "NO_FINAL_ANSWER" | "TOOL_LIMIT_REACHED", detail?: string }`

@@ -1,6 +1,6 @@
 # Vero Proof: Phase 2 design
 
-> **Status:** agreed plan, implementation starting.
+> **Status:** Phase 2 design and acceptance scenarios. The [project README](../README.md) describes the implemented demo and its current limits.
 > **Scope:** Phase 2 = **Vero Proof**. When a recurring cost changes, Vero finds out why, proves whether the change is justified, and prepares everything downstream (payment, cash forecast, letter to the supplier) for the owner's approval. Execution is simulated.
 > **Demo data:** the same **Pizzeria Amalfi** 2025 bank statement and the same `as_of_date` (5 May 2025) as Phase 1, plus synthetic documents that agree with it (§4).
 >

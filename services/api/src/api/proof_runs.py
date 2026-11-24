@@ -56,7 +56,17 @@ REASON_UNREADABLE = "UNREADABLE_DOCUMENT"
 REASON_INVALID = "INVALID_ANSWER"
 REASON_RESTARTED = "SERVICE_RESTARTED"
 REASON_DATA_CHANGED = "DATA_CHANGED"
-HYPOTHESES = ("NOTICE", "CLAUSE", "REFERENCE_OR_PRICE_LIST", "QUANTITY")
+REASON_INCONCLUSIVE = "AGENT_INCONCLUSIVE"
+HYPOTHESES = (
+    "A letter or notice from the counterparty announcing the change: search_inbox returns its "
+    "full text",
+    "A contract clause that allows the amount to change (an index, adjustment or surcharge "
+    "clause), not the clause that states the current amount: search_documents lists the "
+    "sections of leases, contracts and terms, read_clause reads one",
+    "The reference index or price list that clause names, for its base period and the latest "
+    "value up to today, then compute with the clause's parameters",
+    "A change in quantity rather than price",
+)
 _REASON_LABELS = {
     REASON_DISABLED: "Reading with the model is off",
     REASON_UNREACHABLE: "The AI service is unavailable",
@@ -72,6 +82,8 @@ _INVESTIGATION_LABELS = {
     REASON_INVALID: "The agent's answer could not be used",
     REASON_RESTARTED: "Vero restarted during the investigation",
     REASON_DATA_CHANGED: "Your data changed during the investigation",
+    REASON_INCONCLUSIVE: "The agent found no reason the evidence supports",
+    "TOOL_LIMIT_REACHED": "The agent used all its look-ups without an answer",
 }
 
 
@@ -534,10 +546,13 @@ def conclude_investigation(
         )
         for step in grounding.steps:
             trace.add("GROUND", step, now)
-        finding = grounding.apply(finding, now)
         mode = run.mode
         run = replace(run, tool_log=(run.tool_log or {}) | {"completion": completion})
-    else:
+        if grounding.escalated:
+            completion, reason = None, REASON_INCONCLUSIVE
+        else:
+            finding = grounding.apply(finding, now)
+    if completion is None:
         label = _INVESTIGATION_LABELS.get(reason or "", f"The agent stopped ({reason})")
         trace.add("FALLBACK", f"{label}: Vero follows its own steps", now, {"reason": reason})
         result = investigate(state, finding)

@@ -7,7 +7,7 @@ import { useToast } from "../../components/Toast";
 // The real backend only knows the June closure and a reset; the other steps are mock-only for now.
 const buttons: { scenario: DemoScenario; label: string }[] = USE_MOCK
   ? [
-      { scenario: "rent_notice", label: "1. Landlord's rent adjustment arrives" },
+      { scenario: "rent_notice", label: "1. Rent increase notice arrives" },
       { scenario: "fast_forward", label: "2. Fast-forward to 1 July" },
       { scenario: "reset", label: "Start again" },
     ]
